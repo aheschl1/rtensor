@@ -9,6 +9,7 @@ TODO:
 - [ ] Lin alg
 - [ ] accelerated backends
 - [ ] x86 SIMD
+- [ ] Nicer indexing syntax
 
 ## Core Types
 
