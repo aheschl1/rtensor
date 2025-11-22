@@ -128,7 +128,7 @@ pub trait TensorMut<T>: Tensor<T> {
 }
 
 impl<T, W> Tensor<T> for W 
-where W: ViewableTensor<T>
+    where W: ViewableTensor<T>
 {
     fn shape(&self) -> Shape {
         self.view().shape.clone()
@@ -189,7 +189,7 @@ where W: ViewableTensor<T>
 }
 
 impl<T, W> TensorMut<T> for W
-where W: ViewableTensorMut<T>
+    where W: ViewableTensorMut<T>
 {
     fn get_mut(&mut self, idx: &Idx) -> Result<&mut T, TensorError> {
         match idx {
@@ -247,15 +247,9 @@ impl<'a, T, S: Into<Vec<usize>>> Index<S> for TensorOwned<T> {
     }
 }
 
-impl<'a, T, S: Into<Vec<usize>>> Index<S> for TensorView<'_, T> {
-    type Output = T;
-
-    fn index(&self, index: S) -> &Self::Output {
-        self.get(&Idx::Coord(index.into())).unwrap()
-    }
-}
-
-impl<'a, T, S: Into<Vec<usize>>> Index<S> for TensorViewMut<'_, T> {
+impl<'a, T, B, S: Into<Vec<usize>>> Index<S> for TensorViewBase<'a, T, B> 
+    where B: AsRef<[T]> + 'a
+{
     type Output = T;
 
     fn index(&self, index: S) -> &Self::Output {
