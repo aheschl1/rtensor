@@ -6,13 +6,13 @@ Goal to add CUDA and optimized operations.
 
 ### todo
 
-[ ] Nicer syntax. macro time
-[ ] Slicing with ranges
-[ ] Elementwise broadcasting
-[ ] Basic linear algebra helpers
-[ ] Accelerated backends (GPU / parallel)
-[ ] x86 SIMD paths
-[ ] Nicer indexing syntax sugar
+- [ ] Nicer syntax. macro time
+- [ ] Slicing with ranges
+- [ ] Elementwise broadcasting
+- [ ] Basic linear algebra helpers
+- [ ] Accelerated backends (GPU / parallel)
+- [ ] x86 SIMD paths
+- [ ] Nicer indexing syntax sugar
 
 ### example
 
