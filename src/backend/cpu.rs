@@ -1,6 +1,5 @@
-use std::ops::Range;
 
-use crate::{backend::{Backend, BackendElementwise}, core::{meta::MemRegion, tensor::TensorError, value::{TensorValue, TensorValueElementwise}}, ops::elementwise::ElementwiseTensorOp};
+use crate::{backend::{Backend, BackendElementwise}, core::{tensor::TensorError, value::{TensorValue, TensorValueElementwise}}, ops::elementwise::ElementwiseTensorOp};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Cpu;
@@ -70,7 +69,7 @@ impl<T: TensorValue + TensorValueElementwise> BackendElementwise<T> for Cpu {
     ) -> Result<(), TensorError> {
         let bufptr = buf.as_mut();
         for i in start..(start + len) {
-            bufptr[i] = op.apply(bufptr[i].clone());
+            bufptr[i] = op.apply(bufptr[i]);
         }
         Ok(())
     }
@@ -85,7 +84,7 @@ impl<T: TensorValue + TensorValueElementwise> BackendElementwise<T> for Cpu {
         let bufptr = buf.as_mut();
         let mut idx = start;
         for _ in 0..len {
-            bufptr[idx] = op.apply(bufptr[idx].clone());
+            bufptr[idx] = op.apply(bufptr[idx]);
             idx += stride;
         }
         Ok(())
@@ -98,7 +97,7 @@ impl<T: TensorValue + TensorValueElementwise> BackendElementwise<T> for Cpu {
     ) -> Result<(), TensorError> {
         let bufptr = buf.as_mut();
         for &idx in offsets {
-            bufptr[idx] = op.apply(bufptr[idx].clone());
+            bufptr[idx] = op.apply(bufptr[idx]);
         }
         Ok(())
     }

@@ -84,7 +84,7 @@ impl MetaTensor {
             return regions_by_inner_dim(self.clone(), inner);
         }
 
-        return vec![MemRegion::Scattered { offsets: self.iter_offsets().collect() }]; 
+        vec![MemRegion::Scattered { offsets: self.iter_offsets().collect() }]
     }
 
     /// Returns an iterator over all offsets in the underlying buffer for this tensor/view.
@@ -220,7 +220,7 @@ pub trait MetaTensorView {
 
 impl MetaTensorView for MetaTensor {
     fn meta(&self) -> &MetaTensor {
-        &self
+        self
     }
 }
 
@@ -254,12 +254,7 @@ where
 
 fn innermost_contiguous_dim(meta_tensor: &MetaTensor) -> Option<usize> {
     let rank = meta_tensor.rank();
-    for d in (0..rank).rev() {
-        if meta_tensor.stride[d] == 1 {
-            return Some(d);
-        }
-    }
-    None
+    (0..rank).rev().find(|&d| meta_tensor.stride[d] == 1)
 }
 
 /// Computes memory regions for a given inner dimension.
@@ -286,7 +281,7 @@ fn regions_by_inner_dim(meta_tensor: MetaTensor, inner: usize) -> Vec<MemRegion>
 
     let mut outer_idx = vec![0; outer_shape.len()];
 
-    if outer_idx.len() == 0 {
+    if outer_idx.is_empty() {
         // This is a pure 1D tensor
         if inner_stride == 1 {
             regions.push(MemRegion::Contiguous {
