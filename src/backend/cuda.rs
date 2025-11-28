@@ -1,4 +1,4 @@
-use std::sync::{Arc, LazyLock};
+use std::sync::{atomic::{AtomicBool, Ordering}, Arc, LazyLock, Mutex};
 
 use cudarc::driver::{CudaContext, CudaSlice, DevicePtr, DeviceRepr};
 
@@ -15,12 +15,15 @@ use bindings::*;
 // Can be tuned based on kernel characteristics and GPU architecture
 const DEFAULT_BLOCK_SIZE: u32 = 256;
 
-const CUDA_BACKENDS: LazyLock<Vec<Arc<CudaContext>>> = LazyLock::new(|| {
+const CUDA_BACKENDS: LazyLock<Vec<CudaBackend>> = LazyLock::new(|| {
     let mut backends = Vec::new();
     let device_count = cudarc::driver::CudaContext::device_count().unwrap_or(0);
     for device_id in 0..device_count {
-        let ctx = CudaContext::new(device_id as usize).unwrap();
-        backends.push(ctx);
+        let backend = CudaBackend { 
+            ctx: CudaContext::new(device_id as usize).unwrap(), 
+            dirty: AtomicBool::new(true).into(),
+        };
+        backends.push(backend);
     }
     backends
 });
@@ -34,6 +37,7 @@ pub struct CudaBuf<T: TensorValue> {
 #[derive(Clone)]
 pub struct CudaBackend {
     pub(crate) ctx: Arc<CudaContext>,
+    dirty: Arc<AtomicBool>,
 }
 
 
@@ -44,10 +48,33 @@ impl CudaBackend {
 
     pub(crate) fn construct(device: usize) -> Result<Self, TensorError> {
         // TODO multiple devices
-        let ctx = CUDA_BACKENDS.get(device)
+        let backend = CUDA_BACKENDS.get(device)
             .ok_or_else(|| TensorError::CudaError(format!("CUDA device {} not found", device)))?
             .clone();
-        Ok(Self { ctx } )
+        Ok( backend )
+    }
+
+    pub fn flush(&self) -> Result<(), TensorError> {
+        if self.dirty.swap(false, Ordering::AcqRel){
+            // it was dirty, now its clean
+            self.stream()
+                .synchronize()
+                .map_err(|e| TensorError::CudaError(e.to_string()))?;
+        }
+        Ok(())
+    }
+
+    #[inline(always)]
+    pub fn sync(&self) -> Result<(), TensorError> {
+        if self.dirty.load(Ordering::Acquire){
+            self.flush()?;
+        }
+        Ok(())
+    }
+
+    #[inline(always)]
+    pub fn dirty(&self) {
+        self.dirty.store(true, Ordering::Release);
     }
 }
 
@@ -78,6 +105,7 @@ impl<T: TensorValue + DeviceRepr> Backend<T> for CudaBackend {
     }
     
     fn copy_from_slice(&self, dst: &mut Self::Buf, src: &[T]) -> Result<(), crate::core::tensor::TensorError> {
+        self.sync()?;
         if src.len() != dst.len {
             return Err(TensorError::CudaError(format!("Source slice length {} does not match destination buffer length {}", src.len(), dst.len)));
         }
@@ -89,6 +117,7 @@ impl<T: TensorValue + DeviceRepr> Backend<T> for CudaBackend {
     }
     
     fn read(&self, buf: &Self::Buf, offset: usize) -> Result<T, crate::core::tensor::TensorError> {
+        self.sync()?;
         if offset >= buf.len {
             return Err(TensorError::IdxOutOfBounds);
         }
@@ -101,6 +130,7 @@ impl<T: TensorValue + DeviceRepr> Backend<T> for CudaBackend {
     }
     
     fn write(&self, buf: &mut Self::Buf, offset: usize, value: T) -> Result<(), crate::core::tensor::TensorError> {
+        self.sync()?;
         if offset >= buf.len {
             return Err(TensorError::IdxOutOfBounds);
         }
@@ -116,16 +146,13 @@ impl<T: TensorValue + DeviceRepr> Backend<T> for CudaBackend {
         buf.len
     }
     
-    // fn apply_elementwise<V: TensorValueelementwise>(&self, buf: &mut Self::Buf, op: elementwiseTensorOp<V>, offsets: Vec<usize>) -> Result<(), crate::core::tensor::TensorError> {
-    //     todo!()
-    // }
-    
     fn new() -> Self {
         // TODO multiple devices
         Self::construct(0).unwrap()
     }
     
     fn copy(&self, src: &Self::Buf) -> Result<Self::Buf, TensorError> {
+        self.sync()?;
         let mut dst = self.alloc(src.len)?;
         self.stream()
             .memcpy_dtod(&src.ptr, &mut dst.ptr)
@@ -134,6 +161,7 @@ impl<T: TensorValue + DeviceRepr> Backend<T> for CudaBackend {
     }
     
     fn dump(&self, src: &Self::Buf) -> Result<Box<[T]>, TensorError> {
+        self.sync()?;
         let mut host_buf = vec![T::default(); src.len];
         self.stream()
             .memcpy_dtoh(&src.ptr, host_buf.as_mut_slice())
@@ -175,8 +203,7 @@ impl<T: TensorValueElementwise + DeviceRepr + 'static> BackendElementwise<T> for
                         DEFAULT_BLOCK_SIZE,
                     );
                 }
-                stream.synchronize()
-                    .map_err(|e| TensorError::CudaError(e.to_string()))?;
+                self.dirty();
                 Ok(())
             }};
         }
@@ -228,8 +255,7 @@ impl<T: TensorValueElementwise + DeviceRepr + 'static> BackendElementwise<T> for
                         DEFAULT_BLOCK_SIZE,
                     );
                 }
-                stream.synchronize()
-                    .map_err(|e| TensorError::CudaError(e.to_string()))?;
+                self.dirty();
                 Ok(())
             }};
         }
@@ -284,8 +310,7 @@ impl<T: TensorValueElementwise + DeviceRepr + 'static> BackendElementwise<T> for
                         DEFAULT_BLOCK_SIZE,
                     );
                 }
-                stream.synchronize()
-                    .map_err(|e| TensorError::CudaError(e.to_string()))?;
+                self.dirty();
                 Ok(())
             }};
         }
@@ -307,4 +332,5 @@ impl<T: TensorValueElementwise + DeviceRepr + 'static> BackendElementwise<T> for
             _ => Err(TensorError::CudaError("Unsupported type for CUDA elementwise operation".to_string())),
         }
     }
+
 }
