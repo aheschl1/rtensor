@@ -16,6 +16,7 @@ Goal is high performance ML stack with minimal dependencies and maximal flexibil
 - [ ] x86 SIMD paths (currently relying on llvm auto-vectorization for CPU which only works for contiguous memory)
 - [ ] Multiple gpu devices allowed
 - [ ] CUDA scheduler for syncing and fusing ops
+- [X] Do not lock thread on GPU dispatch
 
 ## to optimize
 
