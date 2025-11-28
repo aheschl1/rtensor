@@ -15,7 +15,7 @@ use bindings::*;
 // Can be tuned based on kernel characteristics and GPU architecture
 const DEFAULT_BLOCK_SIZE: u32 = 256;
 
-static CUDA_BACKENDS: LazyLock<Vec<Arc<CudaContext>>> = LazyLock::new(|| {
+const CUDA_BACKENDS: LazyLock<Vec<Arc<CudaContext>>> = LazyLock::new(|| {
     let mut backends = Vec::new();
     let device_count = cudarc::driver::CudaContext::device_count().unwrap_or(0);
     for device_id in 0..device_count {
