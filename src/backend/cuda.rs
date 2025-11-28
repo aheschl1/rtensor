@@ -21,7 +21,7 @@ const CUDA_BACKENDS: LazyLock<Vec<CudaBackend>> = LazyLock::new(|| {
     for device_id in 0..device_count {
         let backend = CudaBackend { 
             ctx: CudaContext::new(device_id as usize).unwrap(), 
-            dirty: AtomicBool::new(true).into(),
+            dirty: AtomicBool::new(false).into(),
         };
         backends.push(backend);
     }
