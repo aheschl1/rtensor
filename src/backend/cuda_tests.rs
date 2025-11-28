@@ -214,7 +214,7 @@ mod tests {
         let tensor = make_cuda_tensor(buf, shape);
         
         let view = tensor.view();
-        let slice = view.slice(0, 0).unwrap();
+        let slice = view.slice(0, 0..0).unwrap();
         assert_eq!(*slice.meta.shape(), vec![3]);
         assert_eq!(*slice.meta.stride(), vec![1]);
         assert_eq!(index_tensor(Idx::At(0), &slice).unwrap(), 1);
@@ -222,7 +222,7 @@ mod tests {
         assert_eq!(index_tensor(Idx::At(2), &slice).unwrap(), 3);
         
         let view = tensor.view();
-        let slice2 = view.slice(1, 0).unwrap();
+        let slice2 = view.slice(1, 0..0).unwrap();
         assert_eq!(*slice2.meta.shape(), vec![2]);
         assert_eq!(*slice2.meta.stride(), vec![3]);
         assert_eq!(index_tensor(Idx::At(0), &slice2).unwrap(), 1);
@@ -237,7 +237,7 @@ mod tests {
         let tensor = make_cuda_tensor(buf, shape);
         
         let view = tensor.view();
-        let slice = view.slice(0, 0).unwrap();
+        let slice = view.slice(0, 0..0).unwrap();
         assert_eq!(*slice.meta.shape(), vec![2, 2]);
         assert_eq!(*slice.meta.stride(), vec![2, 1]);
         assert_eq!(index_tensor(Idx::Coord(&[0, 0]), &slice).unwrap(), 1);
@@ -246,7 +246,7 @@ mod tests {
         assert_eq!(index_tensor(Idx::Coord(&[1, 1]), &slice).unwrap(), 5);
 
         let view = tensor.view();
-        let slice_second_depth = view.slice(0, 1).unwrap();
+        let slice_second_depth = view.slice(0, 1..1).unwrap();
         assert_eq!(*slice_second_depth.meta.shape(), vec![2, 2]);
         assert_eq!(*slice_second_depth.meta.stride(), vec![2, 1]);
         assert_eq!(index_tensor(Idx::Coord(&[0, 0]), &slice_second_depth).unwrap(), 6);
@@ -255,7 +255,7 @@ mod tests {
         assert_eq!(index_tensor(Idx::Coord(&[1, 1]), &slice_second_depth).unwrap(), 9);
         
         let view = tensor.view();
-        let slice2 = view.slice(1, 0).unwrap();
+        let slice2 = view.slice(1, 0..0).unwrap();
         assert_eq!(*slice2.meta.shape(), vec![2, 2]);
         assert_eq!(*slice2.meta.stride(), vec![4, 1]);
         assert_eq!(index_tensor(Idx::Coord(&[0, 0]), &slice2).unwrap(), 1);
@@ -264,7 +264,7 @@ mod tests {
         assert_eq!(index_tensor(Idx::Coord(&[1, 1]), &slice2).unwrap(), 7);
 
         let view = tensor.view();
-        let slice3 = view.slice(2, 0).unwrap();
+        let slice3 = view.slice(2, 0..0).unwrap();
         assert_eq!(*slice3.meta.shape(), vec![2, 2]);
         assert_eq!(*slice3.meta.stride(), vec![4, 2]);
         assert_eq!(index_tensor(Idx::Coord(&[0, 0]), &slice3).unwrap(), 1);
@@ -280,13 +280,13 @@ mod tests {
         let tensor = make_cuda_tensor(buf, shape);
         
         let view = tensor.view();
-        let slice = view.slice(0, 1).unwrap();
+        let slice = view.slice(0, 1..1).unwrap();
         assert_eq!(*slice.meta.shape(), vec![3]);
         assert_eq!(index_tensor(Idx::At(0), &slice).unwrap(), 4);
         assert_eq!(index_tensor(Idx::At(1), &slice).unwrap(), 5);
         assert_eq!(index_tensor(Idx::At(2), &slice).unwrap(), 6);
 
-        let slice_of_slice = slice.slice(0, 2).unwrap();
+        let slice_of_slice = slice.slice(0, 2..2).unwrap();
         assert_eq!(*slice_of_slice.meta.shape(), vec![]);
         assert_eq!(index_tensor(Idx::Coord(&[]), &slice_of_slice).unwrap(), 6);
     }
@@ -298,19 +298,19 @@ mod tests {
         let tensor = make_cuda_tensor(buf, shape);
 
         let view = tensor.view();
-        let slice = view.slice(0, 1).unwrap();
+        let slice = view.slice(0, 1..1).unwrap();
         assert_eq!(*slice.meta.shape(), vec![2, 2]);
         assert_eq!(index_tensor(Idx::Coord(&[0, 0]), &slice).unwrap(), 6);
         assert_eq!(index_tensor(Idx::Coord(&[0, 1]), &slice).unwrap(), 7);
         assert_eq!(index_tensor(Idx::Coord(&[1, 0]), &slice).unwrap(), 8);
         assert_eq!(index_tensor(Idx::Coord(&[1, 1]), &slice).unwrap(), 9);
 
-        let slice_of_slice = slice.slice(1, 0).unwrap();
+        let slice_of_slice = slice.slice(1, 0..0).unwrap();
         assert_eq!(*slice_of_slice.meta.shape(), vec![2]);
         assert_eq!(index_tensor(Idx::At(0), &slice_of_slice).unwrap(), 6);
         assert_eq!(index_tensor(Idx::At(1), &slice_of_slice).unwrap(), 8);
 
-        let slice_of_slice_of_slice = slice_of_slice.slice(0, 1).unwrap();
+        let slice_of_slice_of_slice = slice_of_slice.slice(0, 1..1).unwrap();
         assert_eq!(*slice_of_slice_of_slice.meta.shape(), vec![]);
         assert_eq!(index_tensor(Idx::Item, &slice_of_slice_of_slice).unwrap(), 8);
     }
@@ -322,7 +322,7 @@ mod tests {
         let mut tensor = make_cuda_tensor(buf, shape);
         
         let mut view = tensor.view_mut();
-        let mut slice = view.slice_mut(0, 1).unwrap();
+        let mut slice = view.slice_mut(0, 1..1).unwrap();
         
         assert_eq!(*slice.meta.shape(), vec![3]);
         assert_eq!(index_tensor(Idx::At(0), &slice).unwrap(), 4);
@@ -366,7 +366,7 @@ mod tests {
         let tensor = make_cuda_tensor(buf, shape);
 
         let view = tensor.view();
-        let slice = view.slice(0, 1).unwrap();
+        let slice = view.slice(0, 1..1).unwrap();
         assert_eq!(*slice.meta.shape(), vec![3]);
         let reshaped = slice.view_as(vec![1, 3]).unwrap();
         assert_eq!(*reshaped.meta.shape(), vec![1, 3]);
@@ -430,11 +430,11 @@ mod tests {
     fn test_cuda_slice_errors() {
         let tensor = make_cuda_tensor(vec![1, 2, 3, 4], vec![2, 2]);
         assert!(matches!(
-            tensor.view().slice(3, 0),
+            tensor.view().slice(3, 0..0),
             Err(TensorError::InvalidDim)
         ));
         assert!(matches!(
-            tensor.view().slice(0, 5),
+            tensor.view().slice(0, 5..5),
             Err(TensorError::IdxOutOfBounds)
         ));
     }
@@ -453,13 +453,13 @@ mod tests {
         assert_eq!(tensor.view().get(vec![1, 1]).unwrap(), 55);
 
         let view = tensor.view();
-        let view = view.slice(0, 1).unwrap();
+        let view = view.slice(0, 1..1).unwrap();
         assert_eq!(view.get(vec![0]).unwrap(), 4);
         assert_eq!(view.get(vec![1]).unwrap(), 55);
         assert_eq!(view.get(vec![2]).unwrap(), 6);
 
         let mut mut_view = tensor.view_mut();
-        let mut mut_slice = mut_view.slice_mut(0, 0).unwrap();
+        let mut mut_slice = mut_view.slice_mut(0, 0..0).unwrap();
         mut_slice.set(vec![2], 33).unwrap();
         assert_eq!(mut_slice.get(&Idx::Coord(&[2])).unwrap(), 33);
         assert_eq!(mut_slice.get(vec![2]).unwrap(), 33);

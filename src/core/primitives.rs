@@ -142,7 +142,7 @@ where
         Self {
             raw,
             backend,
-            meta,
+            meta
         }
     }
 

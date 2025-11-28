@@ -112,7 +112,7 @@ mod tests {
     fn test_add_after_slice() {
         let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 4, 5, 6], vec![2, 3]).unwrap();
         let mut view = tensor.view_mut();
-        let mut slice = view.slice_mut(0, 1).unwrap(); // Second row: [4, 5, 6]
+        let mut slice = view.slice_mut(0, 1..1).unwrap(); // Second row: [4, 5, 6]
         
         // Verify slice values before mutation
         use crate::core::tensor::TensorAccess;
@@ -131,7 +131,7 @@ mod tests {
     fn test_add_after_slice_and_reshape() {
         let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 4, 5, 6], vec![2, 3]).unwrap();
         let mut view = tensor.view_mut();
-        let slice = view.slice_mut(0, 1).unwrap(); // Second row: [4, 5, 6]
+        let slice = view.slice_mut(0, 1..1).unwrap(); // Second row: [4, 5, 6]
         let mut reshaped = slice.view_as(vec![1, 3]).unwrap();
         reshaped += 50;
         
@@ -155,7 +155,7 @@ mod tests {
     fn test_mul_after_slice() {
         let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 4, 5, 6, 7, 8], vec![2, 2, 2]).unwrap();
         let mut view = tensor.view_mut();
-        let mut slice = view.slice_mut(0, 0).unwrap(); // First depth slice: [1, 2, 3, 4]
+        let mut slice = view.slice_mut(0, 0..0).unwrap(); // First depth slice: [1, 2, 3, 4]
         
         // Verify slice values before mutation
         use crate::core::tensor::TensorAccess;
@@ -186,7 +186,7 @@ mod tests {
         // Create a matrix and slice a column (non-contiguous)
         let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 4, 5, 6], vec![2, 3]).unwrap();
         let mut view = tensor.view_mut();
-        let mut col_slice = view.slice_mut(1, 1).unwrap(); // Middle column: [2, 5]
+        let mut col_slice = view.slice_mut(1, 1..1).unwrap(); // Middle column: [2, 5]
         
         // Verify slice values (non-contiguous access)
         use crate::core::tensor::TensorAccess;
@@ -217,7 +217,7 @@ mod tests {
         let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 4, 5, 6, 7, 8], vec![2, 2, 2]).unwrap();
         let value = 1000;
         let mut view = tensor.view_mut();
-        let mut depth_slice = view.slice_mut(0, 1).unwrap(); // Second depth: [6, 7, 8, 9] -> wait, buffer is [5,6,7,8]
+        let mut depth_slice = view.slice_mut(0, 1..1).unwrap(); // Second depth: [6, 7, 8, 9] -> wait, buffer is [5,6,7,8]
         
         // Verify depth slice values
         use crate::core::tensor::TensorAccess;
@@ -226,7 +226,7 @@ mod tests {
         assert_eq!(depth_slice.get(vec![1, 0]).unwrap(), 7, "Depth slice[1,0] should be 7");
         assert_eq!(depth_slice.get(vec![1, 1]).unwrap(), 8, "Depth slice[1,1] should be 8");
         
-        let mut row_slice = depth_slice.slice_mut(0, 0).unwrap(); // First row of that: [5, 6]
+        let mut row_slice = depth_slice.slice_mut(0, 0..0).unwrap(); // First row of that: [5, 6]
         assert_eq!(row_slice.get(vec![0]).unwrap(), 5, "Row slice[0] should be 5");
         assert_eq!(row_slice.get(vec![1]).unwrap(), 6, "Row slice[1] should be 6");
         
@@ -309,7 +309,7 @@ mod tests {
     fn test_add_not_inplace_with_slice() {
         let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 4, 5, 6], vec![2, 3]).unwrap();
         let mut view = tensor.view_mut();
-        let slice = view.slice_mut(0, 1).unwrap(); // Second row: [4, 5, 6]
+        let slice = view.slice_mut(0, 1..1).unwrap(); // Second row: [4, 5, 6]
         let result = slice + 100;
         
         // Result should be a new 1D tensor with shape [3]
@@ -326,7 +326,7 @@ mod tests {
         // Test with non-contiguous column slice
         let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 4, 5, 6], vec![2, 3]).unwrap();
         let mut view = tensor.view_mut();
-        let col_slice = view.slice_mut(1, 1).unwrap(); // Middle column: [2, 5]
+        let col_slice = view.slice_mut(1, 1..1).unwrap(); // Middle column: [2, 5]
         
         assert!(!col_slice.is_contiguous(), "Column slice should be non-contiguous");
         
@@ -381,8 +381,8 @@ mod tests {
         // Test with chained slices to ensure view_to_owned handles complex cases
         let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 4, 5, 6, 7, 8], vec![2, 2, 2]).unwrap();
         let mut view = tensor.view_mut();
-        let mut depth_slice = view.slice_mut(0, 1).unwrap(); // Second depth: [5, 6, 7, 8]
-        let row_slice = depth_slice.slice_mut(0, 0).unwrap(); // First row: [5, 6]
+        let mut depth_slice = view.slice_mut(0, 1..1).unwrap(); // Second depth: [5, 6, 7, 8]
+        let row_slice = depth_slice.slice_mut(0, 0..0).unwrap(); // First row: [5, 6]
         
         let result = row_slice + 1000;
         
@@ -465,7 +465,7 @@ mod tests {
     fn test_sub_immutable_view_with_slice() {
         let tensor = TensorBase::<Cpu, i32>::from_buf(vec![10, 20, 30, 40, 50, 60], vec![2, 3]).unwrap();
         // Slice to get first row, then subtract
-        let result = tensor.view().slice(0, 0).unwrap() - 5;
+        let result = tensor.view().slice(0, 0..0).unwrap() - 5;
         
         assert_eq!(result.raw, vec![5, 15, 25].into_boxed_slice());
         assert_eq!(*result.shape(), vec![3]);
@@ -529,7 +529,7 @@ mod tests {
     fn test_mul_immutable_view_noncontiguous_slice() {
         let tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 4, 5, 6], vec![2, 3]).unwrap();
         // Get column (non-contiguous) then multiply
-        let result = tensor.view().slice(1, 1).unwrap() * 5;
+        let result = tensor.view().slice(1, 1..1).unwrap() * 5;
         
         assert_eq!(result.raw, vec![10, 25].into_boxed_slice());
         assert_eq!(*result.shape(), vec![2]);
@@ -544,7 +544,7 @@ mod tests {
         let tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 4, 5, 6, 7, 8], vec![2, 4]).unwrap();
         // Chain slice and reshape, then add
         let result = tensor.view()
-            .slice(0, 0).unwrap()  // Get first row: [1, 2, 3, 4]
+            .slice(0, 0..0).unwrap()  // Get first row: [1, 2, 3, 4]
             .view_as(vec![2, 2]).unwrap()  // Reshape to 2x2
             + 1000;
         
@@ -729,7 +729,7 @@ mod tests {
             vec![3, 4]
         ).unwrap();
         let mut view = tensor.view_mut();
-        let mut slice = view.slice_mut(0, 1).unwrap(); // Second row: [5, 6, 7, 8]
+        let mut slice = view.slice_mut(0, 1..1).unwrap(); // Second row: [5, 6, 7, 8]
         slice *= 10;
         
         let expected = TensorBase::<Cpu, i32>::from_buf(
@@ -873,7 +873,7 @@ mod tests {
         
         // Get middle column (non-contiguous)
         let mut view = tensor.view_mut();
-        let mut col = view.slice_mut(1, 1).unwrap(); // Column 1: [2, 5, 8, 11]
+        let mut col = view.slice_mut(1, 1..1).unwrap(); // Column 1: [2, 5, 8, 11]
         col += 100;
         col *= 2;
         
@@ -892,7 +892,7 @@ mod tests {
         ).unwrap();
         let view = tensor.view_mut();
         let mut reshaped = view.view_as(vec![4, 2]).unwrap();
-        let mut col_slice = reshaped.slice_mut(1, 1).unwrap(); // Second column
+        let mut col_slice = reshaped.slice_mut(1, 1..1).unwrap(); // Second column
         col_slice *= 10;
         
         // Second column in 4x2 is indices 1, 3, 5, 7
@@ -912,7 +912,7 @@ mod tests {
         // Shape is [2, 3, 4] - we're slicing dim 1 at idx 1
         // This removes the middle dimension, leaving shape [2, 4]
         let mut view = tensor.view_mut();
-        let mut slice = view.slice_mut(1, 1).unwrap(); // Middle "row" at each depth level
+        let mut slice = view.slice_mut(1, 1..1).unwrap(); // Middle "row" at each depth level
         slice += 100;
         
         // Original data is laid out as:
@@ -947,7 +947,7 @@ mod tests {
         let data: Vec<i32> = (1..=24).collect();
         let mut tensor = TensorBase::<Cpu, i32>::from_buf(data, vec![2, 3, 2, 2]).unwrap();
         let mut view = tensor.view_mut();
-        let mut slice = view.slice_mut(0, 1).unwrap(); // Second slice along first dim
+        let mut slice = view.slice_mut(0, 1..1).unwrap(); // Second slice along first dim
         slice *= 10;
         
         // Second half of data (indices 12-23)
@@ -1026,14 +1026,14 @@ mod tests {
         // First view - operate on first row
         {
             let mut view = tensor.view_mut();
-            let mut row1 = view.slice_mut(0, 0).unwrap();
+            let mut row1 = view.slice_mut(0, 0..0).unwrap();
             row1 += 10;
         }
         
         // Second view - operate on second row
         {
             let mut view = tensor.view_mut();
-            let mut row2 = view.slice_mut(0, 1).unwrap();
+            let mut row2 = view.slice_mut(0, 1..1).unwrap();
             row2 *= 5;
         }
         
@@ -1214,7 +1214,7 @@ mod cuda_tests {
     fn test_add_after_slice_cuda() {
         let mut tensor = CudaTensor::<i32>::from_buf(vec![1, 2, 3, 4, 5, 6], vec![2, 3]).unwrap();
         let mut view = tensor.view_mut();
-        let mut slice = view.slice_mut(0, 1).unwrap(); // Second row: [4, 5, 6]
+        let mut slice = view.slice_mut(0, 1..1).unwrap(); // Second row: [4, 5, 6]
         
         // Verify slice values before mutation
         assert_eq!(slice.get(vec![0]).unwrap(), 4);
@@ -1231,7 +1231,7 @@ mod cuda_tests {
     fn test_add_after_slice_and_reshape_cuda() {
         let mut tensor = CudaTensor::<i32>::from_buf(vec![1, 2, 3, 4, 5, 6], vec![2, 3]).unwrap();
         let mut view = tensor.view_mut();
-        let slice = view.slice_mut(0, 1).unwrap(); // Second row: [4, 5, 6]
+        let slice = view.slice_mut(0, 1..1).unwrap(); // Second row: [4, 5, 6]
         let mut reshaped = slice.view_as(vec![1, 3]).unwrap();
         reshaped += 50;
         
@@ -1254,7 +1254,7 @@ mod cuda_tests {
     fn test_mul_after_slice_cuda() {
         let mut tensor = CudaTensor::<i32>::from_buf(vec![1, 2, 3, 4, 5, 6, 7, 8], vec![2, 2, 2]).unwrap();
         let mut view = tensor.view_mut();
-        let mut slice = view.slice_mut(0, 0).unwrap(); // First depth slice
+        let mut slice = view.slice_mut(0, 0..0).unwrap(); // First depth slice
         
         // Verify slice values before mutation
         assert_eq!(slice.get(vec![0, 0]).unwrap(), 1);
@@ -1284,7 +1284,7 @@ mod cuda_tests {
         // Create a matrix and slice a column (non-contiguous)
         let mut tensor = CudaTensor::<i32>::from_buf(vec![1, 2, 3, 4, 5, 6], vec![2, 3]).unwrap();
         let mut view = tensor.view_mut();
-        let mut col_slice = view.slice_mut(1, 1).unwrap(); // Middle column: [2, 5]
+        let mut col_slice = view.slice_mut(1, 1..1).unwrap(); // Middle column: [2, 5]
         
         // Verify slice values (non-contiguous access)
         assert_eq!(col_slice.get(vec![0]).unwrap(), 2);
@@ -1314,7 +1314,7 @@ mod cuda_tests {
         let mut tensor = CudaTensor::<i32>::from_buf(vec![1, 2, 3, 4, 5, 6, 7, 8], vec![2, 2, 2]).unwrap();
         let value = 1000;
         let mut view = tensor.view_mut();
-        let mut depth_slice = view.slice_mut(0, 1).unwrap(); // Second depth
+        let mut depth_slice = view.slice_mut(0, 1..1).unwrap(); // Second depth
         
         // Verify depth slice values
         assert_eq!(depth_slice.get(vec![0, 0]).unwrap(), 5);
@@ -1322,7 +1322,7 @@ mod cuda_tests {
         assert_eq!(depth_slice.get(vec![1, 0]).unwrap(), 7);
         assert_eq!(depth_slice.get(vec![1, 1]).unwrap(), 8);
         
-        let mut row_slice = depth_slice.slice_mut(0, 0).unwrap(); // First row of that
+        let mut row_slice = depth_slice.slice_mut(0, 0..0).unwrap(); // First row of that
         assert_eq!(row_slice.get(vec![0]).unwrap(), 5);
         assert_eq!(row_slice.get(vec![1]).unwrap(), 6);
         
@@ -1393,7 +1393,7 @@ mod cuda_tests {
     fn test_add_not_inplace_with_slice_cuda() {
         let mut tensor = CudaTensor::<i32>::from_buf(vec![1, 2, 3, 4, 5, 6], vec![2, 3]).unwrap();
         let mut view = tensor.view_mut();
-        let slice = view.slice_mut(0, 1).unwrap(); // Second row: [4, 5, 6]
+        let slice = view.slice_mut(0, 1..1).unwrap(); // Second row: [4, 5, 6]
         let result = slice + 100;
         
         // Result should be a new 1D tensor
@@ -1411,7 +1411,7 @@ mod cuda_tests {
         // Test with non-contiguous column slice
         let mut tensor = CudaTensor::<i32>::from_buf(vec![1, 2, 3, 4, 5, 6], vec![2, 3]).unwrap();
         let mut view = tensor.view_mut();
-        let col_slice = view.slice_mut(1, 1).unwrap(); // Middle column: [2, 5]
+        let col_slice = view.slice_mut(1, 1..1).unwrap(); // Middle column: [2, 5]
         
         assert!(!col_slice.is_contiguous());
         
@@ -1446,7 +1446,7 @@ mod cuda_tests {
     #[test]
     fn test_sub_immutable_view_with_slice_cuda() {
         let tensor = CudaTensor::<i32>::from_buf(vec![10, 20, 30, 40, 50, 60], vec![2, 3]).unwrap();
-        let result = tensor.view().slice(0, 0).unwrap() - 5;
+        let result = tensor.view().slice(0, 0..0).unwrap() - 5;
         
         let expected_result = CpuTensor::<i32>::from_buf(vec![5, 15, 25], vec![3]).unwrap();
         assert_eq!(result.cpu().unwrap(), expected_result);
@@ -1537,7 +1537,7 @@ mod cuda_tests {
         
         // Slice a single column (non-contiguous) and add to it
         let mut view = tensor.view_mut();
-        let mut col_slice = view.slice_mut(1, COLS / 2).unwrap(); // Middle column
+        let mut col_slice = view.slice_mut(1, (COLS / 2)..(COLS / 2)).unwrap(); // Middle column
         col_slice += 999;
         
         // Check a few values in the modified column
@@ -1799,7 +1799,7 @@ mod cuda_tests {
         ).unwrap();
         
         let mut view = tensor.view_mut();
-        let mut middle_row = view.slice_mut(0, 1).unwrap(); // [4, 5, 6]
+        let mut middle_row = view.slice_mut(0, 1..1).unwrap(); // [4, 5, 6]
         middle_row *= 10.0;
         middle_row += 5.0;
         
@@ -1947,7 +1947,7 @@ mod cuda_tests {
             vec![3, 3]
         ).unwrap();
         let mut view = tensor.view_mut();
-        let mut col = view.slice_mut(1, 1).unwrap(); // Middle column [2, 5, 8]
+        let mut col = view.slice_mut(1, 1..1).unwrap(); // Middle column [2, 5, 8]
         
         col += 100;
         col *= 2;
@@ -1968,7 +1968,7 @@ mod cuda_tests {
         ).unwrap();
         
         let mut view = tensor.view_mut();
-        let mut depth_slice = view.slice_mut(0, 1).unwrap(); // Middle depth slice
+        let mut depth_slice = view.slice_mut(0, 1..1).unwrap(); // Middle depth slice
         depth_slice *= 10.0;
         
         let mut expected_data: Vec<f32> = (1..=27).map(|x| x as f32).collect();
@@ -2008,7 +2008,7 @@ mod cuda_tests {
         
         // Complex immutable chain
         let result = tensor.view()
-            .slice(0, 1).unwrap()  // Second row: [5, 6, 7, 8]
+            .slice(0, 1..1).unwrap()  // Second row: [5, 6, 7, 8]
             .view_as(vec![2, 2]).unwrap()  // Reshape
             + 100.0;
         
@@ -2192,7 +2192,7 @@ mod cuda_tests {
             vec![3, 4]
         ).unwrap();
         let mut view = tensor.view_mut();
-        let mut slice = view.slice_mut(0, 1).unwrap(); // Second row: [5, 6, 7, 8]
+        let mut slice = view.slice_mut(0, 1..1).unwrap(); // Second row: [5, 6, 7, 8]
         slice *= 10;
         
         let expected = CpuTensor::<i32>::from_buf(
@@ -2267,7 +2267,7 @@ mod cuda_tests {
         
         // Get middle column (non-contiguous)
         let mut view = tensor.view_mut();
-        let mut col = view.slice_mut(1, 1).unwrap(); // Column 1: [2, 5, 8, 11]
+        let mut col = view.slice_mut(1, 1..1).unwrap(); // Column 1: [2, 5, 8, 11]
         col += 100;
         col *= 2;
         
@@ -2286,7 +2286,7 @@ mod cuda_tests {
         ).unwrap();
         let view = tensor.view_mut();
         let mut reshaped = view.view_as(vec![4, 2]).unwrap();
-        let mut col_slice = reshaped.slice_mut(1, 1).unwrap(); // Second column
+        let mut col_slice = reshaped.slice_mut(1, 1..1).unwrap(); // Second column
         col_slice *= 10;
         
         // Second column in 4x2 is indices 1, 3, 5, 7
@@ -2304,7 +2304,7 @@ mod cuda_tests {
         
         // Slice along middle dimension at index 1 (middle row)
         let mut view = tensor.view_mut();
-        let mut slice = view.slice_mut(1, 1).unwrap(); // Middle "row" at each depth level
+        let mut slice = view.slice_mut(1, 1..1).unwrap(); // Middle "row" at each depth level
         slice += 100;
         
         // Indices affected: 5-8, 17-20 (middle row of each depth, 1-indexed becomes 4-7, 16-19 in 0-indexed)
@@ -2336,7 +2336,7 @@ mod cuda_tests {
         let data: Vec<i32> = (1..=24).collect();
         let mut tensor = CudaTensor::<i32>::from_buf(data, vec![2, 3, 2, 2]).unwrap();
         let mut view = tensor.view_mut();
-        let mut slice = view.slice_mut(0, 1).unwrap(); // Second slice along first dim
+        let mut slice = view.slice_mut(0, 1..1).unwrap(); // Second slice along first dim
         slice *= 10;
         
         // Second half of data (indices 12-23)
@@ -2421,14 +2421,14 @@ mod cuda_tests {
         // First view - operate on first row
         {
             let mut view = tensor.view_mut();
-            let mut row1 = view.slice_mut(0, 0).unwrap();
+            let mut row1 = view.slice_mut(0, 0..0).unwrap();
             row1 += 10;
         }
         
         // Second view - operate on second row
         {
             let mut view = tensor.view_mut();
-            let mut row2 = view.slice_mut(0, 1).unwrap();
+            let mut row2 = view.slice_mut(0, 1..1).unwrap();
             row2 *= 5;
         }
         

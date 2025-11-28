@@ -9,7 +9,9 @@ Goal is high performance ML stack with minimal dependencies and maximal flexibil
 - [X] Backend abstraction
 - [X] Nicer syntax. macro time `tset!(tensor.view_mut(), v: 99, 1, 2)` and `tget!(tensor.view(), 1, 2)`
 - [X] Basic GPU backend
-- [ ] Slicing with ranges
+- [X] Slicing with ranges `tensor.view().slice(0, 1..3)` etc.
+- [ ] Test more slicing syntaxes
+- [ ] Slicing macro
 - [X] Elementwise broadcasting
 - [ ] Basic linear algebra helpers
 - [X] Accelerated backends (GPU / parallel) in progress
