@@ -17,18 +17,17 @@ Goal is high performance ML stack with minimal dependencies and maximal flexibil
 - [X] Accelerated backends (GPU / parallel) in progress
 - [ ] x86 SIMD paths (currently relying on llvm auto-vectorization for CPU which only works for contiguous memory)
 - [ ] Multiple gpu devices allowed
-- [ ] CUDA scheduler for syncing and fusing ops
 - [X] Do not lock thread on GPU dispatch
 - [ ] strides and offset as bytes 
 
 ## to optimize
 
-- [ ] Elementwise ops require computing all offsets every time. perhaps cache them
+- [ ] collapse dims to allow backend to access contiguous fast paths
 - [ ] `view_to_owned` can probably be optimized to copy larger chunks at once
-- [ ] Restrict tensor values to require basic operations
+- [X] Restrict tensor values to require basic operations
 - [X] perf sucks for contiguous memory in unary CPU - fix
 - [X] perf sucks for contiguous memory in unary CUDA - fix
-- [ ] perf sucks for non-contiguous memory in unary CPU - fix
+- [X] perf sucks for non-contiguous memory in unary CPU - fix
 - [X] perf sucks for non-contiguous memory in unary CUDA - fix
 
 
