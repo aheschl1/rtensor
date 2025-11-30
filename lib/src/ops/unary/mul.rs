@@ -1,6 +1,6 @@
 use std::{borrow::Borrow, ops::{Mul, MulAssign}};
 
-use crate::{backend::BackendUnaryElementwise, core::{primitives::TensorBase, tensor::{AsTensor, AsViewMut}, value::{TensorValue, TensorValueElementwise}, TensorView, TensorViewMut}, ops::unary::ElementwiseTensorOp};
+use crate::{backend::BackendUnaryElementwise, core::{primitives::TensorBase, tensor::AsTensor, value::{TensorValue, TensorValueElementwise}, TensorView, TensorViewMut}, ops::unary::ElementwiseTensorOp};
 
 impl<'a, T, B, O> MulAssign<O> for TensorViewMut<'a, T, B> 
     where T: TensorValueElementwise + TensorValue,
@@ -16,32 +16,42 @@ impl<'a, T, B, O> MulAssign<O> for TensorViewMut<'a, T, B>
     }
 }
 
-impl<'a, T, B, O> Mul<O> for TensorViewMut<'a, T, B> 
+impl<T, B, O> MulAssign<O> for TensorBase<B, T> 
     where T: TensorValueElementwise + TensorValue,
           B: BackendUnaryElementwise<T>,
           O: Borrow<T>
 {
-    type Output = TensorBase<B, T>;
-
-    fn mul(self, rhs: O) -> Self::Output {
-        let mut result = self.owned();
-        let mut view = result.view_mut();
-        view *= rhs;
-        result
+    fn mul_assign(&mut self, rhs: O) {
+        self.backend.apply_elementwise(
+            &mut self.raw, 
+            ElementwiseTensorOp::Mul(*rhs.borrow()),
+            &self.meta
+        ).unwrap();
     }
 }
 
-impl<'a, T, B, O> Mul<O> for TensorView<'a, T, B> 
-    where T: TensorValueElementwise + TensorValue,
-          B: BackendUnaryElementwise<T>,
-          O: Borrow<T>
-{
-    type Output = TensorBase<B, T>;
+macro_rules! impl_mul {
+    ($type:ty) => {
+        impl<'a, T, B, O> Mul<O> for $type
+        where
+            T: TensorValueElementwise + TensorValue,
+            B: BackendUnaryElementwise<T>,
+            O: Borrow<T>,
+        {
+            type Output = TensorBase<B, T>;
 
-    fn mul(self, rhs: O) -> Self::Output {
-        let mut result = self.owned();
-        let mut view = result.view_mut();
-        view *= rhs;
-        result
-    }
+            fn mul(self, rhs: O) -> Self::Output {
+                let mut result = self.owned();
+                result *= rhs;
+                result
+            }
+        }
+    };
 }
+
+impl_mul!(&TensorViewMut<'a, T, B>);
+impl_mul!(TensorViewMut<'a, T, B>);
+impl_mul!(&TensorView<'a, T, B>);
+impl_mul!(TensorView<'a, T, B>);
+impl_mul!(&TensorBase<B, T>);
+impl_mul!(TensorBase<B, T>);
