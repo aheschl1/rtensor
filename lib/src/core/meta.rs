@@ -6,28 +6,10 @@ use super::primitives::TensorView;
 
 pub type Dim = usize;
 pub type Stride = Vec<isize>;
-// pub type Shape = Vec<Dim>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Shape(pub Vec<Dim>);
 
-impl Into<Vec<Dim>> for Shape {
-    fn into(self) -> Vec<Dim> {
-        self.0
-    }
-}
-
-impl From<Vec<Dim>> for Shape {
-    fn from(v: Vec<Dim>) -> Self {
-        Shape(v)
-    }
-}
-
-impl AsRef<[Dim]> for Shape {
-    fn as_ref(&self) -> &[Dim] {
-        &self.0
-    }
-}
 
 impl Shape {
     pub fn empty() -> Self {
@@ -265,7 +247,7 @@ impl MetaTensorView for MetaTensor {
     }
 }
 
-impl<B, T: TensorValue> MetaTensorView for TensorBase<B, T> 
+impl<B, T: TensorValue> MetaTensorView for TensorBase<T, B> 
 where
     B: Backend<T>,
 {
@@ -292,88 +274,51 @@ where
     }
 }
 
-// / Computes memory regions for a given inner dimension.
-// / For each combination of outer dimensions, a region covering the inner
-// / dimension is created, either as contiguous or strided.
-// / For example, for a tensor of shape [2,3,4] and inner=1 (the '3' dimension),
-// / the resulting regions will cover all 2*4=8 rows of length 3.
-// fn regions_by_inner_dim(meta_tensor: MetaTensor, inner: usize) -> Vec<MemRegion> {
-//     let rank = meta_tensor.rank();
-//     let mut regions = Vec::new();
 
-//     let inner_len = meta_tensor.shape[inner];
-//     let inner_stride = meta_tensor.stride[inner];
+impl Into<Vec<Dim>> for Shape {
+    fn into(self) -> Vec<Dim> {
+        self.0
+    }
+}
 
-//     // Build outer dims
-//     let mut outer_shape = Vec::new();
-//     let mut outer_strides = Vec::new();
+impl From<Vec<Dim>> for Shape {
+    fn from(v: Vec<Dim>) -> Self {
+        Shape(v)
+    }
+}
 
-//     for d in 0..rank {
-//         if d == inner { continue; }
-//         outer_shape.push(meta_tensor.shape[d]);
-//         outer_strides.push(meta_tensor.stride[d]);
-//     }
+impl AsRef<[Dim]> for Shape {
+    fn as_ref(&self) -> &[Dim] {
+        &self.0
+    }
+}
 
-//     let mut outer_idx = vec![0; outer_shape.len()];
+impl From<(Dim,)> for Shape {
+    fn from(t: (Dim,)) -> Self {
+        Shape(vec![t.0])
+    }
+}
 
-//     if outer_idx.is_empty() {
-//         // This is a pure 1D tensor
-//         if inner_stride == 1 {
-//             regions.push(MemRegion::Contiguous {
-//                 start: meta_tensor.offset,
-//                 len: inner_len,
-//             });
-//         } else {
-//             regions.push(MemRegion::Strided {
-//                 start: meta_tensor.offset,
-//                 stride: inner_stride,
-//                 len: inner_len,
-//             });
-//         }
-//         return regions;
-//     }
+impl From<(Dim, Dim)> for Shape {
+    fn from(t: (Dim, Dim)) -> Self {
+        Shape(vec![t.0, t.1])
+    }
+}
 
-//     // Iterate outer indices
-//     'outer_loop: loop {
-//         // Compute base offset for the current outer coordinates
-//         let mut base = meta_tensor.offset;
-//         let mut oi = 0;
+impl From<(Dim, Dim, Dim)> for Shape {
+    fn from(t: (Dim, Dim, Dim)) -> Self {
+        Shape(vec![t.0, t.1, t.2])
+    }
+}
 
-//         for d in 0..rank {
-//             if d == inner { continue; }
-//             base += ((outer_idx[oi] as isize) * meta_tensor.stride[d]) as usize;
-//             oi += 1;
-//         }
+impl From<(Dim, Dim, Dim, Dim)> for Shape {
+    fn from(t: (Dim, Dim, Dim, Dim)) -> Self {
+        Shape(vec![t.0, t.1, t.2, t.3])
+    }
+}
 
-//         // Emit region
-//         if inner_stride == 1 {
-//             regions.push(MemRegion::Contiguous {
-//                 start: base,
-//                 len: inner_len,
-//             });
-//         } else {
-//             regions.push(MemRegion::Strided {
-//                 start: base,
-//                 stride: inner_stride,
-//                 len: inner_len,
-//             });
-//         }
-
-//         // Increment outer indices like a multi-digit counter
-//         for i in (0..outer_idx.len()).rev() {
-//             outer_idx[i] += 1;
-//             if outer_idx[i] < outer_shape[i] {
-//                 continue 'outer_loop;
-//             } else {
-//                 outer_idx[i] = 0;
-//             }
-//         }
-
-//         break;
-//     }
-
-//     regions
-// }
-
-
-// TODO tests for MetaTensor and MetaTensorView
+impl From<(Dim, Dim, Dim, Dim, Dim)> for Shape {
+    fn from(t: (Dim, Dim, Dim, Dim, Dim)) -> Self {
+        Shape(vec![t.0, t.1, t.2, t.3, t.4])
+    }
+}

@@ -1482,4 +1482,14 @@ mod tests {
         assert_eq!(*owned.shape(), vec![2, 3]);
         assert_eq!(owned.raw, vec![1, 2, 3, 4, 5, 6].into_boxed_slice());
     }
+
+    #[test]
+    fn test_instantiation() {
+        let tensor = CpuTensor::<f32>::zeros((1, 1));
+
+        assert_eq!(*tensor.shape(), vec![1, 1]);
+        assert_eq!(tensor.raw.len(), 1);
+        assert_eq!(tensor.raw[0], 0.0);
+
+    }
 }

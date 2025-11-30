@@ -6,6 +6,7 @@ use cudarc::driver::DeviceRepr;
 pub trait TensorValue: 
     Copy + 
     Default +
+    TensorDefault +
     DeviceRepr +
     'static
 {}
@@ -14,6 +15,7 @@ pub trait TensorValue:
 pub trait TensorValue: 
     Copy + 
     Default +
+    TensorDefault +
     'static
 {}
 
@@ -24,33 +26,49 @@ pub trait TensorValueElementwise:
     std::ops::Mul<Output = Self>
 {}
 
-impl TensorValue for f32 {}
-impl TensorValue for f64 {}
-impl TensorValue for i8 {}
-impl TensorValue for i16 {}
-impl TensorValue for i32 {}
-impl TensorValue for i64 {}
-impl TensorValue for i128 {}
-impl TensorValue for isize {}
-impl TensorValue for u8 {}
-impl TensorValue for u16 {}
-impl TensorValue for u32 {}
-impl TensorValue for u64 {}
-impl TensorValue for u128 {}
-impl TensorValue for usize {}
+pub trait TensorDefault {
+    fn zero() -> Self;
+    fn one() -> Self;
+    fn min() -> Self;
+    fn max() -> Self;
+}
+
+
+macro_rules! impl_tensor_values {
+    ($($type:ty),+ $(,)?) => {
+        $(
+            impl TensorValue for $type {}
+            impl TensorValueElementwise for $type {}
+        )+
+    };
+}
+
+macro_rules! impl_default {
+    ($type:ty, $zero:expr, $one:expr, $min:expr, $max:expr) => {
+        impl TensorDefault for $type {
+            fn zero() -> Self {$zero}
+            fn one() -> Self {$one}
+            fn min() -> Self {$min}
+            fn max() -> Self {$max}
+        }
+    };
+}
+
+impl_tensor_values!(f32, f64, i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize);
 impl TensorValue for bool {}
 
-impl TensorValueElementwise for f32 {}
-impl TensorValueElementwise for f64 {}
-impl TensorValueElementwise for i8 {}
-impl TensorValueElementwise for i16 {}
-impl TensorValueElementwise for i32 {}
-impl TensorValueElementwise for i64 {}
-impl TensorValueElementwise for i128 {}
-impl TensorValueElementwise for isize {}
-impl TensorValueElementwise for u8 {}
-impl TensorValueElementwise for u16 {}
-impl TensorValueElementwise for u32 {}
-impl TensorValueElementwise for u64 {}
-impl TensorValueElementwise for u128 {}
-impl TensorValueElementwise for usize {}
+impl_default!(f32, 0.0f32, 1.0f32, f32::MIN, f32::MAX);
+impl_default!(f64, 0.0f64, 1.0f64, f64::MIN, f64::MAX);
+impl_default!(i8, 0i8, 1i8, i8::MIN, i8::MAX);
+impl_default!(i16, 0i16, 1i16, i16::MIN, i16::MAX);
+impl_default!(i32, 0i32, 1i32, i32::MIN, i32::MAX);
+impl_default!(i64, 0i64, 1i64, i64::MIN, i64::MAX);
+impl_default!(i128, 0i128, 1i128, i128::MIN, i128::MAX);
+impl_default!(isize, 0isize, 1isize, isize::MIN, isize::MAX);
+impl_default!(u8, 0u8, 1u8, u8::MIN, u8::MAX);
+impl_default!(u16, 0u16, 1u16, u16::MIN, u16::MAX);
+impl_default!(u32, 0u32, 1u32, u32::MIN, u32::MAX);
+impl_default!(u64, 0u64, 1u64, u64::MIN, u64::MAX);
+impl_default!(u128, 0u128, 1u128, u128::MIN, u128::MAX);
+impl_default!(usize, 0usize, 1usize, usize::MIN, usize::MAX);
+impl_default!(bool, false, true, false, true);

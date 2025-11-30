@@ -16,7 +16,7 @@ impl<'a, T, B, O> MulAssign<O> for TensorViewMut<'a, T, B>
     }
 }
 
-impl<T, B, O> MulAssign<O> for TensorBase<B, T> 
+impl<T, B, O> MulAssign<O> for TensorBase<T, B> 
     where T: TensorValueElementwise + TensorValue,
           B: BackendUnaryElementwise<T>,
           O: Borrow<T>
@@ -38,7 +38,7 @@ macro_rules! impl_mul {
             B: BackendUnaryElementwise<T>,
             O: Borrow<T>,
         {
-            type Output = TensorBase<B, T>;
+            type Output = TensorBase<T, B>;
 
             fn mul(self, rhs: O) -> Self::Output {
                 let mut result = self.owned();
@@ -53,5 +53,5 @@ impl_mul!(&TensorViewMut<'a, T, B>);
 impl_mul!(TensorViewMut<'a, T, B>);
 impl_mul!(&TensorView<'a, T, B>);
 impl_mul!(TensorView<'a, T, B>);
-impl_mul!(&TensorBase<B, T>);
-impl_mul!(TensorBase<B, T>);
+impl_mul!(&TensorBase<T, B>);
+impl_mul!(TensorBase<T, B>);

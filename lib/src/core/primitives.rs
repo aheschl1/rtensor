@@ -7,14 +7,14 @@ use crate::core::{shape_to_stride, Shape, MetaTensor};
 use crate::core::tensor::TensorError;
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct TensorBase<B: Backend<T>, T: TensorValue> {
+pub struct TensorBase<T: TensorValue, B: Backend<T>> {
     pub(crate) backend: B,
     pub(crate) raw: B::Buf,
     pub(crate) meta: MetaTensor,
     _t: PhantomData<T>,
 }
 
-impl<B: Backend<T>, T: TensorValue> Clone for TensorBase<B, T> {
+impl<B: Backend<T>, T: TensorValue> Clone for TensorBase<T, B> {
     fn clone(&self) -> Self {
         let new_backend = B::new();
         let new_buffer = new_backend.copy(&self.raw).unwrap();
@@ -32,10 +32,10 @@ impl<B: Backend<T>, T: TensorValue> Clone for TensorBase<B, T> {
 /// Holds the backing buffer and the associated layout metadata. The `offset`
 /// in `meta` is expected to be zero for owned tensors created via
 /// `from_buf`/`row`/`column`/`scalar`.
-pub type CpuTensor<T> = TensorBase<Cpu, T>;
+pub type CpuTensor<T> = TensorBase<T, Cpu>;
 
 #[cfg(feature = "cuda")]
-pub type CudaTensor<T> = TensorBase<crate::backend::cuda::CudaBackend, T>;
+pub type CudaTensor<T> = TensorBase<T, crate::backend::cuda::CudaBackend>;
 
 #[cfg(feature = "cuda")]
 impl<T: TensorValue> CudaTensor<T> {
@@ -131,7 +131,7 @@ pub type CudaTensorView<'a, T> = TensorView<'a, T, crate::backend::cuda::CudaBac
 #[cfg(feature = "cuda")]
 pub type CudaTensorViewMut<'a, T> = TensorViewMut<'a, T, crate::backend::cuda::CudaBackend>;
 
-impl<B, T: TensorValue> TensorBase<B, T> 
+impl<B, T: TensorValue> TensorBase<T, B> 
 where 
     B: Backend<T>,
 {
@@ -184,5 +184,53 @@ where
         let row = row.into();
         let shape = vec![1, row.len()];
         Self::from_buf(row, shape).unwrap()
+    }
+
+    /// Creates a tensor filled with zeroes for the given shape.
+    /// 
+    /// # Panics
+    /// Panics if memory allocation fails.
+    /// Use `TensorBase::from_buf` for fallible allocation.
+    pub fn zeros(shape: impl Into<Shape>) -> Self {
+        let shape: Shape = shape.into();
+        let element_count = shape.iter().product::<usize>();
+        let zero_buf = vec![T::zero(); element_count];
+        Self::from_buf(zero_buf, shape).expect("Failed to allocate memory")
+    }
+
+    /// Creates a tensor filled with ones for the given shape.
+    /// 
+    /// # Panics
+    /// Panics if memory allocation fails.
+    /// Use `TensorBase::from_buf` for fallible allocation.
+    pub fn ones(shape: impl Into<Shape>) -> Self {
+        let shape: Shape = shape.into();
+        let element_count = shape.iter().product::<usize>();
+        let one_buf = vec![T::one(); element_count];
+        Self::from_buf(one_buf, shape).expect("Failed to allocate memory")
+    }
+
+    /// Creates a tensor filled with the maximum value for the given shape.
+    /// 
+    /// # Panics
+    /// Panics if memory allocation fails.
+    /// Use `TensorBase::from_buf` for fallible allocation.
+    pub fn max(shape: impl Into<Shape>) -> Self {
+        let shape: Shape = shape.into();
+        let element_count = shape.iter().product::<usize>();
+        let max_buf = vec![T::max(); element_count];
+        Self::from_buf(max_buf, shape).expect("Failed to allocate memory")
+    }
+
+    /// Creates a tensor filled with the minimum value for the given shape.
+    /// 
+    /// # Panics
+    /// Panics if memory allocation fails.
+    /// Use `TensorBase::from_buf` for fallible allocation.
+    pub fn min(shape: impl Into<Shape>) -> Self {
+        let shape: Shape = shape.into();
+        let element_count = shape.iter().product::<usize>();
+        let min_buf = vec![T::min(); element_count];
+        Self::from_buf(min_buf, shape).expect("Failed to allocate memory")
     }
 }

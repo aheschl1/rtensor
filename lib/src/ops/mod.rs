@@ -9,59 +9,59 @@ mod tests {
     
     #[test]
     fn test_add() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3], vec![3]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3], vec![3]).unwrap();
         let mut view = tensor.view_mut();
         view += 5;
 
-        let expected = TensorBase::<Cpu, i32>::from_buf(vec![6, 7, 8], vec![3]).unwrap();
+        let expected = TensorBase::<i32, Cpu>::from_buf(vec![6, 7, 8], vec![3]).unwrap();
         assert_eq!(tensor.raw.clone(), expected.raw);
     }
 
     #[test]
     fn test_add_ref() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3], vec![3]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3], vec![3]).unwrap();
         let value = 10;
         let mut view = tensor.view_mut();
         view += &value;
-        let expected = TensorBase::<Cpu, i32>::from_buf(vec![11, 12, 13], vec![3]).unwrap();
+        let expected = TensorBase::<i32, Cpu>::from_buf(vec![11, 12, 13], vec![3]).unwrap();
         assert_eq!(tensor.raw.clone(), expected.raw);
     }
 
     #[test]
     fn test_add_negative() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![10, 20, 30], vec![3]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![10, 20, 30], vec![3]).unwrap();
         let mut view = tensor.view_mut();
         view += -5;
-        let expected = TensorBase::<Cpu, i32>::from_buf(vec![5, 15, 25], vec![3]).unwrap();
+        let expected = TensorBase::<i32, Cpu>::from_buf(vec![5, 15, 25], vec![3]).unwrap();
         assert_eq!(tensor.raw.clone(), expected.raw);
     }
 
     // same for sub
     #[test]
     fn test_sub() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![10, 20, 30], vec![3]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![10, 20, 30], vec![3]).unwrap();
         let mut view = tensor.view_mut();
         view -= 5;
-        let expected = TensorBase::<Cpu, i32>::from_buf(vec![5, 15, 25], vec![3]).unwrap();
+        let expected = TensorBase::<i32, Cpu>::from_buf(vec![5, 15, 25], vec![3]).unwrap();
         assert_eq!(tensor.raw.clone(), expected.raw);
     }
 
     #[test]
     fn test_sub_ref() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![10, 20, 30], vec![3]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![10, 20, 30], vec![3]).unwrap();
         let value = 10;
         let mut view = tensor.view_mut();
         view -= value;
-        let expected = TensorBase::<Cpu, i32>::from_buf(vec![0, 10, 20], vec![3]).unwrap();
+        let expected = TensorBase::<i32, Cpu>::from_buf(vec![0, 10, 20], vec![3]).unwrap();
         assert_eq!(tensor.raw.clone(), expected.raw);
     }
 
     #[test]
     fn test_sub_negative() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3], vec![3]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3], vec![3]).unwrap();
         let mut view = tensor.view_mut();
         view -= -5;
-        let expected = TensorBase::<Cpu, i32>::from_buf(vec![6, 7, 8], vec![3]).unwrap();
+        let expected = TensorBase::<i32, Cpu>::from_buf(vec![6, 7, 8], vec![3]).unwrap();
         assert_eq!(tensor.raw.clone(), expected.raw);
     }
 
@@ -69,29 +69,29 @@ mod tests {
 
     #[test]
     fn test_mul() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3], vec![3]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3], vec![3]).unwrap();
         let mut view = tensor.view_mut();
         view *= 5;
-        let expected = TensorBase::<Cpu, i32>::from_buf(vec![5, 10, 15], vec![3]).unwrap();
+        let expected = TensorBase::<i32, Cpu>::from_buf(vec![5, 10, 15], vec![3]).unwrap();
         assert_eq!(tensor.raw.clone(), expected.raw);
     }
 
     #[test]
     fn test_mul_ref() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3], vec![3]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3], vec![3]).unwrap();
         let value = 10;
         let mut view = tensor.view_mut();
         view *= &value;
-        let expected = TensorBase::<Cpu, i32>::from_buf(vec![10, 20, 30], vec![3]).unwrap();
+        let expected = TensorBase::<i32, Cpu>::from_buf(vec![10, 20, 30], vec![3]).unwrap();
         assert_eq!(tensor.raw.clone(), expected.raw);
     }
 
     #[test]
     fn test_mul_negative() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3], vec![3]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3], vec![3]).unwrap();
         let mut view = tensor.view_mut();
         view *= -5;
-        let expected = TensorBase::<Cpu, i32>::from_buf(vec![-5, -10, -15], vec![3]).unwrap();
+        let expected = TensorBase::<i32, Cpu>::from_buf(vec![-5, -10, -15], vec![3]).unwrap();
         assert_eq!(tensor.raw.clone(), expected.raw);
     }
 
@@ -99,19 +99,19 @@ mod tests {
 
     // #[test]
     // fn test_add_after_reshape() {
-    //     let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 4, 5, 6], vec![2, 3]).unwrap();
+    //     let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3, 4, 5, 6], vec![2, 3]).unwrap();
     //     let view = tensor.view_mut();
     //     let mut reshaped = view.view_as(vec![3, 2]).unwrap();
     //     reshaped += 10;
         
     //     // Original tensor should be modified
-    //     let expected = TensorBase::<Cpu, i32>::from_buf(vec![11, 12, 13, 14, 15, 16], vec![2, 3]).unwrap();
+    //     let expected = TensorBase::<i32, Cpu>::from_buf(vec![11, 12, 13, 14, 15, 16], vec![2, 3]).unwrap();
     //     assert_eq!(tensor.raw.clone(), expected.raw);
     // }
 
     #[test]
     fn test_add_after_slice() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 4, 5, 6], vec![2, 3]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3, 4, 5, 6], vec![2, 3]).unwrap();
         let mut view = tensor.view_mut();
         let mut slice = view.slice_mut(0, 1..1).unwrap(); // Second row: [4, 5, 6]
         
@@ -124,37 +124,37 @@ mod tests {
         slice += 100;
         
         // Only the sliced part should be modified
-        let expected = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 104, 105, 106], vec![2, 3]).unwrap();
+        let expected = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3, 104, 105, 106], vec![2, 3]).unwrap();
         assert_eq!(tensor.raw.clone(), expected.raw);
     }
 
     // #[test]
     // fn test_add_after_slice_and_reshape() {
-    //     let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 4, 5, 6], vec![2, 3]).unwrap();
+    //     let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3, 4, 5, 6], vec![2, 3]).unwrap();
     //     let mut view = tensor.view_mut();
     //     let slice = view.slice_mut(0, 1..1).unwrap(); // Second row: [4, 5, 6]
     //     let mut reshaped = slice.view_as(vec![1, 3]).unwrap();
     //     reshaped += 50;
         
     //     // Only the sliced part should be modified
-    //     let expected = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 54, 55, 56], vec![2, 3]).unwrap();
+    //     let expected = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3, 54, 55, 56], vec![2, 3]).unwrap();
     //     assert_eq!(tensor.raw.clone(), expected.raw);
     // }
 
     // #[test]
     // fn test_sub_after_reshape() {
-    //     let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![10, 20, 30, 40], vec![2, 2]).unwrap();
+    //     let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![10, 20, 30, 40], vec![2, 2]).unwrap();
     //     let view = tensor.view_mut();
     //     let mut reshaped = view.view_as(vec![4]).unwrap();
     //     reshaped -= 5;
         
-    //     let expected = TensorBase::<Cpu, i32>::from_buf(vec![5, 15, 25, 35], vec![2, 2]).unwrap();
+    //     let expected = TensorBase::<i32, Cpu>::from_buf(vec![5, 15, 25, 35], vec![2, 2]).unwrap();
     //     assert_eq!(tensor.raw.clone(), expected.raw);
     // }
 
     #[test]
     fn test_mul_after_slice() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 4, 5, 6, 7, 8], vec![2, 2, 2]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3, 4, 5, 6, 7, 8], vec![2, 2, 2]).unwrap();
         let mut view = tensor.view_mut();
         let mut slice = view.slice_mut(0, 0..0).unwrap(); // First depth slice: [1, 2, 3, 4]
         
@@ -167,25 +167,25 @@ mod tests {
         
         slice *= 10;
         
-        let expected = TensorBase::<Cpu, i32>::from_buf(vec![10, 20, 30, 40, 5, 6, 7, 8], vec![2, 2, 2]).unwrap();
+        let expected = TensorBase::<i32, Cpu>::from_buf(vec![10, 20, 30, 40, 5, 6, 7, 8], vec![2, 2, 2]).unwrap();
         assert_eq!(tensor.raw.clone(), expected.raw);
     }
 
     // #[test]
     // fn test_add_scalar_reshaped_to_matrix() {
-    //     let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![42], vec![1]).unwrap();
+    //     let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![42], vec![1]).unwrap();
     //     let view = tensor.view_mut();
     //     let mut reshaped = view.view_as(vec![1, 1]).unwrap();
     //     reshaped += 8;
         
-    //     let expected = TensorBase::<Cpu, i32>::from_buf(vec![50], vec![1]).unwrap();
+    //     let expected = TensorBase::<i32, Cpu>::from_buf(vec![50], vec![1]).unwrap();
     //     assert_eq!(tensor.raw.clone(), expected.raw);
     // }
 
     #[test]
     fn test_mul_after_column_slice() {
         // Create a matrix and slice a column (non-contiguous)
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 4, 5, 6], vec![2, 3]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3, 4, 5, 6], vec![2, 3]).unwrap();
         let mut view = tensor.view_mut();
         let mut col_slice = view.slice_mut(1, 1..1).unwrap(); // Middle column: [2, 5]
         
@@ -196,26 +196,26 @@ mod tests {
         
         col_slice *= 3;
         
-        let expected = TensorBase::<Cpu, i32>::from_buf(vec![1, 6, 3, 4, 15, 6], vec![2, 3]).unwrap();
+        let expected = TensorBase::<i32, Cpu>::from_buf(vec![1, 6, 3, 4, 15, 6], vec![2, 3]).unwrap();
         assert_eq!(tensor.raw.clone(), expected.raw);
     }
 
     // #[test]
     // fn test_sub_ref_after_reshape() {
-    //     let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![100, 200, 300, 400], vec![2, 2]).unwrap();
+    //     let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![100, 200, 300, 400], vec![2, 2]).unwrap();
     //     let value = 50;
     //     let view = tensor.view_mut();
     //     let mut reshaped = view.view_as(vec![4]).unwrap();
     //     reshaped -= &value;
         
-    //     let expected = TensorBase::<Cpu, i32>::from_buf(vec![50, 150, 250, 350], vec![2, 2]).unwrap();
+    //     let expected = TensorBase::<i32, Cpu>::from_buf(vec![50, 150, 250, 350], vec![2, 2]).unwrap();
     //     assert_eq!(tensor.raw.clone(), expected.raw);
     // }
 
     #[test]
     fn test_add_ref_after_slice_chain() {
         // Create a 3D tensor and chain multiple slices
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 4, 5, 6, 7, 8], vec![2, 2, 2]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3, 4, 5, 6, 7, 8], vec![2, 2, 2]).unwrap();
         let value = 1000;
         let mut view = tensor.view_mut();
         let mut depth_slice = view.slice_mut(0, 1..1).unwrap(); // Second depth: [6, 7, 8, 9] -> wait, buffer is [5,6,7,8]
@@ -233,7 +233,7 @@ mod tests {
         
         row_slice += &value;
         
-        let expected = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 4, 1005, 1006, 7, 8], vec![2, 2, 2]).unwrap();
+        let expected = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3, 4, 1005, 1006, 7, 8], vec![2, 2, 2]).unwrap();
         assert_eq!(tensor.raw.clone(), expected.raw);
     }
 
@@ -241,7 +241,7 @@ mod tests {
 
     #[test]
     fn test_add_not_inplace() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3], vec![3]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3], vec![3]).unwrap();
         let view = tensor.view_mut();
         let result = view + 5;
         
@@ -255,7 +255,7 @@ mod tests {
 
     #[test]
     fn test_add_ref_not_inplace() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3], vec![3]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3], vec![3]).unwrap();
         let value = 10;
         let view = tensor.view_mut();
         let result = view + &value;
@@ -266,7 +266,7 @@ mod tests {
 
     #[test]
     fn test_sub_not_inplace() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![10, 20, 30], vec![3]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![10, 20, 30], vec![3]).unwrap();
         let view = tensor.view_mut();
         let result = view - 5;
         
@@ -276,7 +276,7 @@ mod tests {
 
     #[test]
     fn test_sub_ref_not_inplace() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![10, 20, 30], vec![3]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![10, 20, 30], vec![3]).unwrap();
         let value = 10;
         let view = tensor.view_mut();
         let result = view - value;
@@ -287,7 +287,7 @@ mod tests {
 
     #[test]
     fn test_mul_not_inplace() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3], vec![3]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3], vec![3]).unwrap();
         let view = tensor.view_mut();
         let result = view * 5;
         
@@ -297,7 +297,7 @@ mod tests {
 
     #[test]
     fn test_mul_ref_not_inplace() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3], vec![3]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3], vec![3]).unwrap();
         let value = 10;
         let view = tensor.view_mut();
         let result = view * &value;
@@ -308,7 +308,7 @@ mod tests {
 
     #[test]
     fn test_add_not_inplace_with_slice() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 4, 5, 6], vec![2, 3]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3, 4, 5, 6], vec![2, 3]).unwrap();
         let mut view = tensor.view_mut();
         let slice = view.slice_mut(0, 1..1).unwrap(); // Second row: [4, 5, 6]
         let result = slice + 100;
@@ -325,7 +325,7 @@ mod tests {
     #[test]
     fn test_mul_not_inplace_with_noncontiguous_slice() {
         // Test with non-contiguous column slice
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 4, 5, 6], vec![2, 3]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3, 4, 5, 6], vec![2, 3]).unwrap();
         let mut view = tensor.view_mut();
         let col_slice = view.slice_mut(1, 1..1).unwrap(); // Middle column: [2, 5]
         
@@ -344,7 +344,7 @@ mod tests {
 
     // #[test]
     // fn test_sub_not_inplace_with_reshape() {
-    //     let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![10, 20, 30, 40], vec![2, 2]).unwrap();
+    //     let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![10, 20, 30, 40], vec![2, 2]).unwrap();
     //     let view = tensor.view_mut();
     //     let reshaped = view.view_as(vec![4]).unwrap();
     //     let result = reshaped - 5;
@@ -359,7 +359,7 @@ mod tests {
 
     #[test]
     fn test_add_not_inplace_negative_values() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![10, 20, 30], vec![3]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![10, 20, 30], vec![3]).unwrap();
         let view = tensor.view_mut();
         let result = view + (-5);
         
@@ -369,7 +369,7 @@ mod tests {
 
     #[test]
     fn test_mul_not_inplace_negative_values() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3], vec![3]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3], vec![3]).unwrap();
         let view = tensor.view_mut();
         let result = view * (-5);
         
@@ -380,7 +380,7 @@ mod tests {
     #[test]
     fn test_add_not_inplace_chained_slices() {
         // Test with chained slices to ensure view_to_owned handles complex cases
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 4, 5, 6, 7, 8], vec![2, 2, 2]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3, 4, 5, 6, 7, 8], vec![2, 2, 2]).unwrap();
         let mut view = tensor.view_mut();
         let mut depth_slice = view.slice_mut(0, 1..1).unwrap(); // Second depth: [5, 6, 7, 8]
         let row_slice = depth_slice.slice_mut(0, 0..0).unwrap(); // First row: [5, 6]
@@ -397,7 +397,7 @@ mod tests {
 
     #[test]
     fn test_mul_not_inplace_matrix() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 4], vec![2, 2]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3, 4], vec![2, 2]).unwrap();
         let view = tensor.view_mut();
         let result = view * 10;
         
@@ -411,7 +411,7 @@ mod tests {
 
     #[test]
     fn test_sub_not_inplace_scalar() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![100], vec![]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![100], vec![]).unwrap();
         let view = tensor.view_mut();
         let result = view - 50;
         
@@ -427,7 +427,7 @@ mod tests {
     
     #[test]
     fn test_add_immutable_view_inline() {
-        let tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 4], vec![4]).unwrap();
+        let tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3, 4], vec![4]).unwrap();
         // Call operation directly on view() without storing in variable
         let result = tensor.view() + 10;
         
@@ -440,7 +440,7 @@ mod tests {
 
     #[test]
     fn test_add_immutable_view_ref() {
-        let tensor = TensorBase::<Cpu, i32>::from_buf(vec![5, 10, 15], vec![3]).unwrap();
+        let tensor = TensorBase::<i32, Cpu>::from_buf(vec![5, 10, 15], vec![3]).unwrap();
         let value = 100;
         let result = tensor.view() + &value;
         
@@ -452,7 +452,7 @@ mod tests {
 
     #[test]
     fn test_sub_immutable_view_inline() {
-        let tensor = TensorBase::<Cpu, i32>::from_buf(vec![100, 200, 300], vec![3]).unwrap();
+        let tensor = TensorBase::<i32, Cpu>::from_buf(vec![100, 200, 300], vec![3]).unwrap();
         let result = tensor.view() - 50;
         
         assert_eq!(result.raw, vec![50, 150, 250].into_boxed_slice());
@@ -464,7 +464,7 @@ mod tests {
 
     #[test]
     fn test_sub_immutable_view_with_slice() {
-        let tensor = TensorBase::<Cpu, i32>::from_buf(vec![10, 20, 30, 40, 50, 60], vec![2, 3]).unwrap();
+        let tensor = TensorBase::<i32, Cpu>::from_buf(vec![10, 20, 30, 40, 50, 60], vec![2, 3]).unwrap();
         // Slice to get first row, then subtract
         let result = tensor.view().slice(0, 0..0).unwrap() - 5;
         
@@ -478,7 +478,7 @@ mod tests {
 
     #[test]
     fn test_mul_immutable_view_inline() {
-        let tensor = TensorBase::<Cpu, i32>::from_buf(vec![2, 4, 6, 8], vec![4]).unwrap();
+        let tensor = TensorBase::<i32, Cpu>::from_buf(vec![2, 4, 6, 8], vec![4]).unwrap();
         let result = tensor.view() * 3;
         
         assert_eq!(result.raw, vec![6, 12, 18, 24].into_boxed_slice());
@@ -490,7 +490,7 @@ mod tests {
 
     #[test]
     fn test_mul_immutable_view_matrix() {
-        let tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 4, 5, 6], vec![2, 3]).unwrap();
+        let tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3, 4, 5, 6], vec![2, 3]).unwrap();
         let result = tensor.view() * 10;
         
         assert_eq!(result.raw, vec![10, 20, 30, 40, 50, 60].into_boxed_slice());
@@ -502,7 +502,7 @@ mod tests {
 
     // #[test]
     // fn test_add_immutable_view_after_reshape() {
-    //     let tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 4], vec![4]).unwrap();
+    //     let tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3, 4], vec![4]).unwrap();
     //     // Reshape then add, all inline
     //     let result = tensor.view().view_as(vec![2, 2]).unwrap() + 100;
         
@@ -515,7 +515,7 @@ mod tests {
 
     #[test]
     fn test_sub_immutable_view_scalar() {
-        let tensor = TensorBase::<Cpu, i32>::from_buf(vec![999], vec![]).unwrap();
+        let tensor = TensorBase::<i32, Cpu>::from_buf(vec![999], vec![]).unwrap();
         let result = tensor.view() - 99;
         
         assert_eq!(result.raw, vec![900].into_boxed_slice());
@@ -528,7 +528,7 @@ mod tests {
 
     #[test]
     fn test_mul_immutable_view_noncontiguous_slice() {
-        let tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 4, 5, 6], vec![2, 3]).unwrap();
+        let tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3, 4, 5, 6], vec![2, 3]).unwrap();
         // Get column (non-contiguous) then multiply
         let result = tensor.view().slice(1, 1..1).unwrap() * 5;
         
@@ -542,7 +542,7 @@ mod tests {
 
     // #[test]
     // fn test_add_immutable_view_chained_operations() {
-    //     let tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 4, 5, 6, 7, 8], vec![2, 4]).unwrap();
+    //     let tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3, 4, 5, 6, 7, 8], vec![2, 4]).unwrap();
     //     // Chain slice and reshape, then add
     //     let result = tensor.view()
     //         .slice(0, 0..0).unwrap()  // Get first row: [1, 2, 3, 4]
@@ -558,7 +558,7 @@ mod tests {
 
     #[test]
     fn test_sub_immutable_view_negative_values() {
-        let tensor = TensorBase::<Cpu, i32>::from_buf(vec![-10, -20, -30], vec![3]).unwrap();
+        let tensor = TensorBase::<i32, Cpu>::from_buf(vec![-10, -20, -30], vec![3]).unwrap();
         let result = tensor.view() - 5;
         
         assert_eq!(result.raw, vec![-15, -25, -35].into_boxed_slice());
@@ -569,7 +569,7 @@ mod tests {
 
     #[test]
     fn test_mul_immutable_view_with_ref() {
-        let tensor = TensorBase::<Cpu, i32>::from_buf(vec![7, 14, 21], vec![3]).unwrap();
+        let tensor = TensorBase::<i32, Cpu>::from_buf(vec![7, 14, 21], vec![3]).unwrap();
         let multiplier = 2;
         let result = tensor.view() * &multiplier;
         
@@ -587,7 +587,7 @@ mod tests {
 
     #[test]
     fn test_scalar_add_operation() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![42], vec![]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![42], vec![]).unwrap();
         assert!(tensor.is_scalar());
         let mut view = tensor.view_mut();
         view += 10;
@@ -596,7 +596,7 @@ mod tests {
 
     #[test]
     fn test_scalar_mul_operation() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![7], vec![]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![7], vec![]).unwrap();
         let mut view = tensor.view_mut();
         view *= 6;
         assert_eq!(tensor.raw, vec![42].into_boxed_slice());
@@ -604,7 +604,7 @@ mod tests {
 
     #[test]
     fn test_scalar_sub_operation() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![100], vec![]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![100], vec![]).unwrap();
         let mut view = tensor.view_mut();
         view -= 58;
         assert_eq!(tensor.raw, vec![42].into_boxed_slice());
@@ -612,7 +612,7 @@ mod tests {
 
     #[test]
     fn test_scalar_negative_value() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![-10], vec![]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![-10], vec![]).unwrap();
         let mut view = tensor.view_mut();
         view *= -3;
         view += 5;
@@ -621,7 +621,7 @@ mod tests {
 
     #[test]
     fn test_scalar_zero_operations() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![0], vec![]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![0], vec![]).unwrap();
         let mut view = tensor.view_mut();
         view += 42;
         view *= 0;
@@ -631,7 +631,7 @@ mod tests {
 
     #[test]
     fn test_scalar_non_inplace() {
-        let tensor = TensorBase::<Cpu, i32>::from_buf(vec![100], vec![]).unwrap();
+        let tensor = TensorBase::<i32, Cpu>::from_buf(vec![100], vec![]).unwrap();
         let result = tensor.view() + 50;
         assert_eq!(result.raw, vec![150].into_boxed_slice());
         assert!(result.is_scalar());
@@ -642,7 +642,7 @@ mod tests {
 
     #[test]
     fn test_single_element_1d() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![5], vec![1]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![5], vec![1]).unwrap();
         let mut view = tensor.view_mut();
         view += 10;
         view *= 2;
@@ -651,7 +651,7 @@ mod tests {
 
     #[test]
     fn test_single_element_2d() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![8], vec![1, 1]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![8], vec![1, 1]).unwrap();
         let mut view = tensor.view_mut();
         view *= 5;
         assert_eq!(tensor.raw, vec![40].into_boxed_slice());
@@ -659,7 +659,7 @@ mod tests {
 
     #[test]
     fn test_single_element_3d() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![3], vec![1, 1, 1]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![3], vec![1, 1, 1]).unwrap();
         let mut view = tensor.view_mut();
         view += 7;
         view *= 3;
@@ -670,7 +670,7 @@ mod tests {
 
     #[test]
     fn test_tall_matrix_operations() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 4, 5, 6, 7, 8, 9], vec![9, 1]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3, 4, 5, 6, 7, 8, 9], vec![9, 1]).unwrap();
         let mut view = tensor.view_mut();
         view *= 2;
         assert_eq!(tensor.raw, vec![2, 4, 6, 8, 10, 12, 14, 16, 18].into_boxed_slice());
@@ -678,7 +678,7 @@ mod tests {
 
     #[test]
     fn test_wide_matrix_operations() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 4, 5, 6, 7, 8, 9], vec![1, 9]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3, 4, 5, 6, 7, 8, 9], vec![1, 9]).unwrap();
         let mut view = tensor.view_mut();
         view += 10;
         assert_eq!(tensor.raw, vec![11, 12, 13, 14, 15, 16, 17, 18, 19].into_boxed_slice());
@@ -686,7 +686,7 @@ mod tests {
 
     #[test]
     fn test_rectangular_matrix_2x5() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(
             vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 
             vec![2, 5]
         ).unwrap();
@@ -700,7 +700,7 @@ mod tests {
 
     #[test]
     fn test_rectangular_matrix_5x2() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(
             vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 
             vec![5, 2]
         ).unwrap();
@@ -715,7 +715,7 @@ mod tests {
     #[test]
     fn test_rectangular_3d_tensor() {
         let data: Vec<i32> = (1..=24).collect();
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(data, vec![2, 3, 4]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(data, vec![2, 3, 4]).unwrap();
         let mut view = tensor.view_mut();
         view += 100;
         
@@ -725,7 +725,7 @@ mod tests {
 
     #[test]
     fn test_non_square_slice_operations() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(
             vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 
             vec![3, 4]
         ).unwrap();
@@ -733,7 +733,7 @@ mod tests {
         let mut slice = view.slice_mut(0, 1..1).unwrap(); // Second row: [5, 6, 7, 8]
         slice *= 10;
         
-        let expected = TensorBase::<Cpu, i32>::from_buf(
+        let expected = TensorBase::<i32, Cpu>::from_buf(
             vec![1, 2, 3, 4, 50, 60, 70, 80, 9, 10, 11, 12], 
             vec![3, 4]
         ).unwrap();
@@ -744,7 +744,7 @@ mod tests {
 
     #[test]
     fn test_zero_tensor_operations() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![0, 0, 0, 0], vec![4]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![0, 0, 0, 0], vec![4]).unwrap();
         let mut view = tensor.view_mut();
         view += 10;
         view *= 2;
@@ -753,7 +753,7 @@ mod tests {
 
     #[test]
     fn test_operations_resulting_in_zero() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![5, 10, 15, 20], vec![4]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![5, 10, 15, 20], vec![4]).unwrap();
         let mut view = tensor.view_mut();
         view *= 0;
         assert_eq!(tensor.raw, vec![0, 0, 0, 0].into_boxed_slice());
@@ -761,7 +761,7 @@ mod tests {
 
     #[test]
     fn test_mixed_positive_negative_values() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(
             vec![-5, 10, -15, 20, -25, 30], 
             vec![6]
         ).unwrap();
@@ -777,7 +777,7 @@ mod tests {
 
     #[test]
     fn test_large_values() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(
             vec![1_000_000, 2_000_000, 3_000_000], 
             vec![3]
         ).unwrap();
@@ -794,7 +794,7 @@ mod tests {
 
     #[test]
     fn test_f32_operations() {
-        let mut tensor = TensorBase::<Cpu, f32>::from_buf(
+        let mut tensor = TensorBase::<f32, Cpu>::from_buf(
             vec![1.5, 2.5, 3.5, 4.5], 
             vec![4]
         ).unwrap();
@@ -810,7 +810,7 @@ mod tests {
 
     #[test]
     fn test_f64_operations() {
-        let mut tensor = TensorBase::<Cpu, f64>::from_buf(
+        let mut tensor = TensorBase::<f64, Cpu>::from_buf(
             vec![1.0, 2.0, 3.0, 4.0], 
             vec![4]
         ).unwrap();
@@ -826,7 +826,7 @@ mod tests {
 
     #[test]
     fn test_i64_operations() {
-        let mut tensor = TensorBase::<Cpu, i64>::from_buf(
+        let mut tensor = TensorBase::<i64, Cpu>::from_buf(
             vec![100, 200, 300, 400], 
             vec![4]
         ).unwrap();
@@ -839,7 +839,7 @@ mod tests {
 
     #[test]
     fn test_u32_operations() {
-        let mut tensor = TensorBase::<Cpu, u32>::from_buf(
+        let mut tensor = TensorBase::<u32, Cpu>::from_buf(
             vec![10, 20, 30, 40], 
             vec![4]
         ).unwrap();
@@ -852,7 +852,7 @@ mod tests {
 
     #[test]
     fn test_i16_operations() {
-        let mut tensor = TensorBase::<Cpu, i16>::from_buf(
+        let mut tensor = TensorBase::<i16, Cpu>::from_buf(
             vec![1, 2, 3, 4, 5, 6], 
             vec![2, 3]
         ).unwrap();
@@ -867,7 +867,7 @@ mod tests {
 
     #[test]
     fn test_multiple_noncontiguous_operations() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(
             vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 
             vec![4, 3]
         ).unwrap();
@@ -878,7 +878,7 @@ mod tests {
         col += 100;
         col *= 2;
         
-        let expected = TensorBase::<Cpu, i32>::from_buf(
+        let expected = TensorBase::<i32, Cpu>::from_buf(
             vec![1, 204, 3, 4, 210, 6, 7, 216, 9, 10, 222, 12], 
             vec![4, 3]
         ).unwrap();
@@ -887,7 +887,7 @@ mod tests {
 
     // #[test]
     // fn test_noncontiguous_slice_after_reshape() {
-    //     let mut tensor = TensorBase::<Cpu, i32>::from_buf(
+    //     let mut tensor = TensorBase::<i32, Cpu>::from_buf(
     //         vec![1, 2, 3, 4, 5, 6, 7, 8], 
     //         vec![8]
     //     ).unwrap();
@@ -897,7 +897,7 @@ mod tests {
     //     col_slice *= 10;
         
     //     // Second column in 4x2 is indices 1, 3, 5, 7
-    //     let expected = TensorBase::<Cpu, i32>::from_buf(
+    //     let expected = TensorBase::<i32, Cpu>::from_buf(
     //         vec![1, 20, 3, 40, 5, 60, 7, 80], 
     //         vec![8]
     //     ).unwrap();
@@ -907,7 +907,7 @@ mod tests {
     #[test]
     fn test_3d_noncontiguous_slice() {
         let data: Vec<i32> = (1..=24).collect();
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(data, vec![2, 3, 4]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(data, vec![2, 3, 4]).unwrap();
         
         // Slice along middle dimension at index 1 (middle row)
         // Shape is [2, 3, 4] - we're slicing dim 1 at idx 1
@@ -939,7 +939,7 @@ mod tests {
     #[test]
     fn test_3d_noncontiguous_slice_view() {
         let data: Vec<i32> = (1..=24).collect();
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(data, vec![2, 3, 4]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(data, vec![2, 3, 4]).unwrap();
         
         // Slice along middle dimension at index 1 (middle row)
         // Shape is [2, 3, 4] - we're slicing dim 1 at idx 1
@@ -963,7 +963,7 @@ mod tests {
     #[test]
     fn test_4d_tensor_operations() {
         let data: Vec<i32> = (1..=16).collect();
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(data, vec![2, 2, 2, 2]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(data, vec![2, 2, 2, 2]).unwrap();
         let mut view = tensor.view_mut();
         view += 10;
         
@@ -974,7 +974,7 @@ mod tests {
     #[test]
     fn test_4d_slice_operation() {
         let data: Vec<i32> = (1..=24).collect();
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(data, vec![2, 3, 2, 2]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(data, vec![2, 3, 2, 2]).unwrap();
         let mut view = tensor.view_mut();
         let mut slice = view.slice_mut(0, 1..1).unwrap(); // Second slice along first dim
         slice *= 10;
@@ -991,7 +991,7 @@ mod tests {
     #[test]
     fn test_5d_tensor_operations() {
         let data: Vec<i32> = (1..=32).collect();
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(data, vec![2, 2, 2, 2, 2]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(data, vec![2, 2, 2, 2, 2]).unwrap();
         let mut view = tensor.view_mut();
         view *= 2;
         view += 5;
@@ -1004,7 +1004,7 @@ mod tests {
 
     #[test]
     fn test_long_operation_chain() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![1, 2, 3, 4], vec![4]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3, 4], vec![4]).unwrap();
         let mut view = tensor.view_mut();
         
         view += 1;   // [2, 3, 4, 5]
@@ -1023,7 +1023,7 @@ mod tests {
 
     #[test]
     fn test_alternating_inplace_noninplace() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(vec![5, 10, 15], vec![3]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![5, 10, 15], vec![3]).unwrap();
         
         // Inplace
         let mut view1 = tensor.view_mut();
@@ -1047,7 +1047,7 @@ mod tests {
 
     #[test]
     fn test_multiple_views_different_ops() {
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(
             vec![1, 2, 3, 4, 5, 6], 
             vec![2, 3]
         ).unwrap();
@@ -1066,7 +1066,7 @@ mod tests {
             row2 *= 5;
         }
         
-        let expected = TensorBase::<Cpu, i32>::from_buf(
+        let expected = TensorBase::<i32, Cpu>::from_buf(
             vec![11, 12, 13, 20, 25, 30], 
             vec![2, 3]
         ).unwrap();
@@ -1077,7 +1077,7 @@ mod tests {
 
     #[test]
     fn test_f32_small_values() {
-        let mut tensor = TensorBase::<Cpu, f32>::from_buf(
+        let mut tensor = TensorBase::<f32, Cpu>::from_buf(
             vec![0.0001, 0.0002, 0.0003], 
             vec![3]
         ).unwrap();
@@ -1092,7 +1092,7 @@ mod tests {
 
     #[test]
     fn test_f64_precision() {
-        let mut tensor = TensorBase::<Cpu, f64>::from_buf(
+        let mut tensor = TensorBase::<f64, Cpu>::from_buf(
             vec![1.0 / 3.0, 2.0 / 3.0, 1.0], 
             vec![3]
         ).unwrap();
@@ -1110,7 +1110,7 @@ mod tests {
     #[test]
     fn test_very_imbalanced_shape_1000x2() {
         let data: Vec<i32> = (1..=2000).collect();
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(data, vec![1000, 2]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(data, vec![1000, 2]).unwrap();
         let mut view = tensor.view_mut();
         view += 5;
         
@@ -1124,7 +1124,7 @@ mod tests {
     #[test]
     fn test_very_imbalanced_shape_2x1000() {
         let data: Vec<i32> = (1..=2000).collect();
-        let mut tensor = TensorBase::<Cpu, i32>::from_buf(data, vec![2, 1000]).unwrap();
+        let mut tensor = TensorBase::<i32, Cpu>::from_buf(data, vec![2, 1000]).unwrap();
         let mut view = tensor.view_mut();
         view *= 2;
         
@@ -1611,7 +1611,7 @@ mod cuda_tests {
         let data: Vec<f32> = (0..SIZE).map(|i| (i % 1000) as f32).collect();
         
         // CPU timing
-        let mut cpu_tensor = crate::core::primitives::TensorBase::<Cpu, f32>::from_buf(
+        let mut cpu_tensor = crate::core::primitives::TensorBase::<f32, Cpu>::from_buf(
             data.clone(), 
             vec![SIZE]
         ).unwrap();

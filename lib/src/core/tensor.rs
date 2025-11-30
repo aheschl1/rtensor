@@ -42,10 +42,10 @@ pub trait AsViewMut<T: TensorValue, B: Backend<T>> : AsView<T, B> {
 
 pub trait AsTensor<T: TensorValue, B: Backend<T>> {
     /// Converts to an owned tensor, copying data.
-    fn owned(&self) -> TensorBase<B, T>;
+    fn owned(&self) -> TensorBase<T, B>;
 }
 
-impl<T: TensorValue, B: Backend<T>> AsView<T, B> for TensorBase<B, T> {
+impl<T: TensorValue, B: Backend<T>> AsView<T, B> for TensorBase<T, B> {
     fn view(&self) -> TensorView<'_, T, B> {
         TensorView::<T, B>::from_parts(
             &self.raw, 
@@ -55,7 +55,7 @@ impl<T: TensorValue, B: Backend<T>> AsView<T, B> for TensorBase<B, T> {
     }
 } 
 
-impl<T: TensorValue, B: Backend<T>> AsViewMut<T, B> for TensorBase<B, T> {
+impl<T: TensorValue, B: Backend<T>> AsViewMut<T, B> for TensorBase<T, B> {
     fn view_mut<'a>(&'a mut self) -> TensorViewMut<'a, T, B> {
         TensorViewMut::<T, B>::from_parts(
             &mut self.raw, 
@@ -77,26 +77,26 @@ impl<T: TensorValue, B: Backend<T>> AsView<T, B> for TensorView<'_, T, B>
 }
 
 
-impl <T: TensorValue, B: Backend<T>> AsTensor<T, B> for TensorBase<B, T> {
-    fn owned(&self) -> TensorBase<B, T> {
+impl <T: TensorValue, B: Backend<T>> AsTensor<T, B> for TensorBase<T, B> {
+    fn owned(&self) -> TensorBase<T, B> {
         self.clone()
     }
 }
 
 impl<'a, T: TensorValue, B: Backend<T>> AsTensor<T, B> for TensorView<'a, T, B> {
-    fn owned(&self) -> TensorBase<B, T> {
+    fn owned(&self) -> TensorBase<T, B> {
         view_to_owned(&self.meta, self.raw, self.backend).unwrap()
     }
 }
 
 impl<'a, T: TensorValue, B: Backend<T>> AsTensor<T, B> for TensorViewMut<'a, T, B> {
-    fn owned(&self) -> TensorBase<B, T> {
+    fn owned(&self) -> TensorBase<T, B> {
         view_to_owned(&self.meta, self.raw, self.backend).unwrap()
     }
 }
 
 #[inline]
-fn view_to_owned<T: TensorValue, B: Backend<T>>(meta: &MetaTensor, raw: &B::Buf, backend: &B) -> Result<TensorBase<B, T>, TensorError> {
+fn view_to_owned<T: TensorValue, B: Backend<T>>(meta: &MetaTensor, raw: &B::Buf, backend: &B) -> Result<TensorBase<T, B>, TensorError> {
     let size = meta.size();
     let new_backend = B::new();
     let mut new_buf = new_backend.alloc(size)?;
