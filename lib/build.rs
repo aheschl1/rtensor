@@ -130,7 +130,9 @@ fn build_cuda_kernels() {
     
     println!("cargo:rerun-if-changed=src/cuda/include/kernels.h");
     println!("cargo:rerun-if-changed=src/cuda/include/common.h");
-    println!("cargo:rerun-if-changed=src/cuda/include/elementwise.h");
+    println!("cargo:rerun-if-changed=src/cuda/include/unary.h");
+    println!("cargo:rerun-if-changed=src/cuda/include/binary.h");
+    // println!("cargo:rerun-if-changed=src/cuda/include/elementwise.h");
     for kernel_file in &kernel_files {
         println!("cargo:rerun-if-changed={}", kernel_file.display());
     }

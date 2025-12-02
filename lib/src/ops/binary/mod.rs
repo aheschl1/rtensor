@@ -18,6 +18,13 @@ impl<T: TensorValueElementwise> ElementwiseBinaryTensorOp<T> {
             _ => panic!("Unsupported operation"),
         }
     }
+
+    pub fn to_op_code(&self) -> u8 {
+        match self {
+            ElementwiseBinaryTensorOp::Add => 0,
+            _ => panic!("Unsupported operation"),
+        }
+    }
 }
 
 

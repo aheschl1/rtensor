@@ -4,7 +4,7 @@ pub mod binary;
 
 #[cfg(test)]
 mod tests {
-    use crate::{backend::cpu::Cpu, core::{meta::MetaTensorView, primitives::TensorBase, tensor::{AsView, AsViewMut, TensorAccess, TensorAccessMut}}};
+    use crate::{backend::cpu::Cpu, core::{meta::MetaTensorView, primitives::TensorBase, tensor::{AsView, AsViewMut, TensorAccess, TensorAccessMut}, CpuTensor}, ops::binary::PointwiseTensorOp};
 
     
     #[test]
@@ -1133,6 +1133,719 @@ mod tests {
         assert_eq!(tensor.raw[999], 2000);
         assert_eq!(tensor.raw[1000], 2002);
         assert_eq!(tensor.raw[1999], 4000);
+    }
+
+        // BROADCASTING TESTS
+    #[test]
+    fn test_broadcast_flipped() {
+        let mut veca = CpuTensor::<f32>::ones((1, 3));
+        let vecb = CpuTensor::<f32>::ones((3, 1));
+        veca.view_mut().set(vec![0, 0], 22.0).unwrap();
+
+        let vecc = &veca.view().add(&vecb.view()).expect("fail");
+
+        assert_eq!(vecc.shape().clone(), vec![3, 3]);
+        for i in 0..3usize {
+            for j in 0..3usize {
+                if j == 0 {
+                    assert_eq!(vecc.view().get(vec![i, j]).unwrap(), 23.0);
+                    continue;
+                }
+                assert_eq!(vecc.view().get(vec![i, j]).unwrap(), 2.0);
+            }
+        }
+    }
+
+    #[test]
+    fn test_broadcast_same() {
+        let mut veca = CpuTensor::<f32>::ones((3,1));
+        let vecb = CpuTensor::<f32>::ones((3, 1));
+        veca.view_mut().set(vec![0, 0], 22.0).unwrap();
+
+        let vecc = &veca.view().add(&vecb.view()).expect("fail");
+
+        assert_eq!(vecc.shape().clone(), vec![3, 1]);
+        for i in 0..3usize {
+            for j in 0..1usize {
+                if i == 0 {
+                    assert_eq!(vecc.view().get(vec![i, j]).unwrap(), 23.0);
+                    continue;
+                }
+                assert_eq!(vecc.view().get(vec![i, j]).unwrap(), 2.0);
+            }
+        }
+    }
+
+    // ============================================================================
+    // COMPREHENSIVE BROADCAST TESTS - Higher Rank & Expected Shapes
+    // ============================================================================
+
+    // --- 3D Broadcast Tests (Valid Cases) ---
+
+    #[test]
+    fn test_broadcast_3d_scalar_to_tensor() {
+        let veca = CpuTensor::<f32>::from_buf(vec![5.0], vec![]).unwrap(); // scalar
+        let vecb = CpuTensor::<f32>::ones((2, 3, 4));
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast scalar to 3D");
+        
+        assert_eq!(vecc.shape().clone(), vec![2, 3, 4]);
+        for i in 0..2 {
+            for j in 0..3 {
+                for k in 0..4 {
+                    assert_eq!(vecc.view().get(vec![i, j, k]).unwrap(), 6.0);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_broadcast_3d_vector_along_last_dim() {
+        let veca = CpuTensor::<f32>::from_buf(vec![1.0, 2.0, 3.0], vec![3]).unwrap(); // (3,)
+        let vecb = CpuTensor::<f32>::ones((2, 4, 3)); // (2, 4, 3)
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast (3,) to (2,4,3)");
+        
+        assert_eq!(vecc.shape().clone(), vec![2, 4, 3]);
+        // Check pattern: last dimension should be [2, 3, 4] everywhere
+        for i in 0..2 {
+            for j in 0..4 {
+                assert_eq!(vecc.view().get(vec![i, j, 0]).unwrap(), 2.0);
+                assert_eq!(vecc.view().get(vec![i, j, 1]).unwrap(), 3.0);
+                assert_eq!(vecc.view().get(vec![i, j, 2]).unwrap(), 4.0);
+            }
+        }
+    }
+
+    #[test]
+    fn test_broadcast_3d_matrix_to_tensor() {
+        let veca = CpuTensor::<f32>::ones((3, 4)); // (3, 4)
+        let vecb = CpuTensor::<f32>::ones((2, 3, 4)); // (2, 3, 4)
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast (3,4) to (2,3,4)");
+        
+        assert_eq!(vecc.shape().clone(), vec![2, 3, 4]);
+        for i in 0..2 {
+            for j in 0..3 {
+                for k in 0..4 {
+                    assert_eq!(vecc.view().get(vec![i, j, k]).unwrap(), 2.0);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_broadcast_3d_singleton_dims() {
+        let veca = CpuTensor::<f32>::ones((1, 3, 1)); // (1, 3, 1)
+        let vecb = CpuTensor::<f32>::ones((2, 3, 4)); // (2, 3, 4)
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast (1,3,1) to (2,3,4)");
+        
+        assert_eq!(vecc.shape().clone(), vec![2, 3, 4]);
+        for i in 0..2 {
+            for j in 0..3 {
+                for k in 0..4 {
+                    assert_eq!(vecc.view().get(vec![i, j, k]).unwrap(), 2.0);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_broadcast_3d_prepend_dims() {
+        let veca = CpuTensor::<f32>::ones((3, 4)); // (3, 4)
+        let vecb = CpuTensor::<f32>::ones((5, 3, 4)); // (5, 3, 4)
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast (3,4) to (5,3,4)");
+        
+        assert_eq!(vecc.shape().clone(), vec![5, 3, 4]);
+        for i in 0..5 {
+            for j in 0..3 {
+                for k in 0..4 {
+                    assert_eq!(vecc.view().get(vec![i, j, k]).unwrap(), 2.0);
+                }
+            }
+        }
+    }
+
+    // --- 4D Broadcast Tests (Valid Cases) ---
+
+    #[test]
+    fn test_broadcast_4d_vector_to_tensor() {
+        let veca = CpuTensor::<f32>::from_buf(vec![10.0, 20.0], vec![2]).unwrap(); // (2,)
+        let vecb = CpuTensor::<f32>::ones((3, 4, 5, 2)); // (3, 4, 5, 2)
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast (2,) to (3,4,5,2)");
+        
+        assert_eq!(vecc.shape().clone(), vec![3, 4, 5, 2]);
+        // Check pattern in last dimension
+        for i in 0..3 {
+            for j in 0..4 {
+                for k in 0..5 {
+                    assert_eq!(vecc.view().get(vec![i, j, k, 0]).unwrap(), 11.0);
+                    assert_eq!(vecc.view().get(vec![i, j, k, 1]).unwrap(), 21.0);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_broadcast_4d_complex_singletons() {
+        let veca = CpuTensor::<f32>::ones((1, 1, 5, 1)); // (1, 1, 5, 1)
+        let vecb = CpuTensor::<f32>::ones((2, 3, 5, 4)); // (2, 3, 5, 4)
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast (1,1,5,1) to (2,3,5,4)");
+        
+        assert_eq!(vecc.shape().clone(), vec![2, 3, 5, 4]);
+        for i in 0..2 {
+            for j in 0..3 {
+                for k in 0..5 {
+                    for l in 0..4 {
+                        assert_eq!(vecc.view().get(vec![i, j, k, l]).unwrap(), 2.0);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_broadcast_4d_3d_to_4d() {
+        let veca = CpuTensor::<f32>::ones((3, 5, 4)); // (3, 5, 4)
+        let vecb = CpuTensor::<f32>::ones((2, 3, 5, 4)); // (2, 3, 5, 4)
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast (3,5,4) to (2,3,5,4)");
+        
+        assert_eq!(vecc.shape().clone(), vec![2, 3, 5, 4]);
+        for i in 0..2 {
+            for j in 0..3 {
+                for k in 0..5 {
+                    for l in 0..4 {
+                        assert_eq!(vecc.view().get(vec![i, j, k, l]).unwrap(), 2.0);
+                    }
+                }
+            }
+        }
+    }
+
+    // --- 5D Broadcast Tests (Valid Cases) ---
+
+    #[test]
+    fn test_broadcast_5d_scalar_to_tensor() {
+        let veca = CpuTensor::<f32>::from_buf(vec![100.0], vec![]).unwrap(); // scalar
+        let vecb = CpuTensor::<f32>::ones((2, 2, 2, 2, 2)); // (2, 2, 2, 2, 2)
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast scalar to 5D");
+        
+        assert_eq!(vecc.shape().clone(), vec![2, 2, 2, 2, 2]);
+        for i in 0..2 {
+            for j in 0..2 {
+                for k in 0..2 {
+                    for l in 0..2 {
+                        for m in 0..2 {
+                            assert_eq!(vecc.view().get(vec![i, j, k, l, m]).unwrap(), 101.0);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_broadcast_5d_multiple_singletons() {
+        let veca = CpuTensor::<f32>::ones((1, 2, 1, 3, 1)); // (1, 2, 1, 3, 1)
+        let vecb = CpuTensor::<f32>::ones((4, 2, 5, 3, 6)); // (4, 2, 5, 3, 6)
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast (1,2,1,3,1) to (4,2,5,3,6)");
+        
+        assert_eq!(vecc.shape().clone(), vec![4, 2, 5, 3, 6]);
+        // Check a few representative values
+        assert_eq!(vecc.view().get(vec![0, 0, 0, 0, 0]).unwrap(), 2.0);
+        assert_eq!(vecc.view().get(vec![3, 1, 4, 2, 5]).unwrap(), 2.0);
+    }
+
+    // --- Mixed Dimension Broadcasts (Valid Cases) ---
+
+    #[test]
+    fn test_broadcast_2d_to_4d() {
+        let veca = CpuTensor::<f32>::ones((3, 4)); // (3, 4)
+        let vecb = CpuTensor::<f32>::ones((2, 5, 3, 4)); // (2, 5, 3, 4)
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast (3,4) to (2,5,3,4)");
+        
+        assert_eq!(vecc.shape().clone(), vec![2, 5, 3, 4]);
+        for i in 0..2 {
+            for j in 0..5 {
+                for k in 0..3 {
+                    for l in 0..4 {
+                        assert_eq!(vecc.view().get(vec![i, j, k, l]).unwrap(), 2.0);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_broadcast_1d_to_5d() {
+        let veca = CpuTensor::<f32>::from_buf(vec![1.0, 2.0, 3.0], vec![3]).unwrap(); // (3,)
+        let vecb = CpuTensor::<f32>::ones((2, 4, 5, 6, 3)); // (2, 4, 5, 6, 3)
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast (3,) to (2,4,5,6,3)");
+        
+        assert_eq!(vecc.shape().clone(), vec![2, 4, 5, 6, 3]);
+        // Check pattern in last dimension
+        for i in 0..2 {
+            for j in 0..4 {
+                for k in 0..5 {
+                    for l in 0..6 {
+                        assert_eq!(vecc.view().get(vec![i, j, k, l, 0]).unwrap(), 2.0);
+                        assert_eq!(vecc.view().get(vec![i, j, k, l, 1]).unwrap(), 3.0);
+                        assert_eq!(vecc.view().get(vec![i, j, k, l, 2]).unwrap(), 4.0);
+                    }
+                }
+            }
+        }
+    }
+
+    // --- FAILING BROADCAST TESTS (Should Not Work) ---
+
+    #[test]
+    #[should_panic]
+    fn test_broadcast_incompatible_dimensions_3d() {
+        let veca = CpuTensor::<f32>::ones((3, 4)); // (3, 4)
+        let vecb = CpuTensor::<f32>::ones((2, 5, 6)); // (2, 5, 6) - incompatible!
+        
+        // This should panic because 4 != 6 and 3 != 5
+        let _vecc = veca.view().add(&vecb.view()).expect("Should fail - incompatible dims");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_broadcast_incompatible_inner_dim() {
+        let veca = CpuTensor::<f32>::ones((5,)); // (5,)
+        let vecb = CpuTensor::<f32>::ones((2, 3, 7)); // (2, 3, 7)
+        
+        // Should fail because 5 != 7
+        let _vecc = veca.view().add(&vecb.view()).expect("Should fail - 5 != 7");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_broadcast_incompatible_middle_dim() {
+        let veca = CpuTensor::<f32>::ones((2, 3, 4)); // (2, 3, 4)
+        let vecb = CpuTensor::<f32>::ones((2, 5, 4)); // (2, 5, 4)
+        
+        // Should fail because middle dimension 3 != 5 and neither is 1
+        let _vecc = veca.view().add(&vecb.view()).expect("Should fail - 3 != 5");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_broadcast_incompatible_4d() {
+        let veca = CpuTensor::<f32>::ones((2, 3, 4, 5)); // (2, 3, 4, 5)
+        let vecb = CpuTensor::<f32>::ones((2, 7, 4, 5)); // (2, 7, 4, 5)
+        
+        // Should fail because 3 != 7
+        let _vecc = veca.view().add(&vecb.view()).expect("Should fail - 3 != 7");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_broadcast_incompatible_5d_multiple() {
+        let veca = CpuTensor::<f32>::ones((1, 2, 3, 4, 5)); // (1, 2, 3, 4, 5)
+        let vecb = CpuTensor::<f32>::ones((6, 2, 7, 4, 5)); // (6, 2, 7, 4, 5)
+        
+        // Should fail because 3 != 7 (dim 2)
+        let _vecc = veca.view().add(&vecb.view()).expect("Should fail - 3 != 7");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_broadcast_both_non_singleton_mismatch() {
+        let veca = CpuTensor::<f32>::ones((4, 5, 6)); // (4, 5, 6)
+        let vecb = CpuTensor::<f32>::ones((4, 3, 6)); // (4, 3, 6)
+        
+        // Should fail because 5 != 3 and neither is 1
+        let _vecc = veca.view().add(&vecb.view()).expect("Should fail - 5 != 3");
+    }
+
+    // --- Edge Case Broadcasts ---
+
+    #[test]
+    fn test_broadcast_all_singletons() {
+        let veca = CpuTensor::<f32>::ones((1, 1, 1)); // (1, 1, 1)
+        let vecb = CpuTensor::<f32>::ones((5, 6, 7)); // (5, 6, 7)
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast (1,1,1) to (5,6,7)");
+        
+        assert_eq!(vecc.shape().clone(), vec![5, 6, 7]);
+        assert_eq!(vecc.view().get(vec![0, 0, 0]).unwrap(), 2.0);
+        assert_eq!(vecc.view().get(vec![4, 5, 6]).unwrap(), 2.0);
+    }
+
+    #[test]
+    fn test_broadcast_identity() {
+        let veca = CpuTensor::<f32>::ones((3, 4, 5)); // (3, 4, 5)
+        let vecb = CpuTensor::<f32>::ones((3, 4, 5)); // (3, 4, 5)
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should work - identical shapes");
+        
+        assert_eq!(vecc.shape().clone(), vec![3, 4, 5]);
+        for i in 0..3 {
+            for j in 0..4 {
+                for k in 0..5 {
+                    assert_eq!(vecc.view().get(vec![i, j, k]).unwrap(), 2.0);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_broadcast_alternating_singletons() {
+        let veca = CpuTensor::<f32>::ones((1, 4, 1, 6)); // (1, 4, 1, 6)
+        let vecb = CpuTensor::<f32>::ones((3, 1, 5, 1)); // (3, 1, 5, 1)
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast to (3,4,5,6)");
+        
+        assert_eq!(vecc.shape().clone(), vec![3, 4, 5, 6]);
+        assert_eq!(vecc.view().get(vec![0, 0, 0, 0]).unwrap(), 2.0);
+        assert_eq!(vecc.view().get(vec![2, 3, 4, 5]).unwrap(), 2.0);
+    }
+
+    #[test]
+    fn test_broadcast_trailing_singleton() {
+        let veca = CpuTensor::<f32>::ones((3, 4, 1)); // (3, 4, 1)
+        let vecb = CpuTensor::<f32>::ones((3, 4, 5)); // (3, 4, 5)
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast (3,4,1) to (3,4,5)");
+        
+        assert_eq!(vecc.shape().clone(), vec![3, 4, 5]);
+        for i in 0..3 {
+            for j in 0..4 {
+                for k in 0..5 {
+                    assert_eq!(vecc.view().get(vec![i, j, k]).unwrap(), 2.0);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_broadcast_leading_singleton() {
+        let veca = CpuTensor::<f32>::ones((1, 4, 5)); // (1, 4, 5)
+        let vecb = CpuTensor::<f32>::ones((3, 4, 5)); // (3, 4, 5)
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast (1,4,5) to (3,4,5)");
+        
+        assert_eq!(vecc.shape().clone(), vec![3, 4, 5]);
+        for i in 0..3 {
+            for j in 0..4 {
+                for k in 0..5 {
+                    assert_eq!(vecc.view().get(vec![i, j, k]).unwrap(), 2.0);
+                }
+            }
+        }
+    }
+
+    // --- High Rank Shape Tests (Focus on Expected Output Shapes) ---
+
+    #[test]
+    fn test_broadcast_shape_2d_plus_3d() {
+        let veca = CpuTensor::<f32>::ones((4, 5)); // (4, 5)
+        let vecb = CpuTensor::<f32>::ones((3, 4, 5)); // (3, 4, 5)
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast");
+        
+        // Expected output shape: (3, 4, 5)
+        assert_eq!(*vecc.shape(), vec![3, 4, 5]);
+    }
+
+    #[test]
+    fn test_broadcast_shape_1d_plus_4d() {
+        let veca = CpuTensor::<f32>::ones((7,)); // (7,)
+        let vecb = CpuTensor::<f32>::ones((2, 3, 4, 7)); // (2, 3, 4, 7)
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast");
+        
+        // Expected output shape: (2, 3, 4, 7)
+        assert_eq!(*vecc.shape(), vec![2, 3, 4, 7]);
+    }
+
+    #[test]
+    fn test_broadcast_shape_singleton_expansion() {
+        let veca = CpuTensor::<f32>::ones((1, 5, 1)); // (1, 5, 1)
+        let vecb = CpuTensor::<f32>::ones((4, 5, 6)); // (4, 5, 6)
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast");
+        
+        // Expected output shape: (4, 5, 6)
+        assert_eq!(*vecc.shape(), vec![4, 5, 6]);
+    }
+
+    #[test]
+    fn test_broadcast_shape_prepending() {
+        let veca = CpuTensor::<f32>::ones((5, 6)); // (5, 6)
+        let vecb = CpuTensor::<f32>::ones((2, 3, 4, 5, 6)); // (2, 3, 4, 5, 6)
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast");
+        
+        // Expected output shape: (2, 3, 4, 5, 6)
+        assert_eq!(*vecc.shape(), vec![2, 3, 4, 5, 6]);
+    }
+
+    #[test]
+    fn test_broadcast_shape_both_expand() {
+        let veca = CpuTensor::<f32>::ones((1, 4, 1, 6)); // (1, 4, 1, 6)
+        let vecb = CpuTensor::<f32>::ones((3, 1, 5, 6)); // (3, 1, 5, 6)
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast");
+        
+        // Expected output shape: (3, 4, 5, 6)
+        assert_eq!(*vecc.shape(), vec![3, 4, 5, 6]);
+    }
+
+    #[test]
+    fn test_broadcast_shape_scalar_expansion() {
+        let veca = CpuTensor::<f32>::from_buf(vec![42.0], vec![]).unwrap(); // scalar
+        let vecb = CpuTensor::<f32>::ones((2, 3, 4, 5, 6)); // (2, 3, 4, 5, 6)
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast");
+        
+        // Expected output shape: (2, 3, 4, 5, 6)
+        assert_eq!(*vecc.shape(), vec![2, 3, 4, 5, 6]);
+    }
+
+    #[test]
+    fn test_broadcast_shape_complex_5d() {
+        let veca = CpuTensor::<f32>::ones((1, 1, 3, 1, 5)); // (1, 1, 3, 1, 5)
+        let vecb = CpuTensor::<f32>::ones((2, 4, 3, 6, 5)); // (2, 4, 3, 6, 5)
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast");
+        
+        // Expected output shape: (2, 4, 3, 6, 5)
+        assert_eq!(*vecc.shape(), vec![2, 4, 3, 6, 5]);
+    }
+
+    // ============================================================================
+    // BOTH TENSORS WITH SINGLETONS - Mutual Broadcasting Tests
+    // ============================================================================
+
+    #[test]
+    fn test_broadcast_both_singletons_2d_pattern1() {
+        // Classic row vs column vector
+        let mut veca = CpuTensor::<f32>::ones((1, 4)); // (1, 4) - row vector
+        let vecb = CpuTensor::<f32>::ones((3, 1)); // (3, 1) - column vector
+        veca.view_mut().set(vec![0, 0], 5.0).unwrap();
+        veca.view_mut().set(vec![0, 1], 6.0).unwrap();
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast (1,4) and (3,1) to (3,4)");
+        
+        assert_eq!(*vecc.shape(), vec![3, 4]);
+        // First column should be 5+1=6, second column 6+1=7, rest 1+1=2
+        for i in 0..3 {
+            assert_eq!(vecc.view().get(vec![i, 0]).unwrap(), 6.0);
+            assert_eq!(vecc.view().get(vec![i, 1]).unwrap(), 7.0);
+            assert_eq!(vecc.view().get(vec![i, 2]).unwrap(), 2.0);
+            assert_eq!(vecc.view().get(vec![i, 3]).unwrap(), 2.0);
+        }
+    }
+
+    #[test]
+    fn test_broadcast_both_singletons_2d_pattern2() {
+        // Flipped from classic pattern
+        let mut veca = CpuTensor::<f32>::ones((4, 1)); // (4, 1) - column vector
+        let vecb = CpuTensor::<f32>::ones((1, 5)); // (1, 5) - row vector
+        veca.view_mut().set(vec![0, 0], 10.0).unwrap();
+        veca.view_mut().set(vec![1, 0], 20.0).unwrap();
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast (4,1) and (1,5) to (4,5)");
+        
+        assert_eq!(*vecc.shape(), vec![4, 5]);
+        // First row should all be 10+1=11, second row 20+1=21, rest 1+1=2
+        for j in 0..5 {
+            assert_eq!(vecc.view().get(vec![0, j]).unwrap(), 11.0);
+            assert_eq!(vecc.view().get(vec![1, j]).unwrap(), 21.0);
+            assert_eq!(vecc.view().get(vec![2, j]).unwrap(), 2.0);
+            assert_eq!(vecc.view().get(vec![3, j]).unwrap(), 2.0);
+        }
+    }
+
+    #[test]
+    fn test_broadcast_both_singletons_3d_complementary() {
+        // (1, 3, 1) and (2, 1, 4) -> (2, 3, 4)
+        let veca = CpuTensor::<f32>::ones((1, 3, 1)); // (1, 3, 1)
+        let vecb = CpuTensor::<f32>::ones((2, 1, 4)); // (2, 1, 4)
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast to (2,3,4)");
+        
+        assert_eq!(*vecc.shape(), vec![2, 3, 4]);
+        for i in 0..2 {
+            for j in 0..3 {
+                for k in 0..4 {
+                    assert_eq!(vecc.view().get(vec![i, j, k]).unwrap(), 2.0);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_broadcast_both_singletons_3d_alternating() {
+        // (1, 4, 5) and (3, 1, 5) -> (3, 4, 5)
+        let mut veca = CpuTensor::<f32>::ones((1, 4, 5)); // (1, 4, 5)
+        let mut vecb = CpuTensor::<f32>::ones((3, 1, 5)); // (3, 1, 5)
+        veca.view_mut().set(vec![0, 0, 0], 100.0).unwrap();
+        vecb.view_mut().set(vec![0, 0, 0], 200.0).unwrap();
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast to (3,4,5)");
+        
+        assert_eq!(*vecc.shape(), vec![3, 4, 5]);
+        // [0,0,0] should be 100+200=300
+        assert_eq!(vecc.view().get(vec![0, 0, 0]).unwrap(), 300.0);
+        // veca broadcasts along dim 0, vecb broadcasts along dim 1
+        // At [1,0,0]: veca[0,0,0]=100 + vecb[1,0,0]=1 = 101
+        assert_eq!(vecc.view().get(vec![1, 0, 0]).unwrap(), 101.0);
+        assert_eq!(vecc.view().get(vec![2, 0, 0]).unwrap(), 101.0);
+        // At [0,1,0]: veca[0,1,0]=1 + vecb[0,0,0]=200 = 201
+        assert_eq!(vecc.view().get(vec![0, 1, 0]).unwrap(), 201.0);
+        assert_eq!(vecc.view().get(vec![0, 2, 0]).unwrap(), 201.0);
+    }
+
+    #[test]
+    fn test_broadcast_both_singletons_3d_partial_overlap() {
+        // (5, 1, 3) and (1, 4, 3) -> (5, 4, 3)
+        let veca = CpuTensor::<f32>::ones((5, 1, 3)); // (5, 1, 3)
+        let vecb = CpuTensor::<f32>::ones((1, 4, 3)); // (1, 4, 3)
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast to (5,4,3)");
+        
+        assert_eq!(*vecc.shape(), vec![5, 4, 3]);
+        // All values should be 2.0
+        for i in 0..5 {
+            for j in 0..4 {
+                for k in 0..3 {
+                    assert_eq!(vecc.view().get(vec![i, j, k]).unwrap(), 2.0);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_broadcast_both_singletons_4d_zigzag() {
+        // (1, 3, 1, 5) and (2, 1, 4, 1) -> (2, 3, 4, 5)
+        let veca = CpuTensor::<f32>::ones((1, 3, 1, 5)); // (1, 3, 1, 5)
+        let vecb = CpuTensor::<f32>::ones((2, 1, 4, 1)); // (2, 1, 4, 1)
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast to (2,3,4,5)");
+        
+        assert_eq!(*vecc.shape(), vec![2, 3, 4, 5]);
+        // Spot check some values
+        assert_eq!(vecc.view().get(vec![0, 0, 0, 0]).unwrap(), 2.0);
+        assert_eq!(vecc.view().get(vec![1, 2, 3, 4]).unwrap(), 2.0);
+    }
+
+    #[test]
+    fn test_broadcast_both_singletons_4d_complex() {
+        // (1, 1, 6, 7) and (5, 4, 1, 1) -> (5, 4, 6, 7)
+        let veca = CpuTensor::<f32>::ones((1, 1, 6, 7)); // (1, 1, 6, 7)
+        let vecb = CpuTensor::<f32>::ones((5, 4, 1, 1)); // (5, 4, 1, 1)
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast to (5,4,6,7)");
+        
+        assert_eq!(*vecc.shape(), vec![5, 4, 6, 7]);
+        // Check boundaries
+        assert_eq!(vecc.view().get(vec![0, 0, 0, 0]).unwrap(), 2.0);
+        assert_eq!(vecc.view().get(vec![4, 3, 5, 6]).unwrap(), 2.0);
+    }
+
+    #[test]
+    fn test_broadcast_both_singletons_5d_checkerboard() {
+        // (1, 2, 1, 3, 1) and (4, 1, 5, 1, 6) -> (4, 2, 5, 3, 6)
+        let veca = CpuTensor::<f32>::ones((1, 2, 1, 3, 1)); // (1, 2, 1, 3, 1)
+        let vecb = CpuTensor::<f32>::ones((4, 1, 5, 1, 6)); // (4, 1, 5, 1, 6)
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast to (4,2,5,3,6)");
+        
+        assert_eq!(*vecc.shape(), vec![4, 2, 5, 3, 6]);
+        // Spot check
+        assert_eq!(vecc.view().get(vec![0, 0, 0, 0, 0]).unwrap(), 2.0);
+        assert_eq!(vecc.view().get(vec![3, 1, 4, 2, 5]).unwrap(), 2.0);
+    }
+
+    #[test]
+    fn test_broadcast_both_singletons_5d_all_different() {
+        // (1, 3, 1, 1, 7) and (2, 1, 4, 5, 1) -> (2, 3, 4, 5, 7)
+        let veca = CpuTensor::<f32>::ones((1, 3, 1, 1, 7)); // (1, 3, 1, 1, 7)
+        let vecb = CpuTensor::<f32>::ones((2, 1, 4, 5, 1)); // (2, 1, 4, 5, 1)
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast to (2,3,4,5,7)");
+        
+        assert_eq!(*vecc.shape(), vec![2, 3, 4, 5, 7]);
+        // Verify a few positions
+        assert_eq!(vecc.view().get(vec![0, 0, 0, 0, 0]).unwrap(), 2.0);
+        assert_eq!(vecc.view().get(vec![1, 1, 1, 1, 1]).unwrap(), 2.0);
+        assert_eq!(vecc.view().get(vec![1, 2, 3, 4, 6]).unwrap(), 2.0);
+    }
+
+    #[test]
+    fn test_broadcast_both_singletons_mixed_ranks() {
+        // (1, 5) and (3, 1, 1) -> (3, 1, 5) - wait, this should be (3, 1, 5)? Let me recalculate
+        // Actually: (1, 5) needs to be prepended -> (1, 1, 5), then broadcast with (3, 1, 1) -> (3, 1, 5)
+        let veca = CpuTensor::<f32>::ones((1, 5)); // (1, 5)
+        let vecb = CpuTensor::<f32>::ones((3, 1, 1)); // (3, 1, 1)
+        
+        let vecc = veca.view().add(&vecb.view()).expect("Should broadcast");
+        
+        assert_eq!(*vecc.shape(), vec![3, 1, 5]);
+        for i in 0..3 {
+            for k in 0..5 {
+                assert_eq!(vecc.view().get(vec![i, 0, k]).unwrap(), 2.0);
+            }
+        }
+    }
+
+    // --- FAILING TESTS: Both tensors with singletons but incompatible ---
+
+    #[test]
+    #[should_panic]
+    fn test_broadcast_both_singletons_incompatible_2d() {
+        // (3, 1) and (1, 5) would work, but (3, 4) and (5, 1) won't
+        let veca = CpuTensor::<f32>::ones((3, 4)); // (3, 4) - no singleton!
+        let vecb = CpuTensor::<f32>::ones((5, 1)); // (5, 1)
+        
+        // Should fail: 3 != 5 and 4 != 1
+        let _vecc = veca.view().add(&vecb.view()).expect("Should fail - 3 != 5");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_broadcast_both_singletons_incompatible_3d() {
+        // (2, 1, 4) and (1, 3, 5) won't work because 4 != 5
+        let veca = CpuTensor::<f32>::ones((2, 1, 4)); // (2, 1, 4)
+        let vecb = CpuTensor::<f32>::ones((1, 3, 5)); // (1, 3, 5)
+        
+        // Should fail: 4 != 5
+        let _vecc = veca.view().add(&vecb.view()).expect("Should fail - 4 != 5");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_broadcast_both_singletons_incompatible_4d() {
+        // (1, 3, 1, 6) and (2, 1, 4, 7) won't work because 6 != 7
+        let veca = CpuTensor::<f32>::ones((1, 3, 1, 6)); // (1, 3, 1, 6)
+        let vecb = CpuTensor::<f32>::ones((2, 1, 4, 7)); // (2, 1, 4, 7)
+        
+        // Should fail: 6 != 7
+        let _vecc = veca.view().add(&vecb.view()).expect("Should fail - 6 != 7");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_broadcast_both_singletons_incompatible_middle() {
+        // (1, 4, 1) and (3, 1, 5) would give (3, 4, 5)
+        // but (2, 4, 1) and (3, 1, 5) fails because 2 != 3
+        let veca = CpuTensor::<f32>::ones((2, 4, 1)); // (2, 4, 1)
+        let vecb = CpuTensor::<f32>::ones((3, 1, 5)); // (3, 1, 5)
+        
+        // Should fail: 2 != 3
+        let _vecc = veca.view().add(&vecb.view()).expect("Should fail - 2 != 3");
     }
 }
 
@@ -2537,11 +3250,11 @@ mod cuda_tests {
         assert_eq!(result.view().get(vec![1, 999]).unwrap(), 4000);
     }
 
-    // BROADCASTING TESTS
+        // BROADCASTING TESTS
     #[test]
-    fn test_broadcast_flipped() {
-        let mut veca = CpuTensor::<f32>::ones((1, 3));
-        let vecb = CpuTensor::<f32>::ones((3, 1));
+    fn test_broadcast_flipped_cuda() {
+        let mut veca = CudaTensor::<f32>::ones((1, 3));
+        let vecb = CudaTensor::<f32>::ones((3, 1));
         veca.view_mut().set(vec![0, 0], 22.0).unwrap();
 
         let vecc = &veca.view().add(&vecb.view()).expect("fail");
@@ -2559,9 +3272,9 @@ mod cuda_tests {
     }
 
     #[test]
-    fn test_broadcast_same() {
-        let mut veca = CpuTensor::<f32>::ones((3,1));
-        let vecb = CpuTensor::<f32>::ones((3, 1));
+    fn test_broadcast_same_cuda() {
+        let mut veca = CudaTensor::<f32>::ones((3,1));
+        let vecb = CudaTensor::<f32>::ones((3, 1));
         veca.view_mut().set(vec![0, 0], 22.0).unwrap();
 
         let vecc = &veca.view().add(&vecb.view()).expect("fail");
@@ -2585,9 +3298,9 @@ mod cuda_tests {
     // --- 3D Broadcast Tests (Valid Cases) ---
 
     #[test]
-    fn test_broadcast_3d_scalar_to_tensor() {
-        let veca = CpuTensor::<f32>::from_buf(vec![5.0], vec![]).unwrap(); // scalar
-        let vecb = CpuTensor::<f32>::ones((2, 3, 4));
+    fn test_broadcast_3d_scalar_to_tensor_cuda() {
+        let veca = CudaTensor::<f32>::from_buf(vec![5.0], vec![]).unwrap(); // scalar
+        let vecb = CudaTensor::<f32>::ones((2, 3, 4));
         
         let vecc = veca.view().add(&vecb.view()).expect("Should broadcast scalar to 3D");
         
@@ -2602,9 +3315,9 @@ mod cuda_tests {
     }
 
     #[test]
-    fn test_broadcast_3d_vector_along_last_dim() {
-        let veca = CpuTensor::<f32>::from_buf(vec![1.0, 2.0, 3.0], vec![3]).unwrap(); // (3,)
-        let vecb = CpuTensor::<f32>::ones((2, 4, 3)); // (2, 4, 3)
+    fn test_broadcast_3d_vector_along_last_dim_cuda() {
+        let veca = CudaTensor::<f32>::from_buf(vec![1.0, 2.0, 3.0], vec![3]).unwrap(); // (3,)
+        let vecb = CudaTensor::<f32>::ones((2, 4, 3)); // (2, 4, 3)
         
         let vecc = veca.view().add(&vecb.view()).expect("Should broadcast (3,) to (2,4,3)");
         
@@ -2620,9 +3333,9 @@ mod cuda_tests {
     }
 
     #[test]
-    fn test_broadcast_3d_matrix_to_tensor() {
-        let veca = CpuTensor::<f32>::ones((3, 4)); // (3, 4)
-        let vecb = CpuTensor::<f32>::ones((2, 3, 4)); // (2, 3, 4)
+    fn test_broadcast_3d_matrix_to_tensor_cuda() {
+        let veca = CudaTensor::<f32>::ones((3, 4)); // (3, 4)
+        let vecb = CudaTensor::<f32>::ones((2, 3, 4)); // (2, 3, 4)
         
         let vecc = veca.view().add(&vecb.view()).expect("Should broadcast (3,4) to (2,3,4)");
         
@@ -2637,9 +3350,9 @@ mod cuda_tests {
     }
 
     #[test]
-    fn test_broadcast_3d_singleton_dims() {
-        let veca = CpuTensor::<f32>::ones((1, 3, 1)); // (1, 3, 1)
-        let vecb = CpuTensor::<f32>::ones((2, 3, 4)); // (2, 3, 4)
+    fn test_broadcast_3d_singleton_dims_cuda() {
+        let veca = CudaTensor::<f32>::ones((1, 3, 1)); // (1, 3, 1)
+        let vecb = CudaTensor::<f32>::ones((2, 3, 4)); // (2, 3, 4)
         
         let vecc = veca.view().add(&vecb.view()).expect("Should broadcast (1,3,1) to (2,3,4)");
         
@@ -2654,9 +3367,9 @@ mod cuda_tests {
     }
 
     #[test]
-    fn test_broadcast_3d_prepend_dims() {
-        let veca = CpuTensor::<f32>::ones((3, 4)); // (3, 4)
-        let vecb = CpuTensor::<f32>::ones((5, 3, 4)); // (5, 3, 4)
+    fn test_broadcast_3d_prepend_dims_cuda() {
+        let veca = CudaTensor::<f32>::ones((3, 4)); // (3, 4)
+        let vecb = CudaTensor::<f32>::ones((5, 3, 4)); // (5, 3, 4)
         
         let vecc = veca.view().add(&vecb.view()).expect("Should broadcast (3,4) to (5,3,4)");
         
@@ -2673,9 +3386,9 @@ mod cuda_tests {
     // --- 4D Broadcast Tests (Valid Cases) ---
 
     #[test]
-    fn test_broadcast_4d_vector_to_tensor() {
-        let veca = CpuTensor::<f32>::from_buf(vec![10.0, 20.0], vec![2]).unwrap(); // (2,)
-        let vecb = CpuTensor::<f32>::ones((3, 4, 5, 2)); // (3, 4, 5, 2)
+    fn test_broadcast_4d_vector_to_tensor_cuda() {
+        let veca = CudaTensor::<f32>::from_buf(vec![10.0, 20.0], vec![2]).unwrap(); // (2,)
+        let vecb = CudaTensor::<f32>::ones((3, 4, 5, 2)); // (3, 4, 5, 2)
         
         let vecc = veca.view().add(&vecb.view()).expect("Should broadcast (2,) to (3,4,5,2)");
         
@@ -2692,9 +3405,9 @@ mod cuda_tests {
     }
 
     #[test]
-    fn test_broadcast_4d_complex_singletons() {
-        let veca = CpuTensor::<f32>::ones((1, 1, 5, 1)); // (1, 1, 5, 1)
-        let vecb = CpuTensor::<f32>::ones((2, 3, 5, 4)); // (2, 3, 5, 4)
+    fn test_broadcast_4d_complex_singletons_cuda() {
+        let veca = CudaTensor::<f32>::ones((1, 1, 5, 1)); // (1, 1, 5, 1)
+        let vecb = CudaTensor::<f32>::ones((2, 3, 5, 4)); // (2, 3, 5, 4)
         
         let vecc = veca.view().add(&vecb.view()).expect("Should broadcast (1,1,5,1) to (2,3,5,4)");
         
@@ -2711,9 +3424,9 @@ mod cuda_tests {
     }
 
     #[test]
-    fn test_broadcast_4d_3d_to_4d() {
-        let veca = CpuTensor::<f32>::ones((3, 5, 4)); // (3, 5, 4)
-        let vecb = CpuTensor::<f32>::ones((2, 3, 5, 4)); // (2, 3, 5, 4)
+    fn test_broadcast_4d_3d_to_4d_cuda() {
+        let veca = CudaTensor::<f32>::ones((3, 5, 4)); // (3, 5, 4)
+        let vecb = CudaTensor::<f32>::ones((2, 3, 5, 4)); // (2, 3, 5, 4)
         
         let vecc = veca.view().add(&vecb.view()).expect("Should broadcast (3,5,4) to (2,3,5,4)");
         
@@ -2732,9 +3445,9 @@ mod cuda_tests {
     // --- 5D Broadcast Tests (Valid Cases) ---
 
     #[test]
-    fn test_broadcast_5d_scalar_to_tensor() {
-        let veca = CpuTensor::<f32>::from_buf(vec![100.0], vec![]).unwrap(); // scalar
-        let vecb = CpuTensor::<f32>::ones((2, 2, 2, 2, 2)); // (2, 2, 2, 2, 2)
+    fn test_broadcast_5d_scalar_to_tensor_cuda() {
+        let veca = CudaTensor::<f32>::from_buf(vec![100.0], vec![]).unwrap(); // scalar
+        let vecb = CudaTensor::<f32>::ones((2, 2, 2, 2, 2)); // (2, 2, 2, 2, 2)
         
         let vecc = veca.view().add(&vecb.view()).expect("Should broadcast scalar to 5D");
         
@@ -2753,9 +3466,9 @@ mod cuda_tests {
     }
 
     #[test]
-    fn test_broadcast_5d_multiple_singletons() {
-        let veca = CpuTensor::<f32>::ones((1, 2, 1, 3, 1)); // (1, 2, 1, 3, 1)
-        let vecb = CpuTensor::<f32>::ones((4, 2, 5, 3, 6)); // (4, 2, 5, 3, 6)
+    fn test_broadcast_5d_multiple_singletons_cuda() {
+        let veca = CudaTensor::<f32>::ones((1, 2, 1, 3, 1)); // (1, 2, 1, 3, 1)
+        let vecb = CudaTensor::<f32>::ones((4, 2, 5, 3, 6)); // (4, 2, 5, 3, 6)
         
         let vecc = veca.view().add(&vecb.view()).expect("Should broadcast (1,2,1,3,1) to (4,2,5,3,6)");
         
@@ -2768,9 +3481,9 @@ mod cuda_tests {
     // --- Mixed Dimension Broadcasts (Valid Cases) ---
 
     #[test]
-    fn test_broadcast_2d_to_4d() {
-        let veca = CpuTensor::<f32>::ones((3, 4)); // (3, 4)
-        let vecb = CpuTensor::<f32>::ones((2, 5, 3, 4)); // (2, 5, 3, 4)
+    fn test_broadcast_2d_to_4d_cuda() {
+        let veca = CudaTensor::<f32>::ones((3, 4)); // (3, 4)
+        let vecb = CudaTensor::<f32>::ones((2, 5, 3, 4)); // (2, 5, 3, 4)
         
         let vecc = veca.view().add(&vecb.view()).expect("Should broadcast (3,4) to (2,5,3,4)");
         
@@ -2787,9 +3500,9 @@ mod cuda_tests {
     }
 
     #[test]
-    fn test_broadcast_1d_to_5d() {
-        let veca = CpuTensor::<f32>::from_buf(vec![1.0, 2.0, 3.0], vec![3]).unwrap(); // (3,)
-        let vecb = CpuTensor::<f32>::ones((2, 4, 5, 6, 3)); // (2, 4, 5, 6, 3)
+    fn test_broadcast_1d_to_5d_cuda() {
+        let veca = CudaTensor::<f32>::from_buf(vec![1.0, 2.0, 3.0], vec![3]).unwrap(); // (3,)
+        let vecb = CudaTensor::<f32>::ones((2, 4, 5, 6, 3)); // (2, 4, 5, 6, 3)
         
         let vecc = veca.view().add(&vecb.view()).expect("Should broadcast (3,) to (2,4,5,6,3)");
         
@@ -2812,9 +3525,9 @@ mod cuda_tests {
 
     #[test]
     #[should_panic]
-    fn test_broadcast_incompatible_dimensions_3d() {
-        let veca = CpuTensor::<f32>::ones((3, 4)); // (3, 4)
-        let vecb = CpuTensor::<f32>::ones((2, 5, 6)); // (2, 5, 6) - incompatible!
+    fn test_broadcast_incompatible_dimensions_3d_cuda() {
+        let veca = CudaTensor::<f32>::ones((3, 4)); // (3, 4)
+        let vecb = CudaTensor::<f32>::ones((2, 5, 6)); // (2, 5, 6) - incompatible!
         
         // This should panic because 4 != 6 and 3 != 5
         let _vecc = veca.view().add(&vecb.view()).expect("Should fail - incompatible dims");
@@ -2822,9 +3535,9 @@ mod cuda_tests {
 
     #[test]
     #[should_panic]
-    fn test_broadcast_incompatible_inner_dim() {
-        let veca = CpuTensor::<f32>::ones((5,)); // (5,)
-        let vecb = CpuTensor::<f32>::ones((2, 3, 7)); // (2, 3, 7)
+    fn test_broadcast_incompatible_inner_dim_cuda() {
+        let veca = CudaTensor::<f32>::ones((5,)); // (5,)
+        let vecb = CudaTensor::<f32>::ones((2, 3, 7)); // (2, 3, 7)
         
         // Should fail because 5 != 7
         let _vecc = veca.view().add(&vecb.view()).expect("Should fail - 5 != 7");
@@ -2832,9 +3545,9 @@ mod cuda_tests {
 
     #[test]
     #[should_panic]
-    fn test_broadcast_incompatible_middle_dim() {
-        let veca = CpuTensor::<f32>::ones((2, 3, 4)); // (2, 3, 4)
-        let vecb = CpuTensor::<f32>::ones((2, 5, 4)); // (2, 5, 4)
+    fn test_broadcast_incompatible_middle_dim_cuda() {
+        let veca = CudaTensor::<f32>::ones((2, 3, 4)); // (2, 3, 4)
+        let vecb = CudaTensor::<f32>::ones((2, 5, 4)); // (2, 5, 4)
         
         // Should fail because middle dimension 3 != 5 and neither is 1
         let _vecc = veca.view().add(&vecb.view()).expect("Should fail - 3 != 5");
@@ -2842,9 +3555,9 @@ mod cuda_tests {
 
     #[test]
     #[should_panic]
-    fn test_broadcast_incompatible_4d() {
-        let veca = CpuTensor::<f32>::ones((2, 3, 4, 5)); // (2, 3, 4, 5)
-        let vecb = CpuTensor::<f32>::ones((2, 7, 4, 5)); // (2, 7, 4, 5)
+    fn test_broadcast_incompatible_4d_cuda() {
+        let veca = CudaTensor::<f32>::ones((2, 3, 4, 5)); // (2, 3, 4, 5)
+        let vecb = CudaTensor::<f32>::ones((2, 7, 4, 5)); // (2, 7, 4, 5)
         
         // Should fail because 3 != 7
         let _vecc = veca.view().add(&vecb.view()).expect("Should fail - 3 != 7");
@@ -2852,9 +3565,9 @@ mod cuda_tests {
 
     #[test]
     #[should_panic]
-    fn test_broadcast_incompatible_5d_multiple() {
-        let veca = CpuTensor::<f32>::ones((1, 2, 3, 4, 5)); // (1, 2, 3, 4, 5)
-        let vecb = CpuTensor::<f32>::ones((6, 2, 7, 4, 5)); // (6, 2, 7, 4, 5)
+    fn test_broadcast_incompatible_5d_multiple_cuda() {
+        let veca = CudaTensor::<f32>::ones((1, 2, 3, 4, 5)); // (1, 2, 3, 4, 5)
+        let vecb = CudaTensor::<f32>::ones((6, 2, 7, 4, 5)); // (6, 2, 7, 4, 5)
         
         // Should fail because 3 != 7 (dim 2)
         let _vecc = veca.view().add(&vecb.view()).expect("Should fail - 3 != 7");
@@ -2862,9 +3575,9 @@ mod cuda_tests {
 
     #[test]
     #[should_panic]
-    fn test_broadcast_both_non_singleton_mismatch() {
-        let veca = CpuTensor::<f32>::ones((4, 5, 6)); // (4, 5, 6)
-        let vecb = CpuTensor::<f32>::ones((4, 3, 6)); // (4, 3, 6)
+    fn test_broadcast_both_non_singleton_mismatch_cuda() {
+        let veca = CudaTensor::<f32>::ones((4, 5, 6)); // (4, 5, 6)
+        let vecb = CudaTensor::<f32>::ones((4, 3, 6)); // (4, 3, 6)
         
         // Should fail because 5 != 3 and neither is 1
         let _vecc = veca.view().add(&vecb.view()).expect("Should fail - 5 != 3");
@@ -2873,9 +3586,9 @@ mod cuda_tests {
     // --- Edge Case Broadcasts ---
 
     #[test]
-    fn test_broadcast_all_singletons() {
-        let veca = CpuTensor::<f32>::ones((1, 1, 1)); // (1, 1, 1)
-        let vecb = CpuTensor::<f32>::ones((5, 6, 7)); // (5, 6, 7)
+    fn test_broadcast_all_singletons_cuda() {
+        let veca = CudaTensor::<f32>::ones((1, 1, 1)); // (1, 1, 1)
+        let vecb = CudaTensor::<f32>::ones((5, 6, 7)); // (5, 6, 7)
         
         let vecc = veca.view().add(&vecb.view()).expect("Should broadcast (1,1,1) to (5,6,7)");
         
@@ -2885,9 +3598,9 @@ mod cuda_tests {
     }
 
     #[test]
-    fn test_broadcast_identity() {
-        let veca = CpuTensor::<f32>::ones((3, 4, 5)); // (3, 4, 5)
-        let vecb = CpuTensor::<f32>::ones((3, 4, 5)); // (3, 4, 5)
+    fn test_broadcast_identity_cuda() {
+        let veca = CudaTensor::<f32>::ones((3, 4, 5)); // (3, 4, 5)
+        let vecb = CudaTensor::<f32>::ones((3, 4, 5)); // (3, 4, 5)
         
         let vecc = veca.view().add(&vecb.view()).expect("Should work - identical shapes");
         
@@ -2902,9 +3615,9 @@ mod cuda_tests {
     }
 
     #[test]
-    fn test_broadcast_alternating_singletons() {
-        let veca = CpuTensor::<f32>::ones((1, 4, 1, 6)); // (1, 4, 1, 6)
-        let vecb = CpuTensor::<f32>::ones((3, 1, 5, 1)); // (3, 1, 5, 1)
+    fn test_broadcast_alternating_singletons_cuda() {
+        let veca = CudaTensor::<f32>::ones((1, 4, 1, 6)); // (1, 4, 1, 6)
+        let vecb = CudaTensor::<f32>::ones((3, 1, 5, 1)); // (3, 1, 5, 1)
         
         let vecc = veca.view().add(&vecb.view()).expect("Should broadcast to (3,4,5,6)");
         
@@ -2914,9 +3627,9 @@ mod cuda_tests {
     }
 
     #[test]
-    fn test_broadcast_trailing_singleton() {
-        let veca = CpuTensor::<f32>::ones((3, 4, 1)); // (3, 4, 1)
-        let vecb = CpuTensor::<f32>::ones((3, 4, 5)); // (3, 4, 5)
+    fn test_broadcast_trailing_singleton_cuda() {
+        let veca = CudaTensor::<f32>::ones((3, 4, 1)); // (3, 4, 1)
+        let vecb = CudaTensor::<f32>::ones((3, 4, 5)); // (3, 4, 5)
         
         let vecc = veca.view().add(&vecb.view()).expect("Should broadcast (3,4,1) to (3,4,5)");
         
@@ -2931,9 +3644,9 @@ mod cuda_tests {
     }
 
     #[test]
-    fn test_broadcast_leading_singleton() {
-        let veca = CpuTensor::<f32>::ones((1, 4, 5)); // (1, 4, 5)
-        let vecb = CpuTensor::<f32>::ones((3, 4, 5)); // (3, 4, 5)
+    fn test_broadcast_leading_singleton_cuda() {
+        let veca = CudaTensor::<f32>::ones((1, 4, 5)); // (1, 4, 5)
+        let vecb = CudaTensor::<f32>::ones((3, 4, 5)); // (3, 4, 5)
         
         let vecc = veca.view().add(&vecb.view()).expect("Should broadcast (1,4,5) to (3,4,5)");
         
@@ -2950,9 +3663,9 @@ mod cuda_tests {
     // --- High Rank Shape Tests (Focus on Expected Output Shapes) ---
 
     #[test]
-    fn test_broadcast_shape_2d_plus_3d() {
-        let veca = CpuTensor::<f32>::ones((4, 5)); // (4, 5)
-        let vecb = CpuTensor::<f32>::ones((3, 4, 5)); // (3, 4, 5)
+    fn test_broadcast_shape_2d_plus_3d_cuda() {
+        let veca = CudaTensor::<f32>::ones((4, 5)); // (4, 5)
+        let vecb = CudaTensor::<f32>::ones((3, 4, 5)); // (3, 4, 5)
         
         let vecc = veca.view().add(&vecb.view()).expect("Should broadcast");
         
@@ -2961,9 +3674,9 @@ mod cuda_tests {
     }
 
     #[test]
-    fn test_broadcast_shape_1d_plus_4d() {
-        let veca = CpuTensor::<f32>::ones((7,)); // (7,)
-        let vecb = CpuTensor::<f32>::ones((2, 3, 4, 7)); // (2, 3, 4, 7)
+    fn test_broadcast_shape_1d_plus_4d_cuda() {
+        let veca = CudaTensor::<f32>::ones((7,)); // (7,)
+        let vecb = CudaTensor::<f32>::ones((2, 3, 4, 7)); // (2, 3, 4, 7)
         
         let vecc = veca.view().add(&vecb.view()).expect("Should broadcast");
         
@@ -2972,9 +3685,9 @@ mod cuda_tests {
     }
 
     #[test]
-    fn test_broadcast_shape_singleton_expansion() {
-        let veca = CpuTensor::<f32>::ones((1, 5, 1)); // (1, 5, 1)
-        let vecb = CpuTensor::<f32>::ones((4, 5, 6)); // (4, 5, 6)
+    fn test_broadcast_shape_singleton_expansion_cuda() {
+        let veca = CudaTensor::<f32>::ones((1, 5, 1)); // (1, 5, 1)
+        let vecb = CudaTensor::<f32>::ones((4, 5, 6)); // (4, 5, 6)
         
         let vecc = veca.view().add(&vecb.view()).expect("Should broadcast");
         
@@ -2983,9 +3696,9 @@ mod cuda_tests {
     }
 
     #[test]
-    fn test_broadcast_shape_prepending() {
-        let veca = CpuTensor::<f32>::ones((5, 6)); // (5, 6)
-        let vecb = CpuTensor::<f32>::ones((2, 3, 4, 5, 6)); // (2, 3, 4, 5, 6)
+    fn test_broadcast_shape_prepending_cuda() {
+        let veca = CudaTensor::<f32>::ones((5, 6)); // (5, 6)
+        let vecb = CudaTensor::<f32>::ones((2, 3, 4, 5, 6)); // (2, 3, 4, 5, 6)
         
         let vecc = veca.view().add(&vecb.view()).expect("Should broadcast");
         
@@ -2994,9 +3707,9 @@ mod cuda_tests {
     }
 
     #[test]
-    fn test_broadcast_shape_both_expand() {
-        let veca = CpuTensor::<f32>::ones((1, 4, 1, 6)); // (1, 4, 1, 6)
-        let vecb = CpuTensor::<f32>::ones((3, 1, 5, 6)); // (3, 1, 5, 6)
+    fn test_broadcast_shape_both_expand_cuda() {
+        let veca = CudaTensor::<f32>::ones((1, 4, 1, 6)); // (1, 4, 1, 6)
+        let vecb = CudaTensor::<f32>::ones((3, 1, 5, 6)); // (3, 1, 5, 6)
         
         let vecc = veca.view().add(&vecb.view()).expect("Should broadcast");
         
@@ -3005,9 +3718,9 @@ mod cuda_tests {
     }
 
     #[test]
-    fn test_broadcast_shape_scalar_expansion() {
-        let veca = CpuTensor::<f32>::from_buf(vec![42.0], vec![]).unwrap(); // scalar
-        let vecb = CpuTensor::<f32>::ones((2, 3, 4, 5, 6)); // (2, 3, 4, 5, 6)
+    fn test_broadcast_shape_scalar_expansion_cuda() {
+        let veca = CudaTensor::<f32>::from_buf(vec![42.0], vec![]).unwrap(); // scalar
+        let vecb = CudaTensor::<f32>::ones((2, 3, 4, 5, 6)); // (2, 3, 4, 5, 6)
         
         let vecc = veca.view().add(&vecb.view()).expect("Should broadcast");
         
@@ -3016,9 +3729,9 @@ mod cuda_tests {
     }
 
     #[test]
-    fn test_broadcast_shape_complex_5d() {
-        let veca = CpuTensor::<f32>::ones((1, 1, 3, 1, 5)); // (1, 1, 3, 1, 5)
-        let vecb = CpuTensor::<f32>::ones((2, 4, 3, 6, 5)); // (2, 4, 3, 6, 5)
+    fn test_broadcast_shape_complex_5d_cuda() {
+        let veca = CudaTensor::<f32>::ones((1, 1, 3, 1, 5)); // (1, 1, 3, 1, 5)
+        let vecb = CudaTensor::<f32>::ones((2, 4, 3, 6, 5)); // (2, 4, 3, 6, 5)
         
         let vecc = veca.view().add(&vecb.view()).expect("Should broadcast");
         
@@ -3031,10 +3744,10 @@ mod cuda_tests {
     // ============================================================================
 
     #[test]
-    fn test_broadcast_both_singletons_2d_pattern1() {
+    fn test_broadcast_both_singletons_2d_pattern1_cuda() {
         // Classic row vs column vector
-        let mut veca = CpuTensor::<f32>::ones((1, 4)); // (1, 4) - row vector
-        let vecb = CpuTensor::<f32>::ones((3, 1)); // (3, 1) - column vector
+        let mut veca = CudaTensor::<f32>::ones((1, 4)); // (1, 4) - row vector
+        let vecb = CudaTensor::<f32>::ones((3, 1)); // (3, 1) - column vector
         veca.view_mut().set(vec![0, 0], 5.0).unwrap();
         veca.view_mut().set(vec![0, 1], 6.0).unwrap();
         
@@ -3051,10 +3764,10 @@ mod cuda_tests {
     }
 
     #[test]
-    fn test_broadcast_both_singletons_2d_pattern2() {
+    fn test_broadcast_both_singletons_2d_pattern2_cuda() {
         // Flipped from classic pattern
-        let mut veca = CpuTensor::<f32>::ones((4, 1)); // (4, 1) - column vector
-        let vecb = CpuTensor::<f32>::ones((1, 5)); // (1, 5) - row vector
+        let mut veca = CudaTensor::<f32>::ones((4, 1)); // (4, 1) - column vector
+        let vecb = CudaTensor::<f32>::ones((1, 5)); // (1, 5) - row vector
         veca.view_mut().set(vec![0, 0], 10.0).unwrap();
         veca.view_mut().set(vec![1, 0], 20.0).unwrap();
         
@@ -3071,10 +3784,10 @@ mod cuda_tests {
     }
 
     #[test]
-    fn test_broadcast_both_singletons_3d_complementary() {
+    fn test_broadcast_both_singletons_3d_complementary_cuda() {
         // (1, 3, 1) and (2, 1, 4) -> (2, 3, 4)
-        let veca = CpuTensor::<f32>::ones((1, 3, 1)); // (1, 3, 1)
-        let vecb = CpuTensor::<f32>::ones((2, 1, 4)); // (2, 1, 4)
+        let veca = CudaTensor::<f32>::ones((1, 3, 1)); // (1, 3, 1)
+        let vecb = CudaTensor::<f32>::ones((2, 1, 4)); // (2, 1, 4)
         
         let vecc = veca.view().add(&vecb.view()).expect("Should broadcast to (2,3,4)");
         
@@ -3089,10 +3802,10 @@ mod cuda_tests {
     }
 
     #[test]
-    fn test_broadcast_both_singletons_3d_alternating() {
+    fn test_broadcast_both_singletons_3d_alternating_cuda() {
         // (1, 4, 5) and (3, 1, 5) -> (3, 4, 5)
-        let mut veca = CpuTensor::<f32>::ones((1, 4, 5)); // (1, 4, 5)
-        let mut vecb = CpuTensor::<f32>::ones((3, 1, 5)); // (3, 1, 5)
+        let mut veca = CudaTensor::<f32>::ones((1, 4, 5)); // (1, 4, 5)
+        let mut vecb = CudaTensor::<f32>::ones((3, 1, 5)); // (3, 1, 5)
         veca.view_mut().set(vec![0, 0, 0], 100.0).unwrap();
         vecb.view_mut().set(vec![0, 0, 0], 200.0).unwrap();
         
@@ -3111,10 +3824,10 @@ mod cuda_tests {
     }
 
     #[test]
-    fn test_broadcast_both_singletons_3d_partial_overlap() {
+    fn test_broadcast_both_singletons_3d_partial_overlap_cuda() {
         // (5, 1, 3) and (1, 4, 3) -> (5, 4, 3)
-        let veca = CpuTensor::<f32>::ones((5, 1, 3)); // (5, 1, 3)
-        let vecb = CpuTensor::<f32>::ones((1, 4, 3)); // (1, 4, 3)
+        let veca = CudaTensor::<f32>::ones((5, 1, 3)); // (5, 1, 3)
+        let vecb = CudaTensor::<f32>::ones((1, 4, 3)); // (1, 4, 3)
         
         let vecc = veca.view().add(&vecb.view()).expect("Should broadcast to (5,4,3)");
         
@@ -3130,10 +3843,10 @@ mod cuda_tests {
     }
 
     #[test]
-    fn test_broadcast_both_singletons_4d_zigzag() {
+    fn test_broadcast_both_singletons_4d_zigzag_cuda() {
         // (1, 3, 1, 5) and (2, 1, 4, 1) -> (2, 3, 4, 5)
-        let veca = CpuTensor::<f32>::ones((1, 3, 1, 5)); // (1, 3, 1, 5)
-        let vecb = CpuTensor::<f32>::ones((2, 1, 4, 1)); // (2, 1, 4, 1)
+        let veca = CudaTensor::<f32>::ones((1, 3, 1, 5)); // (1, 3, 1, 5)
+        let vecb = CudaTensor::<f32>::ones((2, 1, 4, 1)); // (2, 1, 4, 1)
         
         let vecc = veca.view().add(&vecb.view()).expect("Should broadcast to (2,3,4,5)");
         
@@ -3144,10 +3857,10 @@ mod cuda_tests {
     }
 
     #[test]
-    fn test_broadcast_both_singletons_4d_complex() {
+    fn test_broadcast_both_singletons_4d_complex_cuda() {
         // (1, 1, 6, 7) and (5, 4, 1, 1) -> (5, 4, 6, 7)
-        let veca = CpuTensor::<f32>::ones((1, 1, 6, 7)); // (1, 1, 6, 7)
-        let vecb = CpuTensor::<f32>::ones((5, 4, 1, 1)); // (5, 4, 1, 1)
+        let veca = CudaTensor::<f32>::ones((1, 1, 6, 7)); // (1, 1, 6, 7)
+        let vecb = CudaTensor::<f32>::ones((5, 4, 1, 1)); // (5, 4, 1, 1)
         
         let vecc = veca.view().add(&vecb.view()).expect("Should broadcast to (5,4,6,7)");
         
@@ -3158,10 +3871,10 @@ mod cuda_tests {
     }
 
     #[test]
-    fn test_broadcast_both_singletons_5d_checkerboard() {
+    fn test_broadcast_both_singletons_5d_checkerboard_cuda() {
         // (1, 2, 1, 3, 1) and (4, 1, 5, 1, 6) -> (4, 2, 5, 3, 6)
-        let veca = CpuTensor::<f32>::ones((1, 2, 1, 3, 1)); // (1, 2, 1, 3, 1)
-        let vecb = CpuTensor::<f32>::ones((4, 1, 5, 1, 6)); // (4, 1, 5, 1, 6)
+        let veca = CudaTensor::<f32>::ones((1, 2, 1, 3, 1)); // (1, 2, 1, 3, 1)
+        let vecb = CudaTensor::<f32>::ones((4, 1, 5, 1, 6)); // (4, 1, 5, 1, 6)
         
         let vecc = veca.view().add(&vecb.view()).expect("Should broadcast to (4,2,5,3,6)");
         
@@ -3172,10 +3885,10 @@ mod cuda_tests {
     }
 
     #[test]
-    fn test_broadcast_both_singletons_5d_all_different() {
+    fn test_broadcast_both_singletons_5d_all_different_cuda() {
         // (1, 3, 1, 1, 7) and (2, 1, 4, 5, 1) -> (2, 3, 4, 5, 7)
-        let veca = CpuTensor::<f32>::ones((1, 3, 1, 1, 7)); // (1, 3, 1, 1, 7)
-        let vecb = CpuTensor::<f32>::ones((2, 1, 4, 5, 1)); // (2, 1, 4, 5, 1)
+        let veca = CudaTensor::<f32>::ones((1, 3, 1, 1, 7)); // (1, 3, 1, 1, 7)
+        let vecb = CudaTensor::<f32>::ones((2, 1, 4, 5, 1)); // (2, 1, 4, 5, 1)
         
         let vecc = veca.view().add(&vecb.view()).expect("Should broadcast to (2,3,4,5,7)");
         
@@ -3187,11 +3900,11 @@ mod cuda_tests {
     }
 
     #[test]
-    fn test_broadcast_both_singletons_mixed_ranks() {
+    fn test_broadcast_both_singletons_mixed_ranks_cuda() {
         // (1, 5) and (3, 1, 1) -> (3, 1, 5) - wait, this should be (3, 1, 5)? Let me recalculate
         // Actually: (1, 5) needs to be prepended -> (1, 1, 5), then broadcast with (3, 1, 1) -> (3, 1, 5)
-        let veca = CpuTensor::<f32>::ones((1, 5)); // (1, 5)
-        let vecb = CpuTensor::<f32>::ones((3, 1, 1)); // (3, 1, 1)
+        let veca = CudaTensor::<f32>::ones((1, 5)); // (1, 5)
+        let vecb = CudaTensor::<f32>::ones((3, 1, 1)); // (3, 1, 1)
         
         let vecc = veca.view().add(&vecb.view()).expect("Should broadcast");
         
@@ -3207,10 +3920,10 @@ mod cuda_tests {
 
     #[test]
     #[should_panic]
-    fn test_broadcast_both_singletons_incompatible_2d() {
+    fn test_broadcast_both_singletons_incompatible_2d_cuda() {
         // (3, 1) and (1, 5) would work, but (3, 4) and (5, 1) won't
-        let veca = CpuTensor::<f32>::ones((3, 4)); // (3, 4) - no singleton!
-        let vecb = CpuTensor::<f32>::ones((5, 1)); // (5, 1)
+        let veca = CudaTensor::<f32>::ones((3, 4)); // (3, 4) - no singleton!
+        let vecb = CudaTensor::<f32>::ones((5, 1)); // (5, 1)
         
         // Should fail: 3 != 5 and 4 != 1
         let _vecc = veca.view().add(&vecb.view()).expect("Should fail - 3 != 5");
@@ -3218,10 +3931,10 @@ mod cuda_tests {
 
     #[test]
     #[should_panic]
-    fn test_broadcast_both_singletons_incompatible_3d() {
+    fn test_broadcast_both_singletons_incompatible_3d_cuda() {
         // (2, 1, 4) and (1, 3, 5) won't work because 4 != 5
-        let veca = CpuTensor::<f32>::ones((2, 1, 4)); // (2, 1, 4)
-        let vecb = CpuTensor::<f32>::ones((1, 3, 5)); // (1, 3, 5)
+        let veca = CudaTensor::<f32>::ones((2, 1, 4)); // (2, 1, 4)
+        let vecb = CudaTensor::<f32>::ones((1, 3, 5)); // (1, 3, 5)
         
         // Should fail: 4 != 5
         let _vecc = veca.view().add(&vecb.view()).expect("Should fail - 4 != 5");
@@ -3229,10 +3942,10 @@ mod cuda_tests {
 
     #[test]
     #[should_panic]
-    fn test_broadcast_both_singletons_incompatible_4d() {
+    fn test_broadcast_both_singletons_incompatible_4d_cuda() {
         // (1, 3, 1, 6) and (2, 1, 4, 7) won't work because 6 != 7
-        let veca = CpuTensor::<f32>::ones((1, 3, 1, 6)); // (1, 3, 1, 6)
-        let vecb = CpuTensor::<f32>::ones((2, 1, 4, 7)); // (2, 1, 4, 7)
+        let veca = CudaTensor::<f32>::ones((1, 3, 1, 6)); // (1, 3, 1, 6)
+        let vecb = CudaTensor::<f32>::ones((2, 1, 4, 7)); // (2, 1, 4, 7)
         
         // Should fail: 6 != 7
         let _vecc = veca.view().add(&vecb.view()).expect("Should fail - 6 != 7");
@@ -3240,11 +3953,11 @@ mod cuda_tests {
 
     #[test]
     #[should_panic]
-    fn test_broadcast_both_singletons_incompatible_middle() {
+    fn test_broadcast_both_singletons_incompatible_middle_cuda() {
         // (1, 4, 1) and (3, 1, 5) would give (3, 4, 5)
         // but (2, 4, 1) and (3, 1, 5) fails because 2 != 3
-        let veca = CpuTensor::<f32>::ones((2, 4, 1)); // (2, 4, 1)
-        let vecb = CpuTensor::<f32>::ones((3, 1, 5)); // (3, 1, 5)
+        let veca = CudaTensor::<f32>::ones((2, 4, 1)); // (2, 4, 1)
+        let vecb = CudaTensor::<f32>::ones((3, 1, 5)); // (3, 1, 5)
         
         // Should fail: 2 != 3
         let _vecc = veca.view().add(&vecb.view()).expect("Should fail - 2 != 3");

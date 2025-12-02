@@ -121,6 +121,10 @@ where T: TensorValueElementwise
         dst: (&mut Self::Buf, &MetaTensor),
         op: ElementwiseBinaryTensorOp<T>
     ) -> Result<(), TensorError> {
+        // this is a stupid algorithm which is O(rank*size)
+        // it can be optimized to O(size) later
+        // a cleaner O(rank*size) algorithm just uses the coordinate iterator
+        // and converts the, to full offsets
         let (left_buf, left_meta) = left;
         let (right_buf, right_meta) = right;
         let (dst_buf, dst_meta) = dst;

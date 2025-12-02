@@ -1,8 +1,8 @@
 use std::sync::{atomic::{AtomicBool, Ordering}, Arc, LazyLock};
 
-use cudarc::driver::{CudaContext, CudaSlice, DevicePtr, DeviceRepr};
+use cudarc::driver::{CudaContext, CudaSlice, DevicePtr};
 
-use crate::{backend::{Backend, BackendUnaryElementwise}, core::{tensor::TensorError, value::{TensorValue, TensorValueElementwise}}, ops::unary::ElementwiseUnaryTensorOp};
+use crate::{backend::{Backend, BackendBinaryElementwise, BackendUnaryElementwise}, core::{tensor::TensorError, value::{TensorValue, TensorValueElementwise}}, ops::unary::ElementwiseUnaryTensorOp};
 
 // Include bindgen-generated FFI declarations for CUDA kernel launchers
 #[allow(non_camel_case_types)]
@@ -172,7 +172,7 @@ impl<T: TensorValue> Backend<T> for Cuda {
     
 }
 
-impl<T: TensorValueElementwise + DeviceRepr> BackendUnaryElementwise<T> for Cuda {
+impl<T: TensorValueElementwise> BackendUnaryElementwise<T> for Cuda {
     
     fn apply_elementwise_contiguous(
         &self, buf: &mut Self::Buf, 
@@ -340,4 +340,89 @@ impl<T: TensorValueElementwise + DeviceRepr> BackendUnaryElementwise<T> for Cuda
         }
     }
 
+}
+
+impl<T: TensorValueElementwise> BackendBinaryElementwise<T> for Cuda {
+    fn broadcast(
+        &self, 
+        left: (&Self::Buf, &crate::core::MetaTensor), 
+        right: (&Self::Buf, &crate::core::MetaTensor),
+        dst: (&mut Self::Buf, &crate::core::MetaTensor),
+        op: crate::ops::binary::ElementwiseBinaryTensorOp<T>
+    ) -> Result<(), TensorError> {
+        let (lbuf, lmeta) = left;
+        let (rbuf, rmeta) = right;
+        let (dbuf, dmeta) = dst;
+
+        let op_code = op.to_op_code();
+        let stream = self.stream();
+        
+        let rank = dmeta.shape().len();
+        let size = dmeta.shape().iter().product::<usize>();
+        
+        // Allocate device memory for strides and shapes
+        // let lshape_buf = self.alloc_from_slice(lmeta.shape.0.clone().into_boxed_slice())?;
+        // let rshape_buf = self.alloc_from_slice(rmeta.shape.0.clone().into_boxed_slice())?;
+        let dshape_buf = self.alloc_from_slice(dmeta.shape.0.clone().into_boxed_slice())?;
+        
+        let lstride_buf = self.alloc_from_slice(lmeta.stride().clone().into_boxed_slice())?;
+        let rstride_buf = self.alloc_from_slice(rmeta.stride().clone().into_boxed_slice())?;
+        let dstride_buf = self.alloc_from_slice(dmeta.stride().clone().into_boxed_slice())?;
+
+        let (lstride_ptr, _) = lstride_buf.ptr.device_ptr(&stream);
+        let (rstride_ptr, _) = rstride_buf.ptr.device_ptr(&stream);
+        let (dstride_ptr, _) = dstride_buf.ptr.device_ptr(&stream);
+        // let (lshape_ptr, _) = lshape_buf.ptr.device_ptr(&stream);
+        // let (rshape_ptr, _) = rshape_buf.ptr.device_ptr(&stream);
+        let (dshape_ptr, _) = dshape_buf.ptr.device_ptr(&stream);
+
+        let loff = lmeta.offset();
+        let roff = rmeta.offset();
+        let doff = dmeta.offset();
+
+        macro_rules! launch_broadcast {
+            ($launch_fn:ident, $t:ty) => {{
+                let (lbuf_ptr, _) = lbuf.ptr.device_ptr(&stream);
+                let (rbuf_ptr, _) = rbuf.ptr.device_ptr(&stream);
+                let (dbuf_ptr, _) = dbuf.ptr.device_ptr(&stream);
+                
+                unsafe {
+                    $launch_fn(
+                        lbuf_ptr as *const $t,
+                        rbuf_ptr as *const $t,
+                        dbuf_ptr as *mut $t,
+                        loff,
+                        roff,
+                        doff,
+                        rank,
+                        size,
+                        lstride_ptr as *const isize,
+                        rstride_ptr as *const isize,
+                        dstride_ptr as *const isize,
+                        dshape_ptr as *const usize,
+                        op_code,
+                        DEFAULT_BLOCK_SIZE,
+                    );
+                }
+                self.dirty();
+                Ok(())
+            }};
+        }
+
+        match std::any::TypeId::of::<T>() {
+            id if id == std::any::TypeId::of::<f32>() => launch_broadcast!(launch_binary_broadcast_elementwise_f32, f32),
+            id if id == std::any::TypeId::of::<f64>() => launch_broadcast!(launch_binary_broadcast_elementwise_f64, f64),
+            id if id == std::any::TypeId::of::<u8>() => launch_broadcast!(launch_binary_broadcast_elementwise_u8, u8),
+            id if id == std::any::TypeId::of::<u16>() => launch_broadcast!(launch_binary_broadcast_elementwise_u16, u16),
+            id if id == std::any::TypeId::of::<u32>() => launch_broadcast!(launch_binary_broadcast_elementwise_u32, u32),
+            id if id == std::any::TypeId::of::<u64>() => launch_broadcast!(launch_binary_broadcast_elementwise_u64, u64),
+            id if id == std::any::TypeId::of::<u128>() => launch_broadcast!(launch_binary_broadcast_elementwise_u128, u128),
+            id if id == std::any::TypeId::of::<i8>() => launch_broadcast!(launch_binary_broadcast_elementwise_i8, i8),
+            id if id == std::any::TypeId::of::<i16>() => launch_broadcast!(launch_binary_broadcast_elementwise_i16, i16),
+            id if id == std::any::TypeId::of::<i32>() => launch_broadcast!(launch_binary_broadcast_elementwise_i32, i32),
+            id if id == std::any::TypeId::of::<i64>() => launch_broadcast!(launch_binary_broadcast_elementwise_i64, i64),
+            id if id == std::any::TypeId::of::<i128>() => launch_broadcast!(launch_binary_broadcast_elementwise_i128, i128),
+            _ => Err(TensorError::CudaError("Unsupported type for CUDA broadcast operation".to_string())),
+        }
+    }
 }
