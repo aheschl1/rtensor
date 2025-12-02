@@ -76,13 +76,13 @@ pub(crate) fn compute_broadcasted_params(
 
     if sa.len() < sb.len() {
         let pad = sb.len() - sa.len();
-        sa.splice(0..0, std::iter::repeat(1).take(pad));
-        stra.splice(0..0, std::iter::repeat(0).take(pad)); // Stride = 0 for inserted dims
+        sa.splice(0..0, std::iter::repeat_n(1, pad));
+        stra.splice(0..0, std::iter::repeat_n(0, pad)); // Stride = 0 for inserted dims
     }
     if sb.len() < sa.len() {
         let pad = sa.len() - sb.len();
-        sb.splice(0..0, std::iter::repeat(1).take(pad));
-        strb.splice(0..0, std::iter::repeat(0).take(pad));
+        sb.splice(0..0, std::iter::repeat_n(1, pad));
+        strb.splice(0..0, std::iter::repeat_n(0, pad));
     }
 
     let mut out_shape = vec![];

@@ -1,12 +1,10 @@
 use std::marker::PhantomData;
-use std::ops::Index;
 
 use crate::backend::Backend;
 use crate::backend::cpu::Cpu;
-use crate::core::idx::Idx;
 use crate::core::value::TensorValue;
 use crate::core::{shape_to_stride, Shape, MetaTensor};
-use crate::core::tensor::{TensorAccess, TensorError};
+use crate::core::tensor::TensorError;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct TensorBase<T: TensorValue, B: Backend<T>> {

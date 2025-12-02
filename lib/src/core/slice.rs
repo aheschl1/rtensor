@@ -57,7 +57,7 @@ impl From<RangeInclusive<usize>> for Slice {
         let end = if step < 0 { if end > 0 { Some(end - 1) } else { None } } else { Some(end + 1) };
         Slice {
             start: Some(start),
-            end: end, 
+            end, 
             step,
         }
     }

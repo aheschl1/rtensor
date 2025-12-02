@@ -1,6 +1,6 @@
 use std::ops::{Index, IndexMut};
 
-use crate::{backend::Backend, core::{idx, primitives::TensorBase, value::TensorValue, TensorViewMut}};
+use crate::{backend::Backend, core::{primitives::TensorBase, value::TensorValue, TensorViewMut}};
 
 use super::primitives::TensorView;
 
@@ -351,9 +351,9 @@ where
 }
 
 
-impl Into<Vec<Dim>> for Shape {
-    fn into(self) -> Vec<Dim> {
-        self.0
+impl From<Shape> for Vec<Dim> {
+    fn from(val: Shape) -> Self {
+        val.0
     }
 }
 
