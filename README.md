@@ -19,7 +19,7 @@ Goal is high performance ML stack with minimal dependencies and maximal flexibil
 - [ ] Multiple gpu devices allowed
 - [X] Do not lock thread on GPU dispatch
 - [ ] strides and offset as bytes  
-- [ ] Broadcasting
+- [X] Broadcasting
 - [ ] Idx should not be ref. makes it less ergonomic
 
 ## to optimize
@@ -105,4 +105,73 @@ tensor.slice(0, Slice::new(Some(5), None, Some(1)))      // From 5 to end
 // Edge cases
 tensor.slice(0, Slice::from(1..3).step(-1))   // Empty slice (start < end with negative step)
 tensor.slice(0, Slice::from(5..5))            // Empty slice (start == end)
+```
+
+## Broadcasting
+
+### Broadcasting Rules
+
+1. If tensors have different ranks, prepend 1s to the shape of the smaller rank tensor
+2. For each dimension, the sizes must either:
+   - Be equal, OR
+   - One of them must be 1 (which gets broadcasted)
+
+### Basic Broadcasting Examples
+
+```rust
+// Scalar to any shape - broadcasts everywhere
+let scalar = CpuTensor::<f32>::from_buf(vec![5.0], vec![]).unwrap();
+let matrix = CpuTensor::<f32>::ones((3, 4));
+let result = scalar.view() + matrix.view();  // Shape: (3, 4), all values are 6.0
+
+// Vector to matrix - broadcasts along rows
+let vector = CpuTensor::<f32>::from_buf(vec![1.0, 2.0, 3.0], vec![3]).unwrap();
+let matrix = CpuTensor::<f32>::ones((4, 3));
+let result = vector.view() + matrix.view();  // Shape: (4, 3), each row is [2, 3, 4]
+
+// Row vector + Column vector = Matrix
+let row = CpuTensor::<f32>::ones((1, 4));    // Shape: (1, 4)
+let col = CpuTensor::<f32>::ones((3, 1));    // Shape: (3, 1)
+let result = row.view() + col.view();         // Shape: (3, 4), all 2.0
+```
+
+```rust
+// Matrix broadcasts to 3D tensor
+let matrix = CpuTensor::<f32>::ones((3, 4));      // Shape: (3, 4)
+let tensor_3d = CpuTensor::<f32>::ones((2, 3, 4)); // Shape: (2, 3, 4)
+let result = matrix.view() + tensor_3d.view();     // Shape: (2, 3, 4)
+
+// Singleton dimensions broadcast
+let a = CpuTensor::<f32>::ones((1, 3, 1));    // Shape: (1, 3, 1)
+let b = CpuTensor::<f32>::ones((2, 3, 4));    // Shape: (2, 3, 4)
+let result = a.view() + b.view();              // Shape: (2, 3, 4)
+```
+
+```rust
+// 4D Broadcasting
+let vector = CpuTensor::<f32>::from_buf(vec![10.0, 20.0], vec![2]).unwrap();
+let tensor_4d = CpuTensor::<f32>::ones((3, 4, 5, 2));
+let result = vector.view() + tensor_4d.view();  // Shape: (3, 4, 5, 2)
+
+// Complex singleton pattern
+let a = CpuTensor::<f32>::ones((1, 1, 5, 1));  // Shape: (1, 1, 5, 1)
+let b = CpuTensor::<f32>::ones((2, 3, 5, 4));  // Shape: (2, 3, 5, 4)
+let result = a.view() + b.view();               // Shape: (2, 3, 5, 4)
+```
+
+```rust
+// Classic: row vector + column vector
+let row = CpuTensor::<f32>::ones((1, 4));      // Shape: (1, 4)
+let col = CpuTensor::<f32>::ones((3, 1));      // Shape: (3, 1)
+let result = row.view() + col.view();           // Shape: (3, 4)
+
+// 3D mutual broadcasting
+let a = CpuTensor::<f32>::ones((1, 4, 5));     // Shape: (1, 4, 5)
+let b = CpuTensor::<f32>::ones((3, 1, 5));     // Shape: (3, 1, 5)
+let result = a.view() + b.view();               // Shape: (3, 4, 5)
+
+// Complex 4D mutual broadcasting
+let a = CpuTensor::<f32>::ones((1, 3, 1, 5));  // Shape: (1, 3, 1, 5)
+let b = CpuTensor::<f32>::ones((2, 1, 4, 1));  // Shape: (2, 1, 4, 1)
+let result = a.view() + b.view();               // Shape: (2, 3, 4, 5)
 ```
