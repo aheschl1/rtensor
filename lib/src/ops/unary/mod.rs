@@ -30,6 +30,7 @@ impl<T> ElementwiseUnaryTensorOp<T>
 where T: TensorValue
 {
     /// Convert operation to op code (0=Add, 1=Sub, 2=Mul)
+    #[inline(always)]
     pub fn to_op_code(&self) -> u8 {
         match self {
             ElementwiseUnaryTensorOp::Add(_) => 0,
@@ -39,6 +40,7 @@ where T: TensorValue
     }
 
     /// Get the operation value
+    #[inline(always)]
     pub fn value(&self) -> T {
         match self {
             ElementwiseUnaryTensorOp::Add(v) => *v,

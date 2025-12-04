@@ -1,5 +1,5 @@
 
-use crate::{backend::{Backend, BackendBinaryElementwise, BackendUnaryElementwise}, core::{meta::TensorOffsetIterator, tensor::TensorError, value::{TensorValue, TensorValueElementwise}, MetaTensor}, ops::{binary::ElementwiseBinaryTensorOp, unary::ElementwiseUnaryTensorOp}};
+use crate::{backend::Backend, core::{meta::TensorOffsetIterator, tensor::TensorError, value::TensorValue, MetaTensor}, ops::{binary::ElementwiseBinaryTensorOp, unary::ElementwiseUnaryTensorOp}};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Cpu;
@@ -58,10 +58,9 @@ impl<T: TensorValue> Backend<T> for Cpu {
     fn dump(&self, src: &Self::Buf) -> Result<Box<[T]>, TensorError> {
         Ok(src.clone())
     }
-}
 
-impl<T: TensorValue + TensorValueElementwise> BackendUnaryElementwise<T> for Cpu {
-    fn apply_elementwise_contiguous(
+
+        fn apply_elementwise_contiguous(
         &self, buf: &mut Self::Buf, 
         op: &ElementwiseUnaryTensorOp<T>, 
         start: usize,
@@ -109,11 +108,7 @@ impl<T: TensorValue + TensorValueElementwise> BackendUnaryElementwise<T> for Cpu
         }
         Ok(())
     }
-}
 
-impl<T> BackendBinaryElementwise<T> for Cpu 
-where T: TensorValueElementwise
-{
     fn broadcast(
         &self, 
         left: (&Self::Buf, &MetaTensor), 

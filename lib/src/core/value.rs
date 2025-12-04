@@ -8,6 +8,9 @@ pub trait TensorValue:
     Default +
     TensorDefault +
     DeviceRepr +
+    std::ops::Add<Output = Self> + 
+    std::ops::Sub<Output = Self> + 
+    std::ops::Mul<Output = Self> +
     'static
 {}
 
@@ -16,14 +19,10 @@ pub trait TensorValue:
     Copy + 
     Default +
     TensorDefault +
-    'static
-{}
-
-pub trait TensorValueElementwise: 
-    TensorValue +
     std::ops::Add<Output = Self> + 
     std::ops::Sub<Output = Self> + 
-    std::ops::Mul<Output = Self>
+    std::ops::Mul<Output = Self> +
+    'static
 {}
 
 pub trait TensorDefault {
@@ -38,7 +37,6 @@ macro_rules! impl_tensor_values {
     ($($type:ty),+ $(,)?) => {
         $(
             impl TensorValue for $type {}
-            impl TensorValueElementwise for $type {}
         )+
     };
 }
@@ -55,7 +53,6 @@ macro_rules! impl_default {
 }
 
 impl_tensor_values!(f32, f64, i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize);
-impl TensorValue for bool {}
 
 impl_default!(f32, 0.0f32, 1.0f32, f32::MIN, f32::MAX);
 impl_default!(f64, 0.0f64, 1.0f64, f64::MIN, f64::MAX);

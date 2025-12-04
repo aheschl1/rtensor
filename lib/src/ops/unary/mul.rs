@@ -1,10 +1,10 @@
 use std::{borrow::Borrow, ops::{Mul, MulAssign}};
 
-use crate::{backend::BackendUnaryElementwise, core::{primitives::TensorBase, tensor::AsTensor, value::{TensorValue, TensorValueElementwise}, TensorView, TensorViewMut}, ops::unary::ElementwiseUnaryTensorOp};
+use crate::{backend::Backend, core::{primitives::TensorBase, tensor::AsTensor, value::TensorValue, TensorView, TensorViewMut}, ops::unary::ElementwiseUnaryTensorOp};
 
 impl<'a, T, B, O> MulAssign<O> for TensorViewMut<'a, T, B> 
-    where T: TensorValueElementwise + TensorValue,
-          B: BackendUnaryElementwise<T>,
+    where T: TensorValue,
+          B: Backend<T>,
           O: Borrow<T>
 {
     fn mul_assign(&mut self, rhs: O) {
@@ -17,8 +17,8 @@ impl<'a, T, B, O> MulAssign<O> for TensorViewMut<'a, T, B>
 }
 
 impl<T, B, O> MulAssign<O> for TensorBase<T, B> 
-    where T: TensorValueElementwise + TensorValue,
-          B: BackendUnaryElementwise<T>,
+    where T: TensorValue,
+          B: Backend<T>,
           O: Borrow<T>
 {
     fn mul_assign(&mut self, rhs: O) {
@@ -34,8 +34,8 @@ macro_rules! impl_mul {
     ($type:ty) => {
         impl<'a, T, B, O> Mul<O> for $type
         where
-            T: TensorValueElementwise + TensorValue,
-            B: BackendUnaryElementwise<T>,
+            T: TensorValue,
+            B: Backend<T>,
             O: Borrow<T>,
         {
             type Output = TensorBase<T, B>;

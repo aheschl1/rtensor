@@ -1,6 +1,6 @@
 
 
-use crate::{core::{tensor::TensorError, value::{TensorValue, TensorValueElementwise}, MetaTensor, MetaTensorView}, ops::{binary::ElementwiseBinaryTensorOp, unary::ElementwiseUnaryTensorOp}};
+use crate::{core::{tensor::TensorError, value::{TensorValue}, MetaTensor, MetaTensorView}, ops::{binary::ElementwiseBinaryTensorOp, unary::ElementwiseUnaryTensorOp}};
 
 pub mod cpu;
 
@@ -21,9 +21,7 @@ pub trait Backend<T: TensorValue> {
     fn copy(&self, src: &Self::Buf) -> Result<Self::Buf, TensorError>;
     fn dump(&self, src: &Self::Buf) -> Result<Box<[T]>, TensorError>;
     fn new() -> Self;
-}
 
-pub trait BackendUnaryElementwise<T: TensorValue + TensorValueElementwise>: Backend<T> {
     fn apply_elementwise_contiguous(
         &self, buf: &mut Self::Buf, 
         op: &ElementwiseUnaryTensorOp<T>, 
@@ -48,7 +46,15 @@ pub trait BackendUnaryElementwise<T: TensorValue + TensorValueElementwise>: Back
         stride: &[isize],
     ) -> Result<(), TensorError>;
 
-    fn apply_elementwise(&self, buf: &mut Self::Buf, op: ElementwiseUnaryTensorOp<T>, meta: &MetaTensor) -> Result<(), TensorError>{
+    fn broadcast(
+        &self, 
+        left: (&Self::Buf, &MetaTensor), 
+        right: (&Self::Buf, &MetaTensor),
+        dst: (&mut Self::Buf, &MetaTensor),
+        op: ElementwiseBinaryTensorOp<T>
+    ) -> Result<(), TensorError>;
+
+    fn apply_elementwise(&self, buf: &mut Self::Buf, op: ElementwiseUnaryTensorOp<T>, meta: &MetaTensor) -> Result<(), TensorError> {
         if meta.is_contiguous() {
             return self.apply_elementwise_contiguous(buf, &op, meta.offset, meta.size())
         }
@@ -76,16 +82,6 @@ pub trait BackendUnaryElementwise<T: TensorValue + TensorValueElementwise>: Back
             meta.shape.as_slice(),
             &meta.stride,
         )
+
     }
-}
-
-pub trait BackendBinaryElementwise<T: TensorValue + TensorValueElementwise>: Backend<T> {
-
-    fn broadcast(
-        &self, 
-        left: (&Self::Buf, &MetaTensor), 
-        right: (&Self::Buf, &MetaTensor),
-        dst: (&mut Self::Buf, &MetaTensor),
-        op: ElementwiseBinaryTensorOp<T>
-    ) -> Result<(), TensorError>;
 }

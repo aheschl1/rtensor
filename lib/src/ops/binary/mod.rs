@@ -1,27 +1,39 @@
 
 use std::marker::PhantomData;
 
-use crate::{backend::{Backend, BackendBinaryElementwise}, core::{primitives::TensorBase, tensor::TensorError, value::{TensorValue, TensorValueElementwise}, MetaTensor, MetaTensorView, TensorView}};
+use crate::{backend::{Backend}, core::{primitives::TensorBase, tensor::TensorError, value::{TensorValue}, MetaTensor, MetaTensorView, TensorView}};
+pub mod add;
+pub mod sub;
+pub mod mul;
 
-
-pub enum ElementwiseBinaryTensorOp<T: TensorValueElementwise> {
+pub enum ElementwiseBinaryTensorOp<T: TensorValue> {
     Add,
+    Sub,
+    Mul,
     _P(PhantomData<T>)
 }
 
-impl<T: TensorValueElementwise> ElementwiseBinaryTensorOp<T> {
+impl<T: TensorValue> ElementwiseBinaryTensorOp<T> {
     #[inline(always)]
     pub fn apply(&self, a: T, b: T) -> T 
     {
         match self {
             ElementwiseBinaryTensorOp::Add => a + b,
+            ElementwiseBinaryTensorOp::Sub => a - b,
+            ElementwiseBinaryTensorOp::Mul => a * b,
             _ => panic!("Unsupported operation"),
         }
     }
+}
 
+#[cfg(feature = "cuda")]
+impl<T: TensorValue> ElementwiseBinaryTensorOp<T> {
+    #[inline(always)]
     pub fn to_op_code(&self) -> u8 {
         match self {
             ElementwiseBinaryTensorOp::Add => 0,
+            ElementwiseBinaryTensorOp::Sub => 1,
+            ElementwiseBinaryTensorOp::Mul => 2,
             _ => panic!("Unsupported operation"),
         }
     }
@@ -32,11 +44,13 @@ pub trait PointwiseTensorOp<T, B: Backend<T>>
 where T: TensorValue
 {
     fn add(&'_ self, other: &TensorView<T, B>) -> Result<TensorBase<T, B>, TensorError>;
+    // fn sub(&'_ self, other: &TensorView<T, B>) -> Result<TensorBase<T, B>, TensorError>;
+    // fn mul(&'_ self, other: &TensorView<T, B>) -> Result<TensorBase<T, B>, TensorError>;
 }
 
 impl <T, B> PointwiseTensorOp<T, B> for TensorView<'_, T, B> 
-where T: TensorValueElementwise,
-      B: BackendBinaryElementwise<T>
+where T: TensorValue,
+      B: Backend<T>
 {
     fn add(&'_ self, other: &TensorView<T, B>) -> Result<TensorBase<T, B>, TensorError> {
         let (out_shape, broadcast_stra, broadcast_strb) = compute_broadcasted_params(&self.meta, &other.meta)?;

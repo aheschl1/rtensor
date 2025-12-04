@@ -2,7 +2,7 @@ use std::sync::{atomic::{AtomicBool, Ordering}, Arc, LazyLock};
 
 use cudarc::driver::{CudaContext, CudaSlice, DevicePtr};
 
-use crate::{backend::{Backend, BackendBinaryElementwise, BackendUnaryElementwise}, core::{tensor::TensorError, value::{TensorValue, TensorValueElementwise}}, ops::unary::ElementwiseUnaryTensorOp};
+use crate::{backend::Backend, core::{tensor::TensorError, value::TensorValue}, ops::unary::ElementwiseUnaryTensorOp};
 
 // Include bindgen-generated FFI declarations for CUDA kernel launchers
 #[allow(non_camel_case_types)]
@@ -169,12 +169,8 @@ impl<T: TensorValue> Backend<T> for Cuda {
         Ok(host_buf.into_boxed_slice())
     }
 
-    
-}
 
-impl<T: TensorValueElementwise> BackendUnaryElementwise<T> for Cuda {
-    
-    fn apply_elementwise_contiguous(
+        fn apply_elementwise_contiguous(
         &self, buf: &mut Self::Buf, 
         op: &ElementwiseUnaryTensorOp<T>, 
         start: usize,
@@ -340,9 +336,6 @@ impl<T: TensorValueElementwise> BackendUnaryElementwise<T> for Cuda {
         }
     }
 
-}
-
-impl<T: TensorValueElementwise> BackendBinaryElementwise<T> for Cuda {
     fn broadcast(
         &self, 
         left: (&Self::Buf, &crate::core::MetaTensor), 
@@ -425,4 +418,6 @@ impl<T: TensorValueElementwise> BackendBinaryElementwise<T> for Cuda {
             _ => Err(TensorError::CudaError("Unsupported type for CUDA broadcast operation".to_string())),
         }
     }
+
+    
 }
