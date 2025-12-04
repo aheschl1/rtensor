@@ -836,18 +836,18 @@ mod tests {
     fn test_column() {
     let tensor = Tensor::column(vec![1, 2, 3]);
     assert_eq!(*tensor.shape(), vec![3]);
-        assert_eq!(index_tensor(Idx::At(0), &tensor.view()).unwrap(), 1);
-        assert_eq!(index_tensor(Idx::At(1), &tensor.view()).unwrap(), 2);
-        assert_eq!(index_tensor(Idx::At(2), &tensor.view()).unwrap(), 3);
+        assert_eq!(index_tensor(0, &tensor.view()).unwrap(), 1);
+        assert_eq!(index_tensor(1, &tensor.view()).unwrap(), 2);
+        assert_eq!(index_tensor(2, &tensor.view()).unwrap(), 3);
     }
 
     #[test]
     fn test_row() {
     let tensor = Tensor::row(vec![1, 2, 3]);
     assert_eq!(*tensor.shape(), vec![1, 3]);
-        assert_eq!(index_tensor(Idx::Coord(vec![0, 0]), &tensor.view()).unwrap(), 1);
-        assert_eq!(index_tensor(Idx::Coord(vec![0, 1]), &tensor.view()).unwrap(), 2);
-        assert_eq!(index_tensor(Idx::Coord(vec![0, 2]), &tensor.view()).unwrap(), 3);
+        assert_eq!(index_tensor((0, 0), &tensor.view()).unwrap(), 1);
+        assert_eq!(index_tensor((0, 1), &tensor.view()).unwrap(), 2);
+        assert_eq!(index_tensor((0, 2), &tensor.view()).unwrap(), 3);
 
         assert_eq!(tensor.view().get(&[0, 1]).unwrap(), 2);
     }
@@ -1006,7 +1006,7 @@ mod tests {
             Err(e) => return Err(e.clone()),
         };
         let b = match &index {
-            Idx::At(i) => tensor.get(Idx::Coord(vec![*i])),
+            Idx::At(i) => tensor.get(vec![*i]),
             Idx::Coord(idx) => tensor.get(Idx::Coord(idx.clone())),
             Idx::Item => tensor.item(),
         };

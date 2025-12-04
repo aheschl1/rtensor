@@ -62,6 +62,8 @@ let tensor = TensorBase::<f32, Cuda>::from_buf(buf, (4, 4));
 let value = tensor.get(coord![2, 3]).unwrap(); // get value at (2, 3)
 // or
 let value = get!(tensor, 2, 3).unwrap();
+let value = tensor.get(5).unwrap(); // single-dimensional index
+let value = tensor.get((0, 0)).unwrap(); // tuple index
 // or explicit
 let value = tensor.get(&Idx::Coord(vec![2, 3])).unwrap();
 
