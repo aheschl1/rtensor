@@ -9,7 +9,7 @@ pub mod cuda;
 #[cfg(feature = "cuda")]
 pub mod cuda_tests;
 
-pub(crate) trait Backend<T: TensorValue> {
+pub trait Backend<T: TensorValue> {
     type Buf;
 
     fn alloc_from_slice(&self, src: Box<[T]>) -> Result<Self::Buf, TensorError>;

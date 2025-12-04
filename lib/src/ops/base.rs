@@ -1,7 +1,7 @@
 use crate::core::value::TensorValue;
 
 
-pub(crate) enum OpType {
+pub enum OpType {
     Add,
     Sub,
     Mul,
@@ -10,7 +10,7 @@ pub(crate) enum OpType {
 #[cfg(feature = "cuda")]
 impl OpType {
     #[inline(always)]
-    pub fn to_op_code(&self) -> u8 {
+    pub(crate) fn to_op_code(&self) -> u8 {
         match self {
             Self::Add => 0,
             Self::Sub => 1,
