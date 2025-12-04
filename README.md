@@ -43,7 +43,11 @@ Goal is high performance ML stack with minimal dependencies and maximal flexibil
 - [ ] brooadcast after sliceing
 - [ ] broadcast after negative step slicing
 
-## Creating Tensors
+## Some examples
+
+Note that they may not reflect most up to date API and syntax (assume reality can only be better).
+
+### Creating Tensors
 
 ```rust
 let zeros = TensorBase::<f32, Cpu>::zeros((3, 4)); // 3x4 tensor of zeros
@@ -61,7 +65,7 @@ let tensor = TensorBase::<f32, Cuda>::from_buf(buf, (4, 4));
 
 ```
 
-## Arithmetic Operations
+### Arithmetic Operations
 
 ```rust
 let mut a = CpuTensor::<f32>::ones((2, 2));
@@ -73,7 +77,7 @@ a-= 1.0;
 let b: CpuTensor::<f32> = a * 2.0; 
 ```
 
-## Slicing Syntax
+### Slicing Syntax
 
 ```rust
 // Basic range slicing
@@ -115,9 +119,9 @@ tensor.slice(0, Slice::from(1..3).step(-1))   // Empty slice (start < end with n
 tensor.slice(0, Slice::from(5..5))            // Empty slice (start == end)
 ```
 
-## Broadcasting
+### Broadcasting
 
-### Broadcasting Rules
+#### Broadcasting Rules
 
 1. If tensors have different ranks, prepend 1s to the shape of the smaller rank tensor
 2. For each dimension, the sizes must either:
@@ -126,7 +130,7 @@ tensor.slice(0, Slice::from(5..5))            // Empty slice (start == end)
 
 If inplace, then the tensor being modified must be the same shape the result shape after broadcasting.
 
-### Basic Broadcasting Examples
+#### Basic Broadcasting Examples
 
 ```rust
 // Scalar to any shape - broadcasts everywhere
@@ -186,7 +190,7 @@ let b = CpuTensor::<f32>::ones((2, 1, 4, 1));  // Shape: (2, 1, 4, 1)
 let result = a.view() + b.view();               // Shape: (2, 3, 4, 5)
 ```
 
-### Inplace Broadcasting Operations
+#### Inplace Broadcasting Operations
 
 ```rust
 let mut a = CpuTensor::<f32>::zeros((3, 4));
