@@ -7,7 +7,7 @@ Goal is high performance ML stack with minimal dependencies and maximal flexibil
 ## todo
 
 - [X] Backend abstraction
-- [X] Nicer syntax. macro time `tset!(tensor.view_mut(), v: 99, 1, 2)` and `tget!(tensor.view(), 1, 2)`
+- [X] Nicer syntax. macro time `set!(tensor, v: 99, 1, 2)` and `get!(tensor, 1, 2)` and `coord![1, 2, ..]`
 - [X] Basic GPU backend
 - [X] Slicing with ranges `tensor.view().slice(0, 1..3)` etc.
 - [X] Test more slicing syntaxes
@@ -20,7 +20,7 @@ Goal is high performance ML stack with minimal dependencies and maximal flexibil
 - [X] Do not lock thread on GPU dispatch
 - [ ] strides and offset as bytes  
 - [X] Broadcasting
-- [ ] Idx should not be ref. makes it less ergonomic
+- [X] Idx should not be ref. makes it less ergonomic
 - [ ] Pull out ops into crate defined traits, which return Result, and call that from Add and AddAssign impls (panic there)
 - [ ] Figure outt bool types, and in general those without Add, Sub, and Mul impls
 - [ ] Allow step_by for slicing iterator
@@ -56,6 +56,19 @@ let cpu2 = gpu_tensor.cpu();
 
 let buf = vec![0.0f32; 16];
 let tensor = TensorBase::<f32, Cuda>::from_buf(buf, (4, 4));
+
+// read
+
+let value = tensor.get(coord![2, 3]).unwrap(); // get value at (2, 3)
+// or
+let value = get!(tensor, 2, 3).unwrap();
+// or explicit
+let value = tensor.get(&Idx::Coord(vec![2, 3])).unwrap();
+
+// write
+tensor.set(&Idx::Coord(vec![1, 1]), 42.0).unwrap();
+// or
+set!(tensor, v: 42.0, 1, 1);
 
 ```
 

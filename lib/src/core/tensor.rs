@@ -144,7 +144,7 @@ fn view_to_owned<T: TensorValue, B: Backend<T>>(meta: &MetaTensor, raw: &B::Buf,
 
 pub trait TensorAccess<T: TensorValue, B: Backend<T>>: Sized {
     /// Get element at given index
-    fn get<'a, I: Into<Idx<'a>>>(&self, idx: I) -> Result<T, TensorError>;
+    fn get<I: Into<Idx>>(&self, idx: I) -> Result<T, TensorError>;
 
     fn item(&self) -> Result<T, TensorError> {
         self.get(Idx::Item)
@@ -161,7 +161,7 @@ pub trait TensorAccessMut<T: TensorValue, B: Backend<T>>: TensorAccess<T, B> {
     /// Slice mutable tensor to get a mutable view
     fn slice_mut<S: Into<Slice>>(&mut self, dim: Dim, idx: S) -> Result<TensorViewMut<'_, T, B>, TensorError> where Self: Sized;
     /// sets a value at given index
-    fn set<'a, I: Into<Idx<'a>>>(&mut self, idx: I, value: T) -> Result<(), TensorError>;
+    fn set<I: Into<Idx>>(&mut self, idx: I, value: T) -> Result<(), TensorError>;
     /// take a mutable slice at given index
     fn slice_at_mut(&mut self, dim: Dim, idx: Dim) -> Result<TensorViewMut<'_, T, B>, TensorError> where Self: Sized{
         self.slice_mut(dim, idx)
@@ -177,7 +177,7 @@ where B: Backend<T>, V: AsView<T, B>
     /// Errors
     /// - `WrongDims` if the index rank doesn't match the tensor rank.
     /// - `IdxOutOfBounds` if the computed buffer index is outside the backing slice.
-    fn get<'a, I: Into<Idx<'a>>>(&self, idx: I) -> Result<T, TensorError> {
+    fn get<I: Into<Idx>>(&self, idx: I) -> Result<T, TensorError> {
         let view = self.view();
         let idx = logical_to_buffer_idx(&idx.into(), view.meta.strides(), view.meta.offset())?;
         view.backend.read(view.raw, idx)
@@ -221,7 +221,7 @@ where V: AsViewMut<T, B>
         Ok(TensorViewMut::from_parts(view.raw, view.backend, MetaTensor::new(new_shape, new_stride, offset)))
     }
     
-    fn set<'a, I: Into<Idx<'a>>>(&mut self, idx: I, value: T) -> Result<(), TensorError> {
+    fn set<I: Into<Idx>>(&mut self, idx: I, value: T) -> Result<(), TensorError> {
         let view = self.view_mut();
         let idx = idx.into();
         let buf_idx = logical_to_buffer_idx(&idx, view.meta.strides(), view.meta.offset())?;
@@ -266,7 +266,7 @@ fn logical_to_buffer_idx(idx: &Idx, stride: &Stride, offset: usize) -> Result<us
         },
         Idx::At(i) => {
             // Single-dimensional index; only valid when there is exactly one dimension
-            logical_to_buffer_idx(&Idx::Coord(&[*i]), stride, offset)
+            logical_to_buffer_idx(&Idx::Coord(vec![*i]), stride, offset)
         }
     }
 }

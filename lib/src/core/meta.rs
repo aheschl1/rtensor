@@ -64,8 +64,7 @@ impl PartialEq<Vec<Dim>> for Shape {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct MetaTensor {
     pub shape: Shape,
-    /// Affine matrix wo offset
-    pub strides: Stride,
+    pub strides: Stride, //afine
     pub offset: usize,
 }
 

@@ -4,7 +4,7 @@ pub mod binary;
 
 #[cfg(test)]
 mod tests {
-    use std::{backtrace, ops::Add};
+    use std::ops::Add;
 
     use crate::{backend::cpu::Cpu, core::{meta::MetaTensorView, primitives::TensorBase, tensor::{AsView, AsViewMut, TensorAccess, TensorAccessMut}, Tensor, Slice}};
 
