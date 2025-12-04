@@ -37,8 +37,9 @@ Goal is high performance ML stack with minimal dependencies and maximal flexibil
 ## missing tests
 
 - [ ] broadcasting large tensor
-- [X] broadcasting other than +
-- [X] more add assign broadcast tests
+- [ ] broadcasting scalar
+- [ ] brooadcast after sliceing
+- [ ] broadcast after negative step slicing
 
 ## Creating Tensors
 
@@ -122,6 +123,8 @@ tensor.slice(0, Slice::from(5..5))            // Empty slice (start == end)
    - Be equal, OR
    - One of them must be 1 (which gets broadcasted)
 
+If inplace, then the tensor being modified must be the same shape the result shape after broadcasting.
+
 ### Basic Broadcasting Examples
 
 ```rust
@@ -182,7 +185,7 @@ let b = CpuTensor::<f32>::ones((2, 1, 4, 1));  // Shape: (2, 1, 4, 1)
 let result = a.view() + b.view();               // Shape: (2, 3, 4, 5)
 ```
 
-## Inplace Broadcasting Operations
+### Inplace Broadcasting Operations
 
 ```rust
 let mut a = CpuTensor::<f32>::zeros((3, 4));
