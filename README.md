@@ -24,6 +24,8 @@ Goal is high performance ML stack with minimal dependencies and maximal flexibil
 - [ ] Pull out ops into crate defined traits, which return Result, and call that from Add and AddAssign impls (panic there)
 - [ ] Figure outt bool types, and in general those without Add, Sub, and Mul impls
 - [ ] Allow step_by for slicing iterator
+- [ ] OpenBlas for more targets
+- [ ] cuBLAS
 
 ## to optimize
 
@@ -36,9 +38,8 @@ Goal is high performance ML stack with minimal dependencies and maximal flexibil
 - [X] perf sucks for non-contiguous memory in unary CUDA - fix
 - [ ] O(rank * size) instead of O(size) broadcasting ops is bad
 - [ ] Broadcast cuda kernel puts a cap on tensor dim size - fix
-- [ ] Idx can be borrow [Dim] to avoid clone
-- [ ] 0 copy immutable broadcast views?
 - [ ] Allow F contiguous for matmul, as well as C.
+- [ ] Matmul not using openblas for other than T=f32/f64
 
 ## Some examples
 
@@ -222,4 +223,27 @@ let permuted = tensor.permute(vec![2, 0, 1]).unwrap(); // Shape: (3, 1, 2)
 // Transpose example
 let tensor = Tensor::<f32>::from_buf(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], (2, 3));
 let transposed = tensor.transpose().unwrap(); // Shape: (3, 2) - permutes all dimensions
+```
+
+### Matmul
+
+With f32 and f64, OpenBlas is used for CPU backend, cuBLAS for CUDA backend.
+
+```rust
+let a = Tensor::<f32>::from_buf(
+    vec![1.0, 2.0, 3.0,
+         4.0, 5.0, 6.0,
+         7.0, 8.0, 9.0],
+    (3, 3),
+).unwrap();
+
+
+let b = Tensor::<f32>::from_buf(
+    vec![1.0, 2.0,
+         3.0, 4.0,
+         5.0, 6.0],
+    (3, 2),
+).unwrap();
+
+let result = a.matmul(&b).unwrap(); // Shape: (3, 2)
 ```

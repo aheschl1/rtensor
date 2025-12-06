@@ -3,26 +3,11 @@ pub mod ops;
 pub mod backend;
 pub mod macros;
 
-pub mod openblas {
+pub(crate) mod openblas {
     //! OpenBLAS FFI bindings
     //! 
     //! This module contains automatically generated bindings to OpenBLAS functions.
     //! The bindings are generated at build time using bindgen.
-    //! 
-    //! # Example
-    //! 
-    //! ```no_run
-    //! use tensors::openblas::*;
-    //! 
-    //! unsafe {
-    //!     // Set number of threads
-    //!     openblas_set_num_threads(4);
-    //!     
-    //!     // Get OpenBLAS configuration
-    //!     let config = openblas_get_config();
-    //!     println!("OpenBLAS config: {:?}", std::ffi::CStr::from_ptr(config));
-    //! }
-    //! ```
     
     #![allow(non_upper_case_globals)]
     #![allow(non_camel_case_types)]

@@ -422,7 +422,35 @@ impl<T: TensorValue> Backend<T> for Cuda {
         }
     }
     
-    fn matmul(
+    fn matmul_float32(
+        &self,
+        lhs_buf: &Self::Buf,
+        rhs_buf: &Self::Buf,
+        lhs_offset: usize,
+        rhs_offset: usize,
+        b: usize,
+        m: usize,
+        k: usize,
+        n: usize,
+    ) -> Result<Self::Buf, TensorError> {
+        todo!()
+    }
+    
+    fn matmul_float64(
+        &self,
+        lhs_buf: &Self::Buf,
+        rhs_buf: &Self::Buf,
+        lhs_offset: usize,
+        rhs_offset: usize,
+        b: usize,
+        m: usize,
+        k: usize,
+        n: usize,
+    ) -> Result<Self::Buf, TensorError> {
+        todo!()
+    }
+    
+    fn matmul_generic(
         &self,
         lhs_buf: &Self::Buf,
         rhs_buf: &Self::Buf,

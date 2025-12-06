@@ -1,5 +1,5 @@
 
-use crate::{backend::Backend, core::{meta::TensorOffsetIterator, tensor::TensorError, value::TensorValue, MetaTensor}, ops::base::OpType};
+use crate::{backend::Backend, core::{meta::TensorOffsetIterator, tensor::TensorError, value::TensorValue, MetaTensor}, openblas::{blasint, cblas_dgemm, cblas_sgemm, CBLAS_ORDER, CBLAS_TRANSPOSE}, ops::base::OpType};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Cpu;
@@ -171,7 +171,7 @@ impl<T: TensorValue> Backend<T> for Cpu {
         Ok(())
     }
     
-    fn matmul(
+    fn matmul_generic(
         &self,
         lhs_buf: &Self::Buf,
         rhs_buf: &Self::Buf,
@@ -199,6 +199,87 @@ impl<T: TensorValue> Backend<T> for Cpu {
                     }
                     out_buf[out_batch + row * n + col] = sum;
                 }
+            }
+        }
+        Ok(out_buf)
+    }
+    
+    fn matmul_float32(
+        &self,
+        lhs_buf: &Self::Buf,
+        rhs_buf: &Self::Buf,
+        lhs_offset: usize,
+        rhs_offset: usize,
+        b: usize,
+        m: usize,
+        k: usize,
+        n: usize,
+    ) -> Result<Self::Buf, TensorError> {
+        let mut out_buf: Box<[T]> = self.alloc(b * m * n)?;
+
+        for batch in 0..b {
+            let lhs_batch = lhs_offset + batch * m * k;
+            let rhs_batch = rhs_offset + batch * k * n;
+            let out_batch = batch * m * n;
+
+            unsafe {
+                cblas_sgemm(
+                    CBLAS_ORDER::CblasRowMajor,
+                    CBLAS_TRANSPOSE::CblasNoTrans,
+                    CBLAS_TRANSPOSE::CblasNoTrans,
+                    m as blasint,
+                    n as blasint,
+                    k as blasint,
+                    1.0,
+                    lhs_buf.as_ptr().add(lhs_batch) as *const f32,
+                    k as blasint,
+                    rhs_buf.as_ptr().add(rhs_batch) as *const f32,
+                    n as blasint,
+                    0.0,
+                    out_buf.as_mut_ptr().add(out_batch) as *mut f32,
+                    n as blasint,
+                );
+            }
+        }
+
+        Ok(out_buf)
+    }
+    
+    fn matmul_float64(
+        &self,
+        lhs_buf: &Self::Buf,
+        rhs_buf: &Self::Buf,
+        lhs_offset: usize,
+        rhs_offset: usize,
+        b: usize,
+        m: usize,
+        k: usize,
+        n: usize,
+    ) -> Result<Self::Buf, TensorError> {
+        let mut out_buf: Box<[T]> = self.alloc(b * m * n)?;
+
+        for batch in 0..b {
+            let lhs_batch = lhs_offset + batch * m * k;
+            let rhs_batch = rhs_offset + batch * k * n;
+            let out_batch = batch * m * n;
+
+            unsafe {
+                cblas_dgemm(
+                    CBLAS_ORDER::CblasRowMajor,
+                    CBLAS_TRANSPOSE::CblasNoTrans,
+                    CBLAS_TRANSPOSE::CblasNoTrans,
+                    m as blasint,
+                    n as blasint,
+                    k as blasint,
+                    1.0,
+                    lhs_buf.as_ptr().add(lhs_batch) as *const f64,
+                    k as blasint,
+                    rhs_buf.as_ptr().add(rhs_batch) as *const f64,
+                    n as blasint,
+                    0.0,
+                    out_buf.as_mut_ptr().add(out_batch) as *mut f64,
+                    n as blasint,
+                );
             }
         }
 

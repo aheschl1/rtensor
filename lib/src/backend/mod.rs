@@ -46,6 +46,41 @@ pub trait Backend<T: TensorValue> {
         stride: &[isize],
     ) -> Result<(), TensorError>;
 
+    fn matmul_float32(
+        &self,
+        lhs_buf: &Self::Buf,
+        rhs_buf: &Self::Buf,
+        lhs_offset: usize,
+        rhs_offset: usize,
+        b: usize,
+        m: usize,
+        k: usize,
+        n: usize,
+    ) -> Result<Self::Buf, TensorError>;
+
+    fn matmul_float64(
+        &self,
+        lhs_buf: &Self::Buf,
+        rhs_buf: &Self::Buf,
+        lhs_offset: usize,
+        rhs_offset: usize,
+        b: usize,
+        m: usize,
+        k: usize,
+        n: usize,
+    ) -> Result<Self::Buf, TensorError>;
+
+    fn matmul_generic(
+        &self,
+        lhs_buf: &Self::Buf,
+        rhs_buf: &Self::Buf,
+        lhs_offset: usize,
+        rhs_offset: usize,
+        b: usize,
+        m: usize,
+        k: usize,
+        n: usize,
+    ) -> Result<Self::Buf, TensorError>;
 
     /// Matrix multiplication of two tensors
     /// 
@@ -73,7 +108,47 @@ pub trait Backend<T: TensorValue> {
         m: usize,
         k: usize,
         n: usize,
-    ) -> Result<Self::Buf, TensorError>;
+    ) -> Result<Self::Buf, TensorError>{
+        // switch on type id
+        match std::any::TypeId::of::<T>() {
+            x if x == std::any::TypeId::of::<f32>() => {
+                self.matmul_float32(
+                    lhs_buf,
+                    rhs_buf,
+                    lhs_offset,
+                    rhs_offset,
+                    b,
+                    m,
+                    k,
+                    n,
+                )
+            },
+            x if x == std::any::TypeId::of::<f64>() => {
+                self.matmul_float64(
+                    lhs_buf,
+                    rhs_buf,
+                    lhs_offset,
+                    rhs_offset,
+                    b,
+                    m,
+                    k,
+                    n,
+                )
+            },
+            _ => {
+                self.matmul_generic(
+                    lhs_buf,
+                    rhs_buf,
+                    lhs_offset,
+                    rhs_offset,
+                    b,
+                    m,
+                    k,
+                    n,
+                )
+            }
+        }
+    }
 
     /// Broadcast two tensors into a destination tensor according to broadcasting rules
     /// 
