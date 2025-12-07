@@ -741,3 +741,448 @@ mod tests {
 
 }
 
+#[cfg(all(test, feature = "cuda"))]
+mod cuda_tests {
+    use super::*;
+    use crate::core::{primitives::{CudaTensor, Tensor}, MetaTensorView, tensor::TensorAccess};
+
+    // ============================================================================
+    // F32 GEMM TESTS
+    // ============================================================================
+
+    #[test]
+    fn test_matmul_f32_2d_float() {
+        // Test with floating point values
+        let a = CudaTensor::<f32>::from_buf(vec![1.5, 2.0, 3.5, 4.0], vec![2, 2]).unwrap();
+        let b = CudaTensor::<f32>::from_buf(vec![2.0, 1.0, 3.0, 4.0], vec![2, 2]).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 2]);
+        // Expected: [[1.5*2.0 + 2.0*3.0, 1.5*1.0 + 2.0*4.0],
+        //            [3.5*2.0 + 4.0*3.0, 3.5*1.0 + 4.0*4.0]]
+        //         = [[9.0, 9.5],
+        //            [19.0, 19.5]]
+        let expected = Tensor::<f32>::from_buf(vec![9.0, 9.5, 19.0, 19.5], vec![2, 2]).unwrap();
+        assert_eq!(result.cpu().unwrap(), expected);
+    }
+
+    #[test]
+    fn test_matmul_f32_large_square() {
+        // Test f32 GEMM with larger square matrices
+        let size = 10;
+        let mut a_data = vec![0.0f32; size * size];
+        let mut b_data = vec![0.0f32; size * size];
+        
+        // Initialize with simple pattern
+        for i in 0..size {
+            for j in 0..size {
+                a_data[i * size + j] = (i + j) as f32;
+                b_data[i * size + j] = (i * j + 1) as f32;
+            }
+        }
+        
+        let a = CudaTensor::<f32>::from_buf(a_data, vec![size, size]).unwrap();
+        let b = CudaTensor::<f32>::from_buf(b_data, vec![size, size]).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        assert_eq!(*result.shape(), vec![size, size]);
+        
+        // Verify a specific element manually
+        // result[0,0] should be sum of a[0,k] * b[k,0] for k in 0..size
+        let expected_00: f32 = (0..size).map(|k| {
+            let a_val = k as f32;
+            let b_val = (k * 0 + 1) as f32;
+            a_val * b_val
+        }).sum();
+        
+        let result_cpu = result.cpu().unwrap();
+        assert!((result_cpu.get(vec![0, 0]).unwrap() - expected_00).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_matmul_f32_rectangular_large() {
+        // Test f32 GEMM with rectangular matrices (M x K) @ (K x N)
+        let m = 15;
+        let k = 20;
+        let n = 10;
+        
+        let a_data: Vec<f32> = (0..m*k).map(|i| i as f32 * 0.1).collect();
+        let b_data: Vec<f32> = (0..k*n).map(|i| (i % 7) as f32 + 0.5).collect();
+        
+        let a = CudaTensor::<f32>::from_buf(a_data, vec![m, k]).unwrap();
+        let b = CudaTensor::<f32>::from_buf(b_data, vec![k, n]).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        assert_eq!(*result.shape(), vec![m, n]);
+    }
+
+    #[test]
+    fn test_matmul_f32_batched_gemm() {
+        // Test batched f32 GEMM (3D tensors)
+        let batch = 4;
+        let m = 8;
+        let k = 6;
+        let n = 5;
+        
+        let a_data: Vec<f32> = (0..batch*m*k).map(|i| (i % 10) as f32 * 0.5).collect();
+        let b_data: Vec<f32> = (0..batch*k*n).map(|i| (i % 8) as f32 + 1.0).collect();
+        
+        let a = CudaTensor::<f32>::from_buf(a_data, vec![batch, m, k]).unwrap();
+        let b = CudaTensor::<f32>::from_buf(b_data, vec![batch, k, n]).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        assert_eq!(*result.shape(), vec![batch, m, n]);
+    }
+
+    #[test]
+    fn test_matmul_f32_precision() {
+        // Test that f32 GEMM maintains reasonable precision
+        let a = CudaTensor::<f32>::from_buf(
+            vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
+            vec![2, 3]
+        ).unwrap();
+        let b = CudaTensor::<f32>::from_buf(
+            vec![1.1, 1.2, 1.3, 1.4, 1.5, 1.6],
+            vec![3, 2]
+        ).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        
+        // Manually computed expected values
+        // result[0,0] = 0.1*1.1 + 0.2*1.3 + 0.3*1.5 = 0.11 + 0.26 + 0.45 = 0.82
+        // result[0,1] = 0.1*1.2 + 0.2*1.4 + 0.3*1.6 = 0.12 + 0.28 + 0.48 = 0.88
+        // result[1,0] = 0.4*1.1 + 0.5*1.3 + 0.6*1.5 = 0.44 + 0.65 + 0.90 = 1.99
+        // result[1,1] = 0.4*1.2 + 0.5*1.4 + 0.6*1.6 = 0.48 + 0.70 + 0.96 = 2.14
+        
+        let result_cpu = result.cpu().unwrap();
+        assert!((result_cpu.get(vec![0, 0]).unwrap() - 0.82).abs() < 1e-5);
+        assert!((result_cpu.get(vec![0, 1]).unwrap() - 0.88).abs() < 1e-5);
+        assert!((result_cpu.get(vec![1, 0]).unwrap() - 1.99).abs() < 1e-5);
+        assert!((result_cpu.get(vec![1, 1]).unwrap() - 2.14).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_matmul_f32_sliced_rows() {
+        // Create a larger tensor and slice rows for matmul
+        let full = CudaTensor::<f32>::from_buf(
+            vec![
+                1.0, 2.0, 3.0,
+                4.0, 5.0, 6.0,
+                7.0, 8.0, 9.0,
+                10.0, 11.0, 12.0,
+            ],
+            vec![4, 3]
+        ).unwrap();
+        
+        // Slice to get rows 1-3 (shape [2, 3])
+        let a = full.slice(0, 1..3).unwrap();
+        assert_eq!(*a.shape(), vec![2, 3]);
+        
+        let b = CudaTensor::<f32>::from_buf(
+            vec![
+                1.0, 2.0, 
+                3.0, 4.0, 
+                5.0, 6.0
+            ],
+            vec![3, 2]
+        ).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        assert_eq!(*result.shape(), vec![2, 2]);
+        
+        let result_cpu = result.cpu().unwrap();
+        assert!((result_cpu.get(vec![0, 0]).unwrap() - 22.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_matmul_f32_sliced_cols() {
+        // Test matmul with column-sliced tensor
+        let full = CudaTensor::<f32>::from_buf(
+            vec![
+                1.0, 2.0, 3.0, 4.0,
+                5.0, 6.0, 7.0, 8.0,
+            ],
+            vec![2, 4]
+        ).unwrap();
+        
+        // Slice columns 1-3 (shape [2, 2])
+        let a = full.slice(1, 1..3).unwrap();
+        
+        let b = CudaTensor::<f32>::from_buf(
+            vec![1.0, 2.0, 3.0, 4.0],
+            vec![2, 2]
+        ).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        assert_eq!(*result.shape(), vec![2, 2]);
+        
+        // a is [[2,3], [6,7]]
+        // result[0,0] = 2*1 + 3*3 = 2 + 9 = 11
+        let result_cpu = result.cpu().unwrap();
+        assert!((result_cpu.get(vec![0, 0]).unwrap() - 11.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_matmul_f32_sliced_batched() {
+        // Test batched matmul with sliced tensors
+        let full = CudaTensor::<f32>::from_buf(
+            (0..120).map(|i| i as f32).collect::<Vec<_>>(),
+            vec![5, 4, 6]
+        ).unwrap();
+        
+        // Slice batches 1-4, keep all rows, slice cols 1-5 -> [3, 4, 4]
+        let a_step1 = full.slice(0, 1..4).unwrap();
+        let a = a_step1.slice(2, 1..5).unwrap();
+        
+        let b_data: Vec<f32> = (0..72).map(|i| i as f32 * 0.5).collect();
+        let b = CudaTensor::<f32>::from_buf(b_data, vec![3, 4, 6]).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        assert_eq!(*result.shape(), vec![3, 4, 6]);
+    }
+
+    #[test]
+    fn test_matmul_f32_sliced_rhs() {
+        // Test where only the right-hand side is sliced
+        let a = CudaTensor::<f32>::from_buf(
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            vec![2, 3]
+        ).unwrap();
+        
+        let full_b = CudaTensor::<f32>::from_buf(
+            (0..20).map(|i| i as f32 * 0.5).collect::<Vec<_>>(),
+            vec![5, 4]
+        ).unwrap();
+        
+        // Slice b: rows 1-4, cols 0-2 -> [3, 2]
+        let b_step1 = full_b.slice(0, 1..4).unwrap();
+        let b = b_step1.slice(1, 0..2).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        assert_eq!(*result.shape(), vec![2, 2]);
+    }
+
+    #[test]
+    fn test_matmul_f32_sliced_identity() {
+        // Test sliced tensor with identity-like behavior
+        let full = CudaTensor::<f32>::from_buf(
+            vec![
+                0.0, 0.0, 0.0,
+                0.0, 1.0, 0.0,
+                0.0, 0.0, 1.0,
+                0.0, 0.0, 0.0,
+            ],
+            vec![4, 3]
+        ).unwrap();
+        
+        // Slice to get the identity part [2, 2]
+        let identity_step1 = full.slice(0, 1..3).unwrap();
+        let identity_slice = identity_step1.slice(1, 1..3).unwrap();
+        
+        let test_matrix = CudaTensor::<f32>::from_buf(
+            vec![5.0, 6.0, 7.0, 8.0],
+            vec![2, 2]
+        ).unwrap();
+        
+        let result = identity_slice.matmul(&test_matrix).unwrap();
+        
+        // Should get test_matrix back
+        assert_eq!(result.cpu().unwrap(), test_matrix.cpu().unwrap());
+    }
+
+    // ============================================================================
+    // F64 GEMM TESTS
+    // ============================================================================
+
+    #[test]
+    fn test_matmul_f64_basic() {
+        // Test basic f64 GEMM
+        let a = CudaTensor::<f64>::from_buf(
+            vec![
+                1.0, 2.0, 3.0, 
+                4.0, 5.0, 6.0
+            ],
+            vec![2, 3]
+        ).unwrap();
+        let b = CudaTensor::<f64>::from_buf(
+            vec![
+                7.0, 8.0, 
+                9.0, 10.0, 
+                11.0, 12.0
+            ],
+            vec![3, 2]
+        ).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 2]);
+        // Expected: [[58.0, 64.0], [139.0, 154.0]]
+        let expected = Tensor::<f64>::from_buf(vec![58.0, 64.0, 139.0, 154.0], vec![2, 2]).unwrap();
+        assert_eq!(result.cpu().unwrap(), expected);
+    }
+
+    #[test]
+    fn test_matmul_f64_large_square() {
+        // Test f64 GEMM with larger square matrices
+        let size = 12;
+        let mut a_data = vec![0.0f64; size * size];
+        let mut b_data = vec![0.0f64; size * size];
+        
+        for i in 0..size {
+            for j in 0..size {
+                a_data[i * size + j] = i as f64 + j as f64 * 0.5;
+                b_data[i * size + j] = i as f64 * 0.3 + j as f64;
+            }
+        }
+        
+        let a = CudaTensor::<f64>::from_buf(a_data, vec![size, size]).unwrap();
+        let b = CudaTensor::<f64>::from_buf(b_data, vec![size, size]).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        assert_eq!(*result.shape(), vec![size, size]);
+    }
+
+    #[test]
+    fn test_matmul_f64_rectangular() {
+        // Test f64 GEMM with rectangular matrices
+        let a = CudaTensor::<f64>::from_buf(
+            (0..60).map(|i| i as f64 * 0.1).collect::<Vec<_>>(),
+            vec![10, 6]
+        ).unwrap();
+        let b = CudaTensor::<f64>::from_buf(
+            (0..48).map(|i| i as f64 * 0.2).collect::<Vec<_>>(),
+            vec![6, 8]
+        ).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        assert_eq!(*result.shape(), vec![10, 8]);
+    }
+
+    #[test]
+    fn test_matmul_f64_batched() {
+        // Test batched f64 GEMM
+        let batch = 3;
+        let m = 5;
+        let k = 4;
+        let n = 6;
+        
+        let a_data: Vec<f64> = (0..batch*m*k).map(|i| i as f64 * 0.25).collect();
+        let b_data: Vec<f64> = (0..batch*k*n).map(|i| i as f64 * 0.33).collect();
+        
+        let a = CudaTensor::<f64>::from_buf(a_data, vec![batch, m, k]).unwrap();
+        let b = CudaTensor::<f64>::from_buf(b_data, vec![batch, k, n]).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        assert_eq!(*result.shape(), vec![batch, m, n]);
+    }
+
+    #[test]
+    fn test_matmul_f64_high_precision() {
+        // Test that f64 GEMM maintains high precision
+        let a = CudaTensor::<f64>::from_buf(
+            vec![
+                0.123456789, 0.987654321,
+                0.111111111, 0.999999999,
+            ],
+            vec![2, 2]
+        ).unwrap();
+        let b = CudaTensor::<f64>::from_buf(
+            vec![
+                0.314159265, 0.271828182,
+                0.161803398, 0.577215664,
+            ],
+            vec![2, 2]
+        ).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        
+        // Manually computed with high precision
+        // result[0,0] = 0.123456789 * 0.314159265 + 0.987654321 * 0.161803398
+        let expected_00 = 0.123456789 * 0.314159265 + 0.987654321 * 0.161803398;
+        let result_cpu = result.cpu().unwrap();
+        assert!((result_cpu.get(vec![0, 0]).unwrap() - expected_00).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_matmul_f64_sliced_both() {
+        // Test matmul where both tensors are sliced
+        let full_a = CudaTensor::<f64>::from_buf(
+            (0..24).map(|i| i as f64).collect::<Vec<_>>(),
+            vec![4, 6]
+        ).unwrap();
+        
+        let full_b = CudaTensor::<f64>::from_buf(
+            (0..20).map(|i| i as f64 + 0.5).collect::<Vec<_>>(),
+            vec![5, 4]
+        ).unwrap();
+        
+        // Slice a: rows 1-3, then cols 2-6 -> [2, 4]
+        let a_step1 = full_a.slice(0, 1..3).unwrap();
+        let a = a_step1.slice(1, 2..6).unwrap();
+        // Slice b: rows 1-5, then cols 0-3 -> [4, 3]
+        let b_step1 = full_b.slice(0, 1..5).unwrap();
+        let b = b_step1.slice(1, 0..3).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        assert_eq!(*result.shape(), vec![2, 3]);
+    }
+
+    #[test]
+    fn test_matmul_f64_sliced_lhs() {
+        // Test where only the left-hand side is sliced
+        let full_a = CudaTensor::<f64>::from_buf(
+            (0..30).map(|i| i as f64).collect::<Vec<_>>(),
+            vec![5, 6]
+        ).unwrap();
+        
+        // Slice rows 2-4, then cols 1-4 -> [2, 3]
+        let a_step1 = full_a.slice(0, 2..4).unwrap();
+        let a = a_step1.slice(1, 1..4).unwrap();
+        
+        let b = CudaTensor::<f64>::from_buf(
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            vec![3, 2]
+        ).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        assert_eq!(*result.shape(), vec![2, 2]);
+    }
+
+    #[test]
+    fn test_matmul_f64_slice_then_transpose() {
+        // Test slicing followed by transpose for matmul
+        let full = CudaTensor::<f64>::from_buf(
+            vec![
+                1.0, 2.0, 3.0, 4.0,
+                5.0, 6.0, 7.0, 8.0,
+                9.0, 10.0, 11.0, 12.0,
+            ],
+            vec![3, 4]
+        ).unwrap();
+        
+        // Slice rows 0-2, cols 1-3 -> [2, 2]
+        let sliced_step1 = full.slice(0, 0..2).unwrap();
+        let sliced = sliced_step1.slice(1, 1..3).unwrap();
+        
+        // Transpose it -> [2, 2]
+        let transposed = sliced.transpose().unwrap();
+        
+        let b = CudaTensor::<f64>::from_buf(
+            vec![1.0, 0.0, 0.0, 1.0],
+            vec![2, 2]
+        ).unwrap();
+        
+        let result = transposed.matmul(&b).unwrap();
+        assert_eq!(*result.shape(), vec![2, 2]);
+        
+        // sliced is [[2,3], [6,7]]
+        // transposed is [[2,6], [3,7]]
+        // result should be transposed unchanged (identity mult)
+        let result_cpu = result.cpu().unwrap();
+        assert_eq!(result_cpu.get(vec![0, 0]).unwrap(), 2.0);
+        assert_eq!(result_cpu.get(vec![0, 1]).unwrap(), 6.0);
+    }
+
+}
+

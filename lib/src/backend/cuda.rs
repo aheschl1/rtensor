@@ -1,8 +1,8 @@
 use std::sync::{atomic::{AtomicBool, Ordering}, Arc, LazyLock};
 
-use cudarc::driver::{CudaContext, CudaSlice, DevicePtr};
+use cudarc::{cublas::{sys::cublasOperation_t, CudaBlas, Gemm, GemmConfig, StridedBatchedConfig}, driver::{CudaContext, CudaSlice, DevicePtr}};
 
-use crate::{backend::Backend, core::{tensor::TensorError, value::TensorValue, MetaTensor}, ops::{base::OpType}};
+use crate::{backend::{Backend, BackendBLAS}, core::{tensor::TensorError, value::TensorValue, MetaTensor}, ops::base::OpType};
 
 // Include bindgen-generated FFI declarations for CUDA kernel launchers
 #[allow(non_camel_case_types)]
@@ -19,8 +19,10 @@ const CUDA_BACKENDS: LazyLock<Vec<Cuda>> = LazyLock::new(|| {
     let mut backends = Vec::new();
     let device_count = cudarc::driver::CudaContext::device_count().unwrap_or(0);
     for device_id in 0..device_count {
+        let ctx = CudaContext::new(device_id as usize).unwrap();
         let backend = Cuda { 
-            ctx: CudaContext::new(device_id as usize).unwrap(), 
+            ctx: ctx.clone(), 
+            cublas: Arc::new(CudaBlas::new(ctx.default_stream()).unwrap()),
             dirty: AtomicBool::new(false).into(),
         };
         backends.push(backend);
@@ -37,6 +39,7 @@ pub struct CudaBuf<T: TensorValue> {
 #[derive(Clone)]
 pub struct Cuda {
     pub(crate) ctx: Arc<CudaContext>,
+    pub(crate) cublas: Arc<CudaBlas>,
     dirty: Arc<AtomicBool>,
 }
 
@@ -421,47 +424,64 @@ impl<T: TensorValue> Backend<T> for Cuda {
             _ => Err(TensorError::CudaError("Unsupported type for CUDA broadcast operation".to_string())),
         }
     }
-    
-    fn matmul_float32(
-        &self,
-        lhs_buf: &Self::Buf,
-        rhs_buf: &Self::Buf,
-        lhs_offset: usize,
-        rhs_offset: usize,
-        b: usize,
-        m: usize,
-        k: usize,
-        n: usize,
-    ) -> Result<Self::Buf, TensorError> {
-        todo!()
-    }
-    
-    fn matmul_float64(
-        &self,
-        lhs_buf: &Self::Buf,
-        rhs_buf: &Self::Buf,
-        lhs_offset: usize,
-        rhs_offset: usize,
-        b: usize,
-        m: usize,
-        k: usize,
-        n: usize,
-    ) -> Result<Self::Buf, TensorError> {
-        todo!()
-    }
-    
-    fn matmul_generic(
-        &self,
-        lhs_buf: &Self::Buf,
-        rhs_buf: &Self::Buf,
-        lhs_offset: usize,
-        rhs_offset: usize,
-        b: usize,
-        m: usize,
-        k: usize,
-        n: usize,
-    ) -> Result<Self::Buf, TensorError> {
-        todo!()
-    }
-    
 }
+
+macro_rules! cublas_impl {
+    ($t:ty) => {
+        impl BackendBLAS<$t> for Cuda {
+            fn matmul(
+                &self,
+                lhs_buf: &Self::Buf,
+                rhs_buf: &Self::Buf,
+                lhs_offset: usize,
+                rhs_offset: usize,
+                b: usize,
+                m: usize,
+                k: usize,
+                n: usize,
+            ) -> Result<Self::Buf, TensorError> {
+                // cuBLAS uses column-major order, but our tensors are row-major
+                // To compute C = A * B in row-major, we compute C^T = B^T * A^T in column-major
+                // This means we swap A and B, and swap m and n
+                let (m, n) = (n, m);
+                
+                let cfg = GemmConfig {
+                    transa: cublasOperation_t::CUBLAS_OP_N,
+                    transb: cublasOperation_t::CUBLAS_OP_N,
+                    m: m as i32,
+                    n: n as i32,
+                    k: k as i32,
+                    alpha: 1.0,
+                    lda: m as i32,  // leading dimension of B (now first operand)
+                    ldb: k as i32,  // leading dimension of A (now second operand)
+                    beta: 0.0,
+                    ldc: m as i32,  // leading dimension of C
+                };
+                let cfg = StridedBatchedConfig {
+                    gemm: cfg,
+                    batch_size: b as i32,
+                    stride_a: (k*m) as i64,  // stride for B
+                    stride_b: (n*k) as i64,  // stride for A
+                    stride_c: (n*m) as i64,
+                };
+                let mut res = self.alloc(b*n*m)?;
+
+                unsafe{
+                    // Note: operands are swapped (B, A instead of A, B)
+                    self.cublas.gemm_strided_batched(
+                        cfg, 
+                        &rhs_buf.ptr.slice(rhs_offset..),  // B comes first
+                        &lhs_buf.ptr.slice(lhs_offset..),  // A comes second
+                        &mut res.ptr,
+                    ).map_err(|e| TensorError::CudaError(e.to_string()))?;
+                }
+                self.dirty();
+                Ok(res)
+            }
+        }
+    };
+}
+
+cublas_impl!(f32);
+cublas_impl!(f64);
+
