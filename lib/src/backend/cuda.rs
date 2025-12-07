@@ -524,20 +524,20 @@ macro_rules! cublas_impl {
                 let (lhs_buf, lhs_meta) = lhs;
                 let (rhs_buf, rhs_meta) = rhs;
 
-                let lda = lhs_meta.strides()[rhs_meta.rank() - 2] as i32; // flipped 
-                let ldb = rhs_meta.strides()[lhs_meta.rank() - 2] as i32;
+                let lda = lhs_meta.strides()[lhs_meta.rank() - 2] as i32; // flipped 
+                let ldb = rhs_meta.strides()[rhs_meta.rank() - 2] as i32;
                 let ldc = m as i32;
 
                 let bstride_lhs = if lhs_meta.rank() > 2 {
-                    lhs_meta.strides()[lhs_meta.rank() - 3] as usize
+                    lhs_meta.strides()[lhs_meta.rank() - 3] as i64
                 } else{
-                    m as usize * k as usize
+                    m as i64 * k as i64
                 };
 
                 let bstride_rhs = if rhs_meta.rank() > 2 {
-                    rhs_meta.strides()[rhs_meta.rank() - 3] as usize
+                    rhs_meta.strides()[rhs_meta.rank() - 3] as i64
                 } else{
-                    k as usize * n as usize
+                    k as i64 * n as i64
                 };
 
                 let cfg = GemmConfig {
@@ -547,16 +547,16 @@ macro_rules! cublas_impl {
                     n: n as i32,
                     k: k as i32,
                     alpha: 1.0,
-                    lda: lda,  // leading dimension of B (now first operand)
-                    ldb: ldb,  // leading dimension of A (now second operand)
+                    lda: ldb,  // leading dimension of B (now first operand)
+                    ldb: lda,  // leading dimension of A (now second operand)
                     beta: 0.0,
                     ldc: ldc,  // leading dimension of C
                 };
                 let cfg = StridedBatchedConfig {
                     gemm: cfg,
                     batch_size: b as i32,
-                    stride_a: bstride_rhs as i64,  // stride for B
-                    stride_b: bstride_lhs as i64,  // stride for A
+                    stride_a: bstride_rhs,  // stride for B
+                    stride_b: bstride_lhs,  // stride for A
                     stride_c: (n*m) as i64,
                 };
                 let mut res = self.alloc(b*n*m)?;
