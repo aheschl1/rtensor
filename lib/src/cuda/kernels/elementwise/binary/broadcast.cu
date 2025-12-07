@@ -73,7 +73,7 @@ void launch_binary_broadcast_elementwise_op(
 ) {
     block_size = ALIGN_BLOCK_SIZE(block_size);
 
-    const unsigned int grid = (unsigned int)((size + block_size - 1) / block_size);
+    const unsigned int grid = std::min((unsigned int)((size + block_size - 1) / block_size), 65535u);
     binary_broadcast_elementwise<T><<<grid, block_size>>>(
         lbuf, rbuf, dbuf, loff, roff, doff, rank, size, lstride, rstride, dstride, shape, op
     );

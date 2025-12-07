@@ -35,7 +35,7 @@ void launch_elementwise_strided_op(
 ) {
     block_size = ALIGN_BLOCK_SIZE(block_size);
 
-    const unsigned int grid = (unsigned int)((len + block_size - 1) / block_size);
+    const unsigned int grid = std::min((unsigned int)((len + block_size - 1) / block_size), 65535u);
     elementwise_strided_kernel<T><<<grid, block_size>>>(data, start, stride, len, op, value);
 }
 

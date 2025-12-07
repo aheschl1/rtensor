@@ -2,7 +2,7 @@ use std::sync::{atomic::{AtomicBool, Ordering}, Arc, LazyLock};
 
 use cudarc::{cublas::{sys::cublasOperation_t, CudaBlas, Gemm, GemmConfig, StridedBatchedConfig}, driver::{CudaContext, CudaSlice, DevicePtr}};
 
-use crate::{backend::{Backend, BackendBLAS}, core::{tensor::TensorError, value::TensorValue, MetaTensor}, ops::base::OpType};
+use crate::{backend::{Backend, BackendMatMul}, core::{tensor::TensorError, value::TensorValue, MetaTensor}, ops::base::OpType};
 
 // Include bindgen-generated FFI declarations for CUDA kernel launchers
 #[allow(non_camel_case_types)]
@@ -426,9 +426,63 @@ impl<T: TensorValue> Backend<T> for Cuda {
     }
 }
 
+macro_rules! generic_matmul_impl {
+    ($t:ty, $launch_fn:ident) => {
+        impl BackendMatMul<$t> for Cuda {
+            fn matmul(
+                &self,
+                lhs_buf: &Self::Buf,
+                rhs_buf: &Self::Buf,
+                lhs_offset: usize,
+                rhs_offset: usize,
+                b: usize,
+                m: usize,
+                k: usize,
+                n: usize,
+            ) -> Result<Self::Buf, TensorError> {
+                let stream = self.stream();
+                let res = self.alloc(b * m * n)?;
+                
+                let (lhs_ptr, _) = lhs_buf.ptr.device_ptr(&stream);
+                let (rhs_ptr, _) = rhs_buf.ptr.device_ptr(&stream);
+                let (res_ptr, _) = res.ptr.device_ptr(&stream);
+                
+                // For batched matrix multiplication
+                for batch_idx in 0..b {
+                    let a_offset = lhs_offset + batch_idx * m * k;
+                    let b_offset = rhs_offset + batch_idx * k * n;
+                    let c_offset = batch_idx * m * n;
+                    
+                    let a_ptr = unsafe { (lhs_ptr as *const $t).add(a_offset) };
+                    let b_ptr = unsafe { (rhs_ptr as *const $t).add(b_offset) };
+                    let c_ptr = unsafe { (res_ptr as *mut $t).add(c_offset) };
+                    
+                    unsafe {
+                        $launch_fn(
+                            a_ptr,
+                            b_ptr,
+                            c_ptr,
+                            m,
+                            n,
+                            k,
+                            k,  // lda: leading dimension of A (row-major, so stride is k)
+                            n,  // ldb: leading dimension of B
+                            n,  // ldc: leading dimension of C
+                            DEFAULT_BLOCK_SIZE,
+                        );
+                    }
+                }
+                
+                self.dirty();
+                Ok(res)
+            }
+        }
+    };
+}
+
 macro_rules! cublas_impl {
     ($t:ty) => {
-        impl BackendBLAS<$t> for Cuda {
+        impl BackendMatMul<$t> for Cuda {
             fn matmul(
                 &self,
                 lhs_buf: &Self::Buf,
@@ -485,3 +539,13 @@ macro_rules! cublas_impl {
 cublas_impl!(f32);
 cublas_impl!(f64);
 
+generic_matmul_impl!(u8, launch_matmul_u8);
+generic_matmul_impl!(u16, launch_matmul_u16);
+generic_matmul_impl!(u32, launch_matmul_u32);
+generic_matmul_impl!(u64, launch_matmul_u64);
+generic_matmul_impl!(u128, launch_matmul_u128);
+generic_matmul_impl!(i8, launch_matmul_i8);
+generic_matmul_impl!(i16, launch_matmul_i16);
+generic_matmul_impl!(i32, launch_matmul_i32);
+generic_matmul_impl!(i64, launch_matmul_i64);
+generic_matmul_impl!(i128, launch_matmul_i128);

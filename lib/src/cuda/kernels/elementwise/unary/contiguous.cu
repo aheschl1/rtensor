@@ -31,7 +31,7 @@ void launch_elementwise_contiguous_op(
 ) {
     block_size = ALIGN_BLOCK_SIZE(block_size);
 
-    const unsigned int grid = (unsigned int)((n + block_size - 1) / block_size);
+    const unsigned int grid = std::min((unsigned int)((n + block_size - 1) / block_size), 65535u);
     elementwise_contiguous_kernel<T><<<grid, block_size>>>(data, n, op, value);
 }
 

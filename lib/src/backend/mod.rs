@@ -92,7 +92,7 @@ pub trait Backend<T: TensorValue> {
     }
 }
 
-pub(crate) trait BackendBLAS<T: TensorValue>: Backend<T> {
+pub(crate) trait BackendMatMul<T: TensorValue>: Backend<T> {
     fn matmul(
         &self,
         lhs_buf: &Self::Buf,

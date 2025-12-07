@@ -50,7 +50,7 @@ void launch_elementwise_nd_affine_op(
 ) {
     block_size = ALIGN_BLOCK_SIZE(block_size);
 
-    const unsigned int grid = (unsigned int)((size + block_size - 1) / block_size);
+    const unsigned int grid = std::min((unsigned int)((size + block_size - 1) / block_size), 65535u);
     elementwise_nd_affine_kernel<T><<<grid, block_size>>>(data, offset, stride, shape, rank, size, op, value);
 }
 

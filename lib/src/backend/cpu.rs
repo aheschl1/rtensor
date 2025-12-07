@@ -1,5 +1,5 @@
 
-use crate::{backend::{Backend, BackendBLAS}, core::{meta::TensorOffsetIterator, tensor::TensorError, value::TensorValue, MetaTensor}, openblas::{blasint, cblas_dgemm, cblas_sgemm, CBLAS_ORDER, CBLAS_TRANSPOSE}, ops::base::OpType};
+use crate::{backend::{Backend, BackendMatMul}, core::{meta::TensorOffsetIterator, tensor::TensorError, value::TensorValue, MetaTensor}, openblas::{blasint, cblas_dgemm, cblas_sgemm, CBLAS_ORDER, CBLAS_TRANSPOSE}, ops::base::OpType};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Cpu;
@@ -175,7 +175,7 @@ impl<T: TensorValue> Backend<T> for Cpu {
 
 macro_rules! blas_impl {
     ($t:ty, $gemm_fn:ident) => {
-        impl BackendBLAS<$t> for Cpu {
+        impl BackendMatMul<$t> for Cpu {
             fn matmul(
                 &self,
                 lhs_buf: &Self::Buf,
@@ -222,7 +222,7 @@ macro_rules! blas_impl {
 
 macro_rules! generic_backend_blas {
     ($t:ty) => {
-        impl BackendBLAS<$t> for Cpu {
+        impl BackendMatMul<$t> for Cpu {
             fn matmul(
                 &self,
                 lhs_buf: &Self::Buf,

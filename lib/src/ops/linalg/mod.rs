@@ -1184,5 +1184,313 @@ mod cuda_tests {
         assert_eq!(result_cpu.get(vec![0, 1]).unwrap(), 6.0);
     }
 
+    // ============================================================================
+    // INTEGER TYPE TESTS (i32, i64, u32, u64, etc.)
+    // ============================================================================
+
+    #[test]
+    fn test_matmul_i32_basic() {
+        // Test basic i32 matrix multiplication
+        let a = CudaTensor::<i32>::from_buf(
+            vec![1, 2, 3, 4, 5, 6],
+            vec![2, 3]
+        ).unwrap();
+        let b = CudaTensor::<i32>::from_buf(
+            vec![7, 8, 9, 10, 11, 12],
+            vec![3, 2]
+        ).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 2]);
+        // Expected: [[58, 64], [139, 154]]
+        let expected = Tensor::<i32>::from_buf(vec![58, 64, 139, 154], vec![2, 2]).unwrap();
+        assert_eq!(result.cpu().unwrap(), expected);
+    }
+
+    #[test]
+    fn test_matmul_i32_square() {
+        // Test i32 square matrix multiplication
+        let a = CudaTensor::<i32>::from_buf(vec![1, 2, 3, 4], vec![2, 2]).unwrap();
+        let b = CudaTensor::<i32>::from_buf(vec![5, 6, 7, 8], vec![2, 2]).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 2]);
+        let expected = Tensor::<i32>::from_buf(vec![19, 22, 43, 50], vec![2, 2]).unwrap();
+        assert_eq!(result.cpu().unwrap(), expected);
+    }
+
+    #[test]
+    fn test_matmul_i32_identity() {
+        // Test i32 multiplication with identity matrix
+        let a = CudaTensor::<i32>::from_buf(vec![1, 2, 3, 4], vec![2, 2]).unwrap();
+        let identity = CudaTensor::<i32>::from_buf(vec![1, 0, 0, 1], vec![2, 2]).unwrap();
+        
+        let result = a.matmul(&identity).unwrap();
+        
+        assert_eq!(result.cpu().unwrap(), a.cpu().unwrap());
+    }
+
+    #[test]
+    fn test_matmul_i32_batched() {
+        // Test batched i32 GEMM (3D tensors)
+        let batch = 3;
+        let m = 4;
+        let k = 5;
+        let n = 3;
+        
+        let a_data: Vec<i32> = (0..batch*m*k).map(|i| (i % 10) as i32).collect();
+        let b_data: Vec<i32> = (0..batch*k*n).map(|i| (i % 8) as i32 + 1).collect();
+        
+        let a = CudaTensor::<i32>::from_buf(a_data, vec![batch, m, k]).unwrap();
+        let b = CudaTensor::<i32>::from_buf(b_data, vec![batch, k, n]).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        assert_eq!(*result.shape(), vec![batch, m, n]);
+    }
+
+    #[test]
+    fn test_matmul_i32_rectangular_large() {
+        // Test i32 with larger rectangular matrices
+        let m = 10;
+        let k = 15;
+        let n = 8;
+        
+        let a_data: Vec<i32> = (0..m*k).map(|i| (i % 20) as i32).collect();
+        let b_data: Vec<i32> = (0..k*n).map(|i| (i % 15) as i32 + 1).collect();
+        
+        let a = CudaTensor::<i32>::from_buf(a_data, vec![m, k]).unwrap();
+        let b = CudaTensor::<i32>::from_buf(b_data, vec![k, n]).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        assert_eq!(*result.shape(), vec![m, n]);
+    }
+
+    #[test]
+    fn test_matmul_i64_basic() {
+        // Test basic i64 matrix multiplication
+        let a = CudaTensor::<i64>::from_buf(
+            vec![1, 2, 3, 4, 5, 6],
+            vec![2, 3]
+        ).unwrap();
+        let b = CudaTensor::<i64>::from_buf(
+            vec![7, 8, 9, 10, 11, 12],
+            vec![3, 2]
+        ).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 2]);
+        let expected = Tensor::<i64>::from_buf(vec![58, 64, 139, 154], vec![2, 2]).unwrap();
+        assert_eq!(result.cpu().unwrap(), expected);
+    }
+
+    #[test]
+    fn test_matmul_i64_large_values() {
+        // Test i64 with large values that would overflow i32
+        let a = CudaTensor::<i64>::from_buf(
+            vec![1000000, 2000000, 3000000, 4000000],
+            vec![2, 2]
+        ).unwrap();
+        let b = CudaTensor::<i64>::from_buf(
+            vec![5000000, 6000000, 7000000, 8000000],
+            vec![2, 2]
+        ).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 2]);
+        // result[0,0] = 1000000 * 5000000 + 2000000 * 7000000 = 5e12 + 14e12 = 19e12
+        let result_cpu = result.cpu().unwrap();
+        assert_eq!(result_cpu.get(vec![0, 0]).unwrap(), 19000000000000i64);
+    }
+
+    #[test]
+    fn test_matmul_i64_batched() {
+        // Test batched i64 matrix multiplication
+        let batch = 2;
+        let m = 3;
+        let k = 4;
+        let n = 3;
+        
+        let a_data: Vec<i64> = (0..batch*m*k).map(|i| i as i64).collect();
+        let b_data: Vec<i64> = (0..batch*k*n).map(|i| (i + 1) as i64).collect();
+        
+        let a = CudaTensor::<i64>::from_buf(a_data, vec![batch, m, k]).unwrap();
+        let b = CudaTensor::<i64>::from_buf(b_data, vec![batch, k, n]).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        assert_eq!(*result.shape(), vec![batch, m, n]);
+    }
+
+    #[test]
+    fn test_matmul_u32_basic() {
+        // Test basic u32 matrix multiplication
+        let a = CudaTensor::<u32>::from_buf(
+            vec![1, 2, 3, 4, 5, 6],
+            vec![2, 3]
+        ).unwrap();
+        let b = CudaTensor::<u32>::from_buf(
+            vec![7, 8, 9, 10, 11, 12],
+            vec![3, 2]
+        ).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 2]);
+        let expected = Tensor::<u32>::from_buf(vec![58, 64, 139, 154], vec![2, 2]).unwrap();
+        assert_eq!(result.cpu().unwrap(), expected);
+    }
+
+    #[test]
+    fn test_matmul_u32_square() {
+        // Test u32 square matrix multiplication
+        let a = CudaTensor::<u32>::from_buf(vec![1, 2, 3, 4], vec![2, 2]).unwrap();
+        let b = CudaTensor::<u32>::from_buf(vec![5, 6, 7, 8], vec![2, 2]).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 2]);
+        let expected = Tensor::<u32>::from_buf(vec![19, 22, 43, 50], vec![2, 2]).unwrap();
+        assert_eq!(result.cpu().unwrap(), expected);
+    }
+
+    #[test]
+    fn test_matmul_u64_basic() {
+        // Test basic u64 matrix multiplication
+        let a = CudaTensor::<u64>::from_buf(
+            vec![1, 2, 3, 4, 5, 6],
+            vec![2, 3]
+        ).unwrap();
+        let b = CudaTensor::<u64>::from_buf(
+            vec![7, 8, 9, 10, 11, 12],
+            vec![3, 2]
+        ).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 2]);
+        let expected = Tensor::<u64>::from_buf(vec![58, 64, 139, 154], vec![2, 2]).unwrap();
+        assert_eq!(result.cpu().unwrap(), expected);
+    }
+
+    #[test]
+    fn test_matmul_u64_large_values() {
+        // Test u64 with very large values
+        let a = CudaTensor::<u64>::from_buf(
+            vec![10000000000, 20000000000, 30000000000, 40000000000],
+            vec![2, 2]
+        ).unwrap();
+        let b = CudaTensor::<u64>::from_buf(
+            vec![5, 6, 7, 8],
+            vec![2, 2]
+        ).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 2]);
+        // result[0,0] = 10000000000 * 5 + 20000000000 * 7 = 50000000000 + 140000000000 = 190000000000
+        let result_cpu = result.cpu().unwrap();
+        assert_eq!(result_cpu.get(vec![0, 0]).unwrap(), 190000000000u64);
+    }
+
+    #[test]
+    fn test_matmul_i16_basic() {
+        // Test basic i16 matrix multiplication
+        let a = CudaTensor::<i16>::from_buf(
+            vec![1, 2, 3, 4, 5, 6],
+            vec![2, 3]
+        ).unwrap();
+        let b = CudaTensor::<i16>::from_buf(
+            vec![7, 8, 9, 10, 11, 12],
+            vec![3, 2]
+        ).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 2]);
+        let expected = Tensor::<i16>::from_buf(vec![58, 64, 139, 154], vec![2, 2]).unwrap();
+        assert_eq!(result.cpu().unwrap(), expected);
+    }
+
+    #[test]
+    fn test_matmul_u16_basic() {
+        // Test basic u16 matrix multiplication
+        let a = CudaTensor::<u16>::from_buf(
+            vec![1, 2, 3, 4, 5, 6],
+            vec![2, 3]
+        ).unwrap();
+        let b = CudaTensor::<u16>::from_buf(
+            vec![7, 8, 9, 10, 11, 12],
+            vec![3, 2]
+        ).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 2]);
+        let expected = Tensor::<u16>::from_buf(vec![58, 64, 139, 154], vec![2, 2]).unwrap();
+        assert_eq!(result.cpu().unwrap(), expected);
+    }
+
+    #[test]
+    fn test_matmul_i8_basic() {
+        // Test basic i8 matrix multiplication
+        let a = CudaTensor::<i8>::from_buf(
+            vec![1, 2, 3, 4, 5, 6],
+            vec![2, 3]
+        ).unwrap();
+        let b = CudaTensor::<i8>::from_buf(
+            vec![1, 2, 3, 4, 5, 6],
+            vec![3, 2]
+        ).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 2]);
+        // result[0,0] = 1*1 + 2*3 + 3*5 = 1 + 6 + 15 = 22
+        let expected = Tensor::<i8>::from_buf(vec![22, 28, 49, 64], vec![2, 2]).unwrap();
+        assert_eq!(result.cpu().unwrap(), expected);
+    }
+
+    #[test]
+    fn test_matmul_u8_basic() {
+        // Test basic u8 matrix multiplication
+        let a = CudaTensor::<u8>::from_buf(
+            vec![1, 2, 3, 4, 5, 6],
+            vec![2, 3]
+        ).unwrap();
+        let b = CudaTensor::<u8>::from_buf(
+            vec![1, 2, 3, 4, 5, 6],
+            vec![3, 2]
+        ).unwrap();
+        
+        let result = a.matmul(&b).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 2]);
+        let expected = Tensor::<u8>::from_buf(vec![22, 28, 49, 64], vec![2, 2]).unwrap();
+        assert_eq!(result.cpu().unwrap(), expected);
+    }
+
+    #[test]
+    fn test_matmul_mixed_integer_sizes() {
+        // Test that different integer sizes produce correct results
+        // Compare i32 vs i64 for same operation
+        let a_i32 = CudaTensor::<i32>::from_buf(vec![1, 2, 3, 4], vec![2, 2]).unwrap();
+        let b_i32 = CudaTensor::<i32>::from_buf(vec![5, 6, 7, 8], vec![2, 2]).unwrap();
+        
+        let a_i64 = CudaTensor::<i64>::from_buf(vec![1, 2, 3, 4], vec![2, 2]).unwrap();
+        let b_i64 = CudaTensor::<i64>::from_buf(vec![5, 6, 7, 8], vec![2, 2]).unwrap();
+        
+        let result_i32 = a_i32.matmul(&b_i32).unwrap().cpu().unwrap();
+        let result_i64 = a_i64.matmul(&b_i64).unwrap().cpu().unwrap();
+        
+        // Both should produce [19, 22, 43, 50]
+        assert_eq!(result_i32.get(vec![0, 0]).unwrap(), 19);
+        assert_eq!(result_i64.get(vec![0, 0]).unwrap(), 19);
+        assert_eq!(result_i32.get(vec![1, 1]).unwrap(), 50);
+        assert_eq!(result_i64.get(vec![1, 1]).unwrap(), 50);
+    }
+
 }
 
