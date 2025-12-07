@@ -149,9 +149,7 @@ pub(crate) fn compute_sliced_parameters(
     // Validate step, should be non-zero
     let step: isize = slice.step;
     if step == 0 {
-        return Err(TensorError::InvalidShape(format!(
-            "Slice step cannot be zero"
-        )));
+        return Err(TensorError::InvalidShape("Slice step cannot be zero".to_string()));
     }
 
     // (inclusive)
