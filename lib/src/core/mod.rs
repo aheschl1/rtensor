@@ -309,19 +309,19 @@ mod tests {
         // Range end beyond dimension size
         assert!(matches!(
             tensor.view().slice(0, 0..3),
-            Err(TensorError::IdxOutOfBounds)
+            Err(TensorError::IdxOutOfBounds(_))
         ));
         
         // Range start beyond dimension size
         assert!(matches!(
             tensor.view().slice(0, 3..4),
-            Err(TensorError::IdxOutOfBounds)
+            Err(TensorError::IdxOutOfBounds(_))
         ));
         
         // Range with start > end
         assert!(matches!(
             tensor.view().slice(0, 2..1),
-            Err(TensorError::IdxOutOfBounds)
+            Err(TensorError::IdxOutOfBounds(_))
         ));
     }
 
@@ -563,19 +563,19 @@ mod tests {
         // Invalid start index with negative step
         assert!(matches!(
             tensor.view().slice(0, Slice::new(Some(10), Some(2), -1)),
-            Err(TensorError::IdxOutOfBounds)
+            Err(TensorError::IdxOutOfBounds(_))
         ));
         
         // Invalid end index with negative step
         assert!(matches!(
             tensor.view().slice(0, Slice::new(Some(5), Some(10), -1)),
-            Err(TensorError::IdxOutOfBounds)
+            Err(TensorError::IdxOutOfBounds(_))
         ));
         
         // Step of 0 should error
         assert!(matches!(
             tensor.view().slice(0, Slice::new(Some(2), Some(5), 0)),
-            Err(TensorError::InvalidShape)
+            Err(TensorError::InvalidShape(_))
         ));
     }
 
@@ -1068,7 +1068,7 @@ mod tests {
         let shape = vec![2, 3];
         assert!(matches!(
             Tensor::from_buf(buf, shape),
-            Err(TensorError::InvalidShape)
+            Err(TensorError::InvalidShape(_))
         ));
     }
 
@@ -1077,11 +1077,11 @@ mod tests {
         let tensor = make_tensor(vec![1, 2, 3, 4], vec![2, 2]);
         assert!(matches!(
             index_tensor(Idx::Coord(vec![0, 0, 0]), &tensor.view()),
-            Err(TensorError::WrongDims)
+            Err(TensorError::WrongDims(_))
         ));
         assert!(matches!(
             index_tensor(Idx::Coord(vec![2, 0]), &tensor.view()),
-            Err(TensorError::IdxOutOfBounds)
+            Err(TensorError::IdxOutOfBounds(_))
         ));
     }
 
@@ -1090,11 +1090,11 @@ mod tests {
         let tensor = make_tensor(vec![1, 2, 3, 4], vec![2, 2]);
         assert!(matches!(
             tensor.view().slice(2, 0..0),
-            Err(TensorError::InvalidDim)
+            Err(TensorError::InvalidDim(_))
         ));
         assert!(matches!(
             tensor.view().slice(0, 2..2),
-            Err(TensorError::IdxOutOfBounds)
+            Err(TensorError::IdxOutOfBounds(_))
         ));
     }
 
@@ -1184,7 +1184,7 @@ mod tests {
     #[test]
     fn test_slice_scalar_error() {
         let scalar = Tensor::scalar(5);
-        assert!(matches!(scalar.view().slice(0, 0..0), Err(TensorError::InvalidDim)));
+        assert!(matches!(scalar.view().slice(0, 0..0), Err(TensorError::InvalidDim(_))));
     }
 
     // #[test]
@@ -1206,12 +1206,12 @@ mod tests {
     #[test]
     fn test_item_wrong_dims_error() {
         let tensor = make_tensor(vec![1, 2, 3, 4, 5, 6], vec![2, 3]);
-        assert!(matches!(tensor.view().get(&Idx::Item), Err(TensorError::WrongDims)));
+        assert!(matches!(tensor.view().get(&Idx::Item), Err(TensorError::WrongDims(_))));
     }
 
     #[test]
     fn test_from_buf_empty_shape_error() {
-        assert!(matches!(Tensor::from_buf(Vec::<i32>::new(), vec![]), Err(TensorError::InvalidShape)));
+        assert!(matches!(Tensor::from_buf(Vec::<i32>::new(), vec![]), Err(TensorError::InvalidShape(_))));
     }
 
     // #[test]
@@ -2298,13 +2298,13 @@ mod tests {
         // Too few dimensions
         assert!(matches!(
             tensor.view().permute(vec![0]),
-            Err(TensorError::WrongDims)
+            Err(TensorError::WrongDims(_))
         ));
         
         // Too many dimensions
         assert!(matches!(
             tensor.view().permute(vec![0, 1, 2]),
-            Err(TensorError::WrongDims)
+            Err(TensorError::WrongDims(_))
         ));
     }
 
@@ -2316,12 +2316,12 @@ mod tests {
         // Dimension index out of range
         assert!(matches!(
             tensor.view().permute(vec![0, 3]),
-            Err(TensorError::InvalidDim)
+            Err(TensorError::InvalidDim(_))
         ));
         
         assert!(matches!(
             tensor.view().permute(vec![2, 1]),
-            Err(TensorError::InvalidDim)
+            Err(TensorError::InvalidDim(_))
         ));
     }
 
@@ -3351,6 +3351,58 @@ mod tests {
         assert_eq!(index_tensor(coord![0, 0, 2], &unsqueezed).unwrap(), 5);
         // sliced[4, 2] = original[4, 4] = 29
         assert_eq!(index_tensor(coord![4, 0, 2], &unsqueezed).unwrap(), 29);
+    }
+
+    // ============================================================================
+    // UNSQUEEZE_AT ERROR CASES
+    // ============================================================================
+
+    #[test]
+    #[should_panic]
+    fn test_unsqueeze_at_out_of_bounds_too_large() {
+        // Test that unsqueezing beyond valid dimension range fails
+        let tensor = make_tensor(vec![1, 2, 3, 4, 5, 6], vec![2, 3]);
+        
+        // Valid dimensions for a [2, 3] tensor are 0, 1, 2 (can insert at beginning, middle, or end)
+        // Dimension 4 is out of bounds
+        tensor.unsqueeze_at(4).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_unsqueeze_at_out_of_bounds_1d() {
+        // Test out of bounds on 1D tensor
+        let tensor = make_tensor(vec![1, 2, 3, 4], vec![4]);
+        
+        // Valid dimensions for a [4] tensor are 0, 1
+        // Dimension 3 is out of bounds
+        tensor.unsqueeze_at(3).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_unsqueeze_at_mut_out_of_bounds() {
+        // Test that mutable unsqueeze fails with out of bounds dimension
+        let mut tensor = make_tensor((1..=12).collect::<Vec<i32>>(), vec![3, 4]);
+        
+        // Valid dimensions are 0, 1, 2 for a [3, 4] tensor
+        // Dimension 5 is way out of bounds
+        tensor.unsqueeze_at_mut(5).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_unsqueeze_at_out_of_bounds_after_slice() {
+        // Test that unsqueeze fails even after slicing when dimension is invalid
+        let tensor = make_tensor((1..=24).collect::<Vec<i32>>(), vec![4, 6]);
+        
+        // Slice to [2, 6]
+        let sliced = tensor.slice(0, 1..3).unwrap();
+        assert_eq!(*sliced.shape(), vec![2, 6]);
+        
+        // Valid dimensions for [2, 6] are 0, 1, 2
+        // Dimension 4 is out of bounds
+        sliced.unsqueeze_at(4).unwrap();
     }
 }
 

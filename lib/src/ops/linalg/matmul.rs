@@ -36,7 +36,10 @@ where
         let rr = rhs.rank();
 
         if lr != rr || lr < 2 {
-            return Err(TensorError::InvalidShape);
+            return Err(TensorError::InvalidShape(format!(
+                "Both tensors must have the same rank >= 2, got lhs rank {} and rhs rank {}",
+                lr, rr
+            )));
         }
 
         // batch dims are all leading dims except the last two
@@ -44,7 +47,10 @@ where
         let rhs_batch_dims: Vec<usize> = rhs.shape.0[..rr - 2].to_vec();
 
         if lhs_batch_dims != rhs_batch_dims {
-            return Err(TensorError::SizeMismatch);
+            return Err(TensorError::SizeMismatch(format!(
+                "Batch dimensions must match for matmul, got lhs batch dims {:?} and rhs batch dims {:?}",
+                lhs_batch_dims, rhs_batch_dims
+            )));
         }
 
         let b = if lhs_batch_dims.is_empty() {
@@ -60,7 +66,10 @@ where
         let n  = rhs.shape[rr - 1];
 
         if k_l != k_r {
-            return Err(TensorError::SizeMismatch);
+            return Err(TensorError::SizeMismatch(format!(
+                "Inner matrix dimensions must match for matmul, got lhs K={} and rhs K={}",
+                k_l, k_r
+            )));
         }
 
         // -------- Output shape: (batch..., M, N) --------

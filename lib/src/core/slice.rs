@@ -139,13 +139,19 @@ pub(crate) fn compute_sliced_parameters(
 
     // Validate dimension for slicing over
     if dim >= shape.len() {
-        return Err(TensorError::InvalidDim);
+        return Err(TensorError::InvalidDim(format!(
+            "Dimension {} out of bounds for shape with rank {}",
+            dim,
+            shape.len()
+        )));
     }
     
     // Validate step, should be non-zero
     let step: isize = slice.step;
     if step == 0 {
-        return Err(TensorError::InvalidShape);
+        return Err(TensorError::InvalidShape(format!(
+            "Slice step cannot be zero"
+        )));
     }
 
     // (inclusive)
@@ -166,12 +172,24 @@ pub(crate) fn compute_sliced_parameters(
 
     // Range validation
     if step > 0 && (start < 0 || start >= shape[dim] as isize || end < 0 || end > shape[dim] as isize) {
-        return Err(TensorError::IdxOutOfBounds);
+        return Err(TensorError::IdxOutOfBounds(format!(
+            "Slice indices out of bounds for dimension {} with size {}: start {}, end {}",
+            dim,
+            shape[dim],
+            start,
+            end
+        )));
     }
 
     // start can be in full range, end can be no less than -1 (full), and must not exceed shape
     if step < 0 && (start < 0 || start >= shape[dim] as isize || end < -1 || end >= shape[dim] as isize) {
-        return Err(TensorError::IdxOutOfBounds);
+        return Err(TensorError::IdxOutOfBounds(format!(
+            "Slice indices out of bounds for dimension {} with size {}: start {}, end {}",
+            dim,
+            shape[dim],
+            start,
+            end
+        )));
     }
 
     // Calculate the length of the resulting slice

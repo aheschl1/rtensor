@@ -15,7 +15,11 @@ impl<T: TensorValue> Backend<T> for Cpu {
 
     fn copy_from_slice(&self, dst: &mut Self::Buf, src: &[T]) -> Result<(), TensorError> {
         if dst.len() != src.len() {
-            return Err(TensorError::SizeMismatch);
+            return Err(TensorError::SizeMismatch(format!(
+                "Buffer size mismatch in copy_from_slice: dst size {}, src size {}",
+                dst.len(),
+                src.len()
+            )));
         }
         dst.copy_from_slice(src);
         Ok(())
@@ -23,7 +27,11 @@ impl<T: TensorValue> Backend<T> for Cpu {
 
     fn read(&self, buf: &Self::Buf, offset: usize) -> Result<T, TensorError> {
         Ok(*buf.get(offset).ok_or(
-            TensorError::IdxOutOfBounds
+            TensorError::IdxOutOfBounds(format!(
+                "Index {} out of bounds for buffer of length {}",
+                offset,
+                buf.len()
+            )),
         )?)
     }
 
@@ -33,7 +41,11 @@ impl<T: TensorValue> Backend<T> for Cpu {
                 *slot = value;
                 Ok(())
             }
-            None => Err(TensorError::IdxOutOfBounds),
+            None => Err(TensorError::IdxOutOfBounds(format!(
+                "Index {} out of bounds for buffer of length {}",
+                offset,
+                buf.len()
+            ))),
         }
     }
     

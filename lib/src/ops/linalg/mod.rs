@@ -569,7 +569,7 @@ mod tests {
         
         let result = a.matmul(&b);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), TensorError::SizeMismatch));
+        assert!(matches!(result.unwrap_err(), TensorError::SizeMismatch(_)));
     }
 
     #[test]
@@ -580,7 +580,7 @@ mod tests {
         
         let result = a.matmul(&b);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), TensorError::InvalidShape));
+        assert!(matches!(result.unwrap_err(), TensorError::InvalidShape(_)));
     }
 
     #[test]
@@ -591,7 +591,7 @@ mod tests {
         
         let result = a.matmul(&b);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), TensorError::SizeMismatch));
+        assert!(matches!(result.unwrap_err(), TensorError::SizeMismatch(_)));
     }
 
     #[test]
@@ -629,7 +629,7 @@ mod tests {
         
         let result = a.matmul(&b);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), TensorError::InvalidShape));
+        assert!(matches!(result.unwrap_err(), TensorError::InvalidShape(_)));
     }
 
     #[test]
@@ -640,7 +640,7 @@ mod tests {
         
         let result = a.matmul(&b);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), TensorError::InvalidShape));
+        assert!(matches!(result.unwrap_err(), TensorError::InvalidShape(_)));
     }
 
     #[test]
@@ -651,7 +651,7 @@ mod tests {
         
         let result = a.matmul(&b);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), TensorError::InvalidShape));
+        assert!(matches!(result.unwrap_err(), TensorError::InvalidShape(_)));
     }
 
     #[test]
@@ -662,7 +662,7 @@ mod tests {
         
         let result = a.matmul(&b);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), TensorError::InvalidShape));
+        assert!(matches!(result.unwrap_err(), TensorError::InvalidShape(_)));
     }
 
     #[test]
@@ -691,7 +691,7 @@ mod tests {
         
         let result = a.matmul(&b);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), TensorError::SizeMismatch));
+        assert!(matches!(result.unwrap_err(), TensorError::SizeMismatch(_)));
     }
 
     #[test]
@@ -708,7 +708,7 @@ mod tests {
         
         let result = a.matmul(&b);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), TensorError::SizeMismatch));
+        assert!(matches!(result.unwrap_err(), TensorError::SizeMismatch(_)));
     }
 
     #[test]
@@ -725,7 +725,7 @@ mod tests {
         
         let result = a.matmul(&b);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), TensorError::SizeMismatch));
+        assert!(matches!(result.unwrap_err(), TensorError::SizeMismatch(_)));
     }
 
     #[test]
@@ -736,7 +736,7 @@ mod tests {
         
         let result = a.matmul(&b);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), TensorError::InvalidShape));
+        assert!(matches!(result.unwrap_err(), TensorError::InvalidShape(_)));
     }
 
 }

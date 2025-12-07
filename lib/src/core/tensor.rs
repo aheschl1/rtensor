@@ -5,20 +5,20 @@ use thiserror::Error;
 
 #[derive(Debug, Error, PartialEq, Eq, Clone)]
 pub enum TensorError {
-    #[error("index out of bounds")]
-    IdxOutOfBounds,
+    #[error("index out of bounds {0}")]
+    IdxOutOfBounds(String),
 
-    #[error("wrong number of dimensions")]
-    WrongDims,
+    #[error("wrong number of dimensions {0}")]
+    WrongDims(String),
 
-    #[error("invalid tensor shape")]
-    InvalidShape,
+    #[error("invalid tensor shape {0}")]
+    InvalidShape(String),
 
-    #[error("invalid dimension")]
-    InvalidDim,
+    #[error("invalid dimension {0}")]
+    InvalidDim(String),
 
-    #[error("size mismatch between tensors")]
-    SizeMismatch,
+    #[error("size mismatch between tensors {0}")]
+    SizeMismatch(String),
 
     #[error("backend error: {0}")]
     BackendError(String),
@@ -26,8 +26,8 @@ pub enum TensorError {
     #[error("broadcast error: {0}")]
     BroadcastError(String),
 
-    #[error("tensor is not contiguous")]
-    ContiguityError,
+    #[error("tensor is not contiguous {0}")]
+    ContiguityError(String),
 
     #[cfg(feature = "cuda")]
     #[error("cuda error: {0}")]
@@ -66,7 +66,7 @@ impl<T: TensorValue, B: Backend<T>> AsView<T, B> for TensorBase<T, B> {
     fn view_as(&self, shape: Shape) -> Result<TensorView<'_, T, B>, TensorError> {
         // collapse into shape
         if !is_contiguous_relaxed(&self.meta.shape, &self.meta.strides){
-            return Err(TensorError::InvalidShape);
+            return Err(TensorError::ContiguityError("Cannot view_as non contiguous tensor".to_string()));
         }
 
         panic!()
@@ -292,7 +292,7 @@ where B: Backend<T>, V: AsView<T, B>
             view.meta.shape(),
             view.meta.strides(),
             dim
-        );
+        )?;
 
         let res = TensorView::from_parts(
             view.buf, 
@@ -353,7 +353,7 @@ where V: AsViewMut<T, B>
             view.meta.shape(),
             view.meta.strides(),
             dim
-        );
+        )?;
 
         let res = TensorViewMut::from_parts(
             view.buf, 
@@ -381,14 +381,18 @@ fn logical_to_buffer_idx(idx: &Idx, stride: &Strides, offset: usize) -> Result<u
     match idx {
         Idx::Coord(idx) => {
             if idx.len() != stride.len() {
-                Err(TensorError::WrongDims)
+                Err(TensorError::WrongDims(format!(
+                    "Index rank {} does not match tensor rank {}",
+                    idx.len(),
+                    stride.len()
+                )))
             }else{
                 let bidx = idx
                     .iter()
                     .zip(stride.iter())
                     .fold(offset as isize, |acc, (a, b)| acc + (*a as isize) * *b);
                 if bidx < 0 {
-                    return Err(TensorError::IdxOutOfBounds);
+                    return Err(TensorError::IdxOutOfBounds("Buffer index is negative".to_string()));
                 }
                 Ok(bidx as usize)
             }
@@ -397,7 +401,10 @@ fn logical_to_buffer_idx(idx: &Idx, stride: &Strides, offset: usize) -> Result<u
             if stride.is_empty() {
                 Ok(offset)
             }else{
-                Err(TensorError::WrongDims)
+                Err(TensorError::WrongDims(format!(
+                    "Item index used on non-scalar tensor with rank {}",
+                    stride.len()
+                )))
             }
         },
         Idx::At(i) => {
@@ -417,7 +424,11 @@ fn compute_permuted_parameters(shape: &Shape, stride: &Strides, dims: &Idx) -> R
     };
 
     if dims_vec.len() != rank {
-        return Err(TensorError::WrongDims);
+        return Err(TensorError::WrongDims(format!(
+            "Permutation dims length {} does not match tensor rank {}",
+            dims_vec.len(),
+            rank
+        )));
     }
 
     let mut new_shape = Vec::with_capacity(rank);
@@ -425,7 +436,11 @@ fn compute_permuted_parameters(shape: &Shape, stride: &Strides, dims: &Idx) -> R
 
     for &d in &dims_vec {
         if d >= rank {
-            return Err(TensorError::InvalidDim);
+            return Err(TensorError::InvalidDim(format!(
+                "Permutation dim {} is out of bounds for tensor rank {}",
+                d,
+                rank
+            )));
         }
         new_shape.push(shape[d]);
         new_stride.push(stride[d]);
@@ -435,7 +450,14 @@ fn compute_permuted_parameters(shape: &Shape, stride: &Strides, dims: &Idx) -> R
 }
 
 #[inline]
-fn compute_unsqueezed_parameters(shape: &Shape, stride: &Strides, dim: Dim) -> (Shape, Strides) {
+fn compute_unsqueezed_parameters(shape: &Shape, stride: &Strides, dim: Dim) -> Result<(Shape, Strides), TensorError> {
+    if dim > shape.len() {
+        return Err(TensorError::InvalidDim(format!(
+            "Unsqueeze dim {} is out of bounds for tensor rank {}",
+            dim,
+            shape.len()
+        )));
+    }
     let mut new_strides = stride.clone();
     let mut new_shape = shape.clone();
 
@@ -444,5 +466,5 @@ fn compute_unsqueezed_parameters(shape: &Shape, stride: &Strides, dim: Dim) -> (
     new_strides.0.insert(dim, lstr * lsh);
     new_shape.0.insert(dim, 1);
 
-    (new_shape, new_strides)
+    Ok((new_shape, new_strides))
 }

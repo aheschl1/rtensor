@@ -122,7 +122,11 @@ impl<T: TensorValue> Backend<T> for Cuda {
     fn read(&self, buf: &Self::Buf, offset: usize) -> Result<T, crate::core::tensor::TensorError> {
         self.sync()?;
         if offset >= buf.len {
-            return Err(TensorError::IdxOutOfBounds);
+            return Err(TensorError::IdxOutOfBounds(format!(
+                "Index {} out of bounds for buffer of length {}",
+                offset,
+                buf.len
+            )));
         }
 
         let mut host_buf = vec![T::default(); 1];
@@ -135,7 +139,11 @@ impl<T: TensorValue> Backend<T> for Cuda {
     fn write(&self, buf: &mut Self::Buf, offset: usize, value: T) -> Result<(), crate::core::tensor::TensorError> {
         self.sync()?;
         if offset >= buf.len {
-            return Err(TensorError::IdxOutOfBounds);
+            return Err(TensorError::IdxOutOfBounds(format!(
+                "Index {} out of bounds for buffer of length {}",
+                offset,
+                buf.len
+            )));
         }
 
         self.stream()

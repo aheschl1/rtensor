@@ -340,7 +340,7 @@ mod tests {
         let shape = vec![2, 3];
         assert!(matches!(
             CudaTensor::from_buf(buf, shape),
-            Err(TensorError::InvalidShape)
+            Err(TensorError::InvalidShape(_))
         ));
     }
 
@@ -349,11 +349,11 @@ mod tests {
         let tensor = make_cuda_tensor(vec![1, 2, 3, 4], vec![2, 2]);
         assert!(matches!(
             tensor.get(vec![0, 0, 0]),
-            Err(TensorError::WrongDims)
+            Err(TensorError::WrongDims(_))
         ));
         assert!(matches!(
             tensor.view().get(vec![2, 0]),
-            Err(TensorError::IdxOutOfBounds)
+            Err(TensorError::IdxOutOfBounds(_))
         ));
     }
 
@@ -365,11 +365,11 @@ mod tests {
         );
         assert!(matches!(
             tensor.view().slice(3, 0..0),
-            Err(TensorError::InvalidDim)
+            Err(TensorError::InvalidDim(_))
         ));
         assert!(matches!(
             tensor.view().slice(0, 5..5),
-            Err(TensorError::IdxOutOfBounds)
+            Err(TensorError::IdxOutOfBounds(_))
         ));
     }
 

@@ -155,12 +155,19 @@ where
         let shape: Shape = shape.into();
         if shape.len() > 128 {
             // artificial cap due to broadcast cuda kernel...
-            return Err(TensorError::InvalidShape)
+            return Err(TensorError::InvalidShape(format!(
+                "Tensors with more than 128 dimensions are not supported, got {} dimensions",
+                shape.len()
+            )));
         }
         let backend = B::new();
         let buffer = backend.alloc_from_slice(raw.into())?;
         if shape.iter().product::<usize>() != backend.len(&buffer) {
-            return Err(TensorError::InvalidShape);
+            return Err(TensorError::InvalidShape(format!(
+                "Element count mismatch: shape implies {} elements, but buffer has {} elements",
+                shape.iter().product::<usize>(),
+                backend.len(&buffer)
+            )));
         }
         let stride = shape_to_stride(&shape);
         Ok(Self {
