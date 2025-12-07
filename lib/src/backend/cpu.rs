@@ -247,7 +247,7 @@ macro_rules! generic_backend_blas {
                             for inner in 0..k {
                                 let lhs_idx = lhs_batch + row * k + inner;
                                 let rhs_idx = rhs_batch + inner * n + col;
-                                sum = sum + lhs_buf[lhs_idx] * rhs_buf[rhs_idx];
+                                sum += lhs_buf[lhs_idx] * rhs_buf[rhs_idx];
                             }
                             out_buf[out_batch + row * n + col] = sum;
                         }
