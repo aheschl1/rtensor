@@ -16,6 +16,7 @@ Goal is high performance ML stack with minimal dependencies and maximal flexibil
 - [ ] Allow step_by for slicing iterator
 - [X] OpenBlas for more targets, investigate build system
 - [ ] unsqueeze check bounds and add failure tests (unsqueeze_at(100000000) 4 example)
+- [ ] Matmul with broadcasting?
 
 ## to optimize
 
