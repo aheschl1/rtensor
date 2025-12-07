@@ -24,7 +24,7 @@ Goal is high performance ML stack with minimal dependencies and maximal flexibil
 - [ ] Pull out ops into crate defined traits, which return Result, and call that from Add and AddAssign impls (panic there)
 - [ ] Figure outt bool types, and in general those without Add, Sub, and Mul impls
 - [ ] Allow step_by for slicing iterator
-- [ ] OpenBlas for more targets
+- [ ] OpenBlas for more targets, investigate build system
 - [ ] cuBLAS
 
 ## to optimize

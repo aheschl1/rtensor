@@ -23,10 +23,12 @@ fn setup_openblas() {
     
     // Check if OpenBLAS is already built and installed
     let openblas_lib = openblas_lib_dir.join("libopenblas.a");
-    if openblas_lib.exists() && openblas_include_dir.exists() {
-        println!("OpenBLAS already built at: {}", openblas_install_dir.display());
+    let openblas_header = openblas_include_dir.join("cblas.h");
+    
+    if openblas_lib.exists() && openblas_header.exists() {
+        println!("cargo:warning=OpenBLAS already built at: {}", openblas_install_dir.display());
     } else {
-        println!("Building OpenBLAS from source...");
+        println!("cargo:warning=Building OpenBLAS from source...");
         
         let download_url = "https://github.com/OpenMathLib/OpenBLAS/archive/refs/tags/v0.3.30.zip";
         let zip_path = out_dir.join("openblas-v0.3.30.zip");
@@ -93,18 +95,22 @@ fn setup_openblas() {
             .arg("NO_SHARED=1")
             .arg("NO_LAPACK=1")
             .arg("USE_OPENMP=0")
+            .arg("libs")  // Only build libraries, skip tests
+            .arg("netlib")  // Build reference BLAS
             .arg(format!("-j{}", nproc))
             .output()
             .expect("Failed to run make. Please install make and a Fortran compiler (gfortran).");
         
         if !make_output.status.success() {
-            eprintln!("First build attempt failed, retrying with TARGET=GENERIC...");
+            eprintln!("cargo:warning=First build attempt failed, retrying with TARGET=GENERIC...");
             let make_output2 = Command::new("make")
                 .current_dir(&openblas_source_dir)
                 .arg("NO_SHARED=1")
                 .arg("NO_LAPACK=1")
                 .arg("USE_OPENMP=0")
                 .arg("TARGET=GENERIC")
+                .arg("libs")
+                .arg("netlib")
                 .arg(format!("-j{}", nproc))
                 .output()
                 .expect("Failed to run make. Please install make and a Fortran compiler (gfortran).");
@@ -144,19 +150,17 @@ fn setup_openblas() {
         for lib_file in lib_files {
             let dest = openblas_lib_dir.join(lib_file.file_name());
             std::fs::copy(lib_file.path(), &dest)
-                .expect(&format!("Failed to copy {}", lib_file.file_name().to_string_lossy()));
+                .unwrap_or_else(|_| panic!("Failed to copy {}", lib_file.file_name().to_string_lossy()));
             println!("Copied {} to {}", lib_file.file_name().to_string_lossy(), dest.display());
         }
         
         // Copy all header files from the source directory
-        for entry in std::fs::read_dir(&openblas_source_dir).expect("Failed to read OpenBLAS source directory") {
-            if let Ok(entry) = entry {
-                let path = entry.path();
-                if path.extension().and_then(|s| s.to_str()) == Some("h") {
-                    let dest = openblas_include_dir.join(entry.file_name());
-                    std::fs::copy(&path, &dest)
-                        .expect(&format!("Failed to copy {}", entry.file_name().to_string_lossy()));
-                }
+        for entry in std::fs::read_dir(&openblas_source_dir).expect("Failed to read OpenBLAS source directory").flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("h") {
+                let dest = openblas_include_dir.join(entry.file_name());
+                std::fs::copy(&path, &dest)
+                    .unwrap_or_else(|_| panic!("Failed to copy {}", entry.file_name().to_string_lossy()));
             }
         }
         println!("Copied all header files to include directory");
