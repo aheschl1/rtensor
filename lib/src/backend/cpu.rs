@@ -190,21 +190,39 @@ macro_rules! blas_impl {
         impl BackendMatMul<$t> for Cpu {
             fn matmul(
                 &self,
-                lhs_buf: &Self::Buf,
-                rhs_buf: &Self::Buf,
-                lhs_offset: usize,
-                rhs_offset: usize,
+                lhs: (&Self::Buf, &MetaTensor),
+                rhs: (&Self::Buf, &MetaTensor),
                 b: usize,
                 m: usize,
                 k: usize,
                 n: usize,
             ) -> Result<Self::Buf, TensorError> {
                 let mut out_buf: Box<[$t]> = self.alloc(b * m * n)?;
+                let (lhs_buf, lhs_meta): (&Self::Buf, &MetaTensor) = lhs;
+                let (rhs_buf, rhs_meta): (&Self::Buf, &MetaTensor) = rhs;
+
+                let lda = lhs_meta.strides()[lhs_meta.rank() - 2] as blasint;
+                let ldb = rhs_meta.strides()[rhs_meta.rank() - 2] as blasint;
+                let ldc = n as blasint; // row major
+
+                let bstride_lhs = if lhs_meta.rank() > 2 {
+                    lhs_meta.strides()[lhs_meta.rank() - 3] as usize
+                } else {
+                    m * k
+                };
+                
+                let bstride_rhs = if rhs_meta.rank() > 2 {
+                    rhs_meta.strides()[rhs_meta.rank() - 3] as usize
+                } else {
+                    k * n
+                };
 
                 for batch in 0..b {
-                    let lhs_batch = lhs_offset + batch * m * k;
-                    let rhs_batch = rhs_offset + batch * k * n;
-                    let out_batch = batch * m * n;
+                    // base pointers
+                    let lhs_batch = lhs_meta.offset + batch * bstride_lhs;
+                    let rhs_batch = rhs_meta.offset + batch * bstride_rhs;
+
+                    let out_batch = batch * m * n; // contiguous 0 offset
 
                     unsafe {
                         $gemm_fn(
@@ -216,12 +234,12 @@ macro_rules! blas_impl {
                             k as blasint,
                             1.0,
                             lhs_buf.as_ptr().add(lhs_batch) as *const $t,
-                            k as blasint,
+                            lda,
                             rhs_buf.as_ptr().add(rhs_batch) as *const $t,
-                            n as blasint,
+                            ldb,
                             0.0,
                             out_buf.as_mut_ptr().add(out_batch) as *mut $t,
-                            n as blasint,
+                            ldc,
                         );
                     }
                 }
@@ -237,28 +255,42 @@ macro_rules! generic_backend_blas {
         impl BackendMatMul<$t> for Cpu {
             fn matmul(
                 &self,
-                lhs_buf: &Self::Buf,
-                rhs_buf: &Self::Buf,
-                lhs_offset: usize,
-                rhs_offset: usize,
+                lhs: (&Self::Buf, &MetaTensor),
+                rhs: (&Self::Buf, &MetaTensor),
                 b: usize,
                 m: usize,
                 k: usize,
                 n: usize,
             ) -> Result<Self::Buf, TensorError> {
                 let mut out_buf = self.alloc(b * m * n)?;
+                let (lhs_buf, lhs_meta): (&Self::Buf, &MetaTensor) = lhs;
+                let (rhs_buf, rhs_meta): (&Self::Buf, &MetaTensor) = rhs;
+                let lda = lhs_meta.strides[lhs_meta.rank() - 2] as usize;
+                let ldb = rhs_meta.strides[rhs_meta.rank() - 2] as usize;
+
+                let bstride_lhs = if lhs_meta.rank() > 2 {
+                    lhs_meta.strides[lhs_meta.rank() - 3] as usize
+                } else {
+                    m * k
+                };
+
+                let bstride_rhs = if rhs_meta.rank() > 2 {
+                    rhs_meta.strides[rhs_meta.rank() - 3] as usize
+                } else {
+                    k * n
+                };
 
                 for batch in 0..b {
-                    let lhs_batch = lhs_offset + batch * m * k;
-                    let rhs_batch = rhs_offset + batch * k * n;
+                    let lhs_batch = lhs_meta.offset + batch * bstride_lhs;
+                    let rhs_batch = rhs_meta.offset + batch * bstride_rhs;
                     let out_batch = batch * m * n;
 
                     for row in 0..m {
                         for col in 0..n {
                             let mut sum: $t = 0;
                             for inner in 0..k {
-                                let lhs_idx = lhs_batch + row * k + inner;
-                                let rhs_idx = rhs_batch + inner * n + col;
+                                let lhs_idx = lhs_batch + row * lda + inner;
+                                let rhs_idx = rhs_batch + inner * ldb + col;
                                 sum += lhs_buf[lhs_idx] * rhs_buf[rhs_idx];
                             }
                             out_buf[out_batch + row * n + col] = sum;

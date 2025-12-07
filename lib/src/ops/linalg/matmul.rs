@@ -7,33 +7,41 @@ where
     L: AsView<T, B>,
     R: AsView<T, B>,
 {
+    // in progress. contiguity rules are as follows:
+    // (ignore batch for a second)
+    // 1. inner most dim of lhs (K) must be contiguous (stride=1)
+    // 2. second inner most dim does NOT need to be contiguous
+    // we will add arguments for lda, ldb, and ldc, which are acceptable from blas
+    // these are the leading dimensions (strides) of the matrices (next row, or in terms of ldc, next batch)
     fn matmul(&self, rhs: &R) -> Result<TensorBase<T, B>, TensorError> {
         let lhs_view0 = self.view();
         let rhs_view0 = rhs.view();
 
         let mut _lhs_storage = None;
-        let lhs_view = if lhs_view0.is_contiguous(){
+        let lhs_view = if !materialize_contiguous(&lhs_view0.meta){
             lhs_view0
         } else {
             let c = lhs_view0.contiguous();
             _lhs_storage = Some(c);
+            println!("Materialized LHS contiguous for matmul");
             unsafe {_lhs_storage.as_ref().unwrap_unchecked().view()}
         };
 
         let mut _rhs_storage = None;
-        let rhs_view = if rhs_view0.is_contiguous() {
+        let rhs_view = if !materialize_contiguous(&rhs_view0.meta) {
             rhs_view0
         } else {
             let c = rhs_view0.contiguous();
             _rhs_storage = Some(c);
+            println!("Materialized RHS contiguous for matmul");
             unsafe {_rhs_storage.as_ref().unwrap_unchecked().view()}
         };
 
-        let lhs = &lhs_view.meta;
-        let rhs = &rhs_view.meta;
+        let lhs_meta = &lhs_view.meta;
+        let rhs_meta = &rhs_view.meta;
 
-        let lr = lhs.rank();
-        let rr = rhs.rank();
+        let lr = lhs_meta.rank();
+        let rr = rhs_meta.rank();
 
         if lr != rr || lr < 2 {
             return Err(TensorError::InvalidShape(format!(
@@ -43,8 +51,8 @@ where
         }
 
         // batch dims are all leading dims except the last two
-        let lhs_batch_dims: Vec<usize> = lhs.shape.0[..lr - 2].to_vec();
-        let rhs_batch_dims: Vec<usize> = rhs.shape.0[..rr - 2].to_vec();
+        let lhs_batch_dims: Vec<usize> = lhs_meta.shape.0[..lr - 2].to_vec();
+        let rhs_batch_dims: Vec<usize> = rhs_meta.shape.0[..rr - 2].to_vec();
 
         if lhs_batch_dims != rhs_batch_dims {
             return Err(TensorError::SizeMismatch(format!(
@@ -60,10 +68,10 @@ where
         };
 
         // matrix dims: (..., M, K) @ (..., K, N)
-        let m  = lhs.shape[lr - 2];
-        let k_l = lhs.shape[lr - 1];
-        let k_r = rhs.shape[rr - 2];
-        let n  = rhs.shape[rr - 1];
+        let m  = lhs_meta.shape[lr - 2];
+        let k_l = lhs_meta.shape[lr - 1];
+        let k_r = rhs_meta.shape[rr - 2];
+        let n  = rhs_meta.shape[rr - 1];
 
         if k_l != k_r {
             return Err(TensorError::SizeMismatch(format!(
@@ -78,12 +86,13 @@ where
         out_shape_vec.push(n);
         let out_shape: Shape = out_shape_vec.into();
         let out_strides = shape_to_stride(&out_shape);
-
+        
+        println!("MatMul: b={}, m={}, k={}, n={}", b, m, k_l, n);
+        println!("LHS Meta: {:?}", lhs_meta);
+        println!("RHS Meta: {:?}", rhs_meta);
         let buf = lhs_view.backend.matmul(
-            lhs_view.buf,
-            rhs_view.buf,
-            0,  // lhs_offset
-            0,  // rhs_offset
+            (lhs_view.buf, lhs_meta),
+            (rhs_view.buf, rhs_meta),
             b,
             m,
             k_l,
@@ -99,3 +108,20 @@ where
 
 }
 
+#[inline]
+fn materialize_contiguous(
+    meta: &MetaTensor,
+) -> bool {
+    let shape = &meta.shape;
+    let strides = &meta.strides;
+
+    if shape.len() < 2 {
+        return false;
+    }
+
+    if strides[shape.len() - 1] != 1isize {
+        return true;
+    }
+
+    false
+}

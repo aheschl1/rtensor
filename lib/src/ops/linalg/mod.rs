@@ -13,7 +13,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::{primitives::Tensor, MetaTensorView, tensor::TensorAccess};
+    use crate::core::{primitives::Tensor, tensor::TensorAccess, MetaTensorView, Slice};
 
     #[test]
     fn test_matmul_2d_basic() {
@@ -321,8 +321,11 @@ mod tests {
         
         let result = a.matmul(&b).unwrap();
         assert_eq!(*result.shape(), vec![2, 2]);
-        
-        assert!((result.get(vec![0, 0]).unwrap() - 22.0).abs() < 1e-5);
+        let expected = Tensor::<f32>::from_buf(vec![
+            49.0, 64.0, 
+            76.0, 100.0
+        ], vec![2, 2]).unwrap();
+        assert_eq!(result, expected);
     }
 
     #[test]
@@ -739,12 +742,596 @@ mod tests {
         assert!(matches!(result.unwrap_err(), TensorError::InvalidShape(_)));
     }
 
+    #[test]
+    fn test_matmul_stride_rows() {
+        // Test matmul with tensors that have row strides
+        let a = Tensor::<f32>::from_buf(
+            vec![
+                1.0, 2.0, 3.0, 4.0,
+                5.0, 6.0, 7.0, 8.0,
+                9.0, 10.0, 11.0, 12.0,
+                13.0, 14.0, 15.0, 16.0,
+            ]
+            , vec![4, 4]
+        ).unwrap();
+        let aslice = a.slice(0, Slice::full().step(2)).unwrap();
+        let b = Tensor::<f32>::from_buf(
+            vec![
+                1.0, 2.0,
+                3.0, 4.0,
+                5.0, 6.0,
+                7.0, 8.0,
+            ],
+            vec![4, 2]
+        ).unwrap();
+
+        let result = aslice.matmul(&b).unwrap();
+        assert_eq!(*result.shape(), vec![2, 2]);
+        let expected = Tensor::<f32>::from_buf(
+            vec![
+                50.0, 60.0,
+                178.0, 220.0,
+            ],
+            vec![2, 2]
+        ).unwrap();
+
+        assert_eq!(result, expected);
+
+    }
+
+    // Test stride on right-hand side matrix with f32
+    #[test]
+    fn test_matmul_stride_rhs_f32() {
+        let a = Tensor::<f32>::from_buf(
+            vec![
+                1.0, 2.0,
+                3.0, 4.0,
+            ],
+            vec![2, 2]
+        ).unwrap();
+
+        let b = Tensor::<f32>::from_buf(
+            vec![
+                1.0, 2.0, 3.0, 4.0,
+                5.0, 6.0, 7.0, 8.0,
+                9.0, 10.0, 11.0, 12.0,
+                13.0, 14.0, 15.0, 16.0,
+            ],
+            vec![4, 4]
+        ).unwrap();
+
+        let bslice = b.slice(0, Slice::full().step(2)).unwrap();
+        let result = a.matmul(&bslice).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 4]);
+        let expected = Tensor::<f32>::from_buf(
+            vec![
+                19.0, 22.0, 25.0, 28.0,
+                39.0, 46.0, 53.0, 60.0,
+            ],
+            vec![2, 4]
+        ).unwrap();
+        
+        assert_eq!(result, expected);
+    }
+
+    // Test stride on right-hand side matrix with i32
+    #[test]
+    fn test_matmul_stride_rhs_i32() {
+        let a = Tensor::<i32>::from_buf(
+            vec![
+                1, 2,
+                3, 4,
+            ],
+            vec![2, 2]
+        ).unwrap();
+
+        let b = Tensor::<i32>::from_buf(
+            vec![
+                1, 2, 3, 4, 
+                5, 6, 7, 8,
+                9, 10, 11, 12, 
+                13, 14, 15, 16,
+            ],
+            vec![4, 4]
+        ).unwrap();
+
+        let bslice = b.slice(0, Slice::full().step(2)).unwrap();
+        let result = a.matmul(&bslice).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 4]);
+        let expected = Tensor::<i32>::from_buf(
+            vec![
+                19, 22, 25, 28,
+                39, 46, 53, 60,
+            ],
+            vec![2, 4]
+        ).unwrap();
+        
+        assert_eq!(result, expected);
+    }
+
+    // Test stride on both left and right-hand side with f32
+    #[test]
+    fn test_matmul_stride_both_f32() {
+        let a = Tensor::<f32>::from_buf(
+            vec![
+                1.0, 2.0, 3.0, 4.0,
+                5.0, 6.0, 7.0, 8.0,
+                9.0, 10.0, 11.0, 12.0,
+                13.0, 14.0, 15.0, 16.0,
+            ],
+            vec![4, 4]
+        ).unwrap();
+
+        let b = Tensor::<f32>::from_buf(
+            vec![
+                1.0, 2.0, 3.0, 4.0, 
+                5.0, 6.0, 7.0, 8.0,
+                9.0, 10.0, 11.0, 12.0, 
+                13.0, 14.0, 15.0, 16.0,
+                17.0, 18.0, 19.0, 20.0, 
+                21.0, 22.0, 23.0, 24.0,
+                25.0, 26.0, 27.0, 28.0, 
+                29.0, 30.0, 31.0, 32.0,
+            ],
+            vec![8, 4]
+        ).unwrap();
+
+        let aslice = a.slice(0, Slice::full().step(2)).unwrap();
+        let bslice = b.slice(0, Slice::full().step(2)).unwrap();
+        
+        let result = aslice.matmul(&bslice).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 4]);
+        let expected = Tensor::<f32>::from_buf(
+            vec![
+                170.0, 180.0, 190.0, 200.0,
+                586.0, 628.0, 670.0, 712.0,
+            ],
+            vec![2, 4]
+        ).unwrap();
+        
+        assert_eq!(result, expected);
+    }
+
+    // Test stride on both left and right-hand side with i32
+    #[test]
+    fn test_matmul_stride_both_i32() {
+        let a = Tensor::<i32>::from_buf(
+            vec![
+                1, 2, 3, 4,
+                5, 6, 7, 8,
+                9, 10, 11, 12,
+                13, 14, 15, 16,
+            ],
+            vec![4, 4]
+        ).unwrap();
+
+        let b = Tensor::<i32>::from_buf(
+            vec![
+                1, 2, 3, 4, 
+                5, 6, 7, 8,
+                9, 10, 11, 12, 
+                13, 14, 15, 16,
+                17, 18, 19, 20, 
+                21, 22, 23, 24,
+                25, 26, 27, 28, 
+                29, 30, 31, 32,
+            ],
+            vec![8, 4]
+        ).unwrap();
+
+        let aslice = a.slice(0, Slice::full().step(2)).unwrap();
+        let bslice = b.slice(0, Slice::full().step(2)).unwrap();
+        
+        let result = aslice.matmul(&bslice).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 4]);
+        let expected = Tensor::<i32>::from_buf(
+            vec![
+                170, 180, 190, 200,
+                586, 628, 670, 712,
+            ],
+            vec![2, 4]
+        ).unwrap();
+        
+        assert_eq!(result, expected);
+    }
+
+    // Test stride on left-hand side matrix with f32 (original test extended)
+    #[test]
+    fn test_matmul_stride_lhs_f32() {
+        let a = Tensor::<f32>::from_buf(
+            vec![
+                1.0, 2.0, 3.0, 4.0,
+                5.0, 6.0, 7.0, 8.0,
+                9.0, 10.0, 11.0, 12.0,
+                13.0, 14.0, 15.0, 16.0,
+            ],
+            vec![4, 4]
+        ).unwrap();
+
+        let aslice = a.slice(0, Slice::full().step(2)).unwrap();
+        let b = Tensor::<f32>::from_buf(
+            vec![
+                1.0, 2.0,
+                3.0, 4.0,
+                5.0, 6.0,
+                7.0, 8.0,
+            ],
+            vec![4, 2]
+        ).unwrap();
+
+        let result = aslice.matmul(&b).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 2]);
+        let expected = Tensor::<f32>::from_buf(
+            vec![
+                50.0, 60.0,
+                178.0, 220.0,
+            ],
+            vec![2, 2]
+        ).unwrap();
+        
+        assert_eq!(result, expected);
+    }
+
+    // Test stride on left-hand side matrix with i32
+    #[test]
+    fn test_matmul_stride_lhs_i32() {
+        let a = Tensor::<i32>::from_buf(
+            vec![
+                1, 2, 3, 4,
+                5, 6, 7, 8,
+                9, 10, 11, 12,
+                13, 14, 15, 16,
+            ],
+            vec![4, 4]
+        ).unwrap();
+
+        let aslice = a.slice(0, Slice::full().step(2)).unwrap();
+        let b = Tensor::<i32>::from_buf(
+            vec![
+                1, 2,
+                3, 4,
+                5, 6,
+                7, 8,
+            ],
+            vec![4, 2]
+        ).unwrap();
+
+        let result = aslice.matmul(&b).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 2]);
+        let expected = Tensor::<i32>::from_buf(
+            vec![
+                50, 60,
+                178, 220,
+            ],
+            vec![2, 2]
+        ).unwrap();
+        
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_strided_batched_matmul() {
+        // Test batched matmul with strided tensors
+        let a = Tensor::<f32>::from_buf(
+            vec![
+                1.0, 2.0, 3.0, 4.0,
+                5.0, 6.0, 7.0, 8.0,
+                9.0, 10.0, 11.0, 12.0,
+                13.0, 14.0, 15.0, 16.0,
+
+                91.0, 92.0, 93.0, 94.0,
+                95.0, 96.0, 97.0, 98.0,
+                99.0, 910.0, 911.0, 912.0,
+                913.0, 914.0, 915.0, 916.0,
+            ],
+            vec![2, 4, 4]
+        ).unwrap();
+
+        let b = Tensor::<f32>::from_buf(
+            vec![
+                1.0, 2.0, 3.0, 4.0, 
+                5.0, 6.0, 7.0, 8.0,
+                9.0, 10.0, 11.0, 12.0, 
+                13.0, 14.0, 15.0, 16.0,
+                17.0, 18.0, 19.0, 20.0, 
+                21.0, 22.0, 23.0, 24.0,
+                25.0, 26.0, 27.0, 28.0, 
+                29.0, 30.0, 31.0, 32.0,
+
+                91.0, 92.0, 93.0, 94.0, 
+                95.0, 96.0, 97.0, 98.0,
+                99.0, 910.0, 911.0, 912.0, 
+                913.0, 914.0, 915.0, 916.0,
+                917.0, 918.0, 919.0, 920.0, 
+                921.0, 922.0, 923.0, 924.0,
+                925.0, 926.0, 927.0, 928.0, 
+                929.0, 930.0, 931.0, 932.0,
+            ],
+            vec![2, 8, 4]
+        ).unwrap();
+
+        let aslice = a.slice(1, Slice::full().step(2)).unwrap();
+        let bslice = b.slice(1, Slice::full().step(2)).unwrap();
+        
+        let result = aslice.matmul(&bslice).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 2, 4]);
+        let expected = Tensor::<f32>::from_buf(
+            vec![
+                170.0, 180.0, 190.0, 200.0,
+                586.0, 628.0, 670.0, 712.0,
+
+                189620.,  264510.,  264880.,  265250.,
+                1778086., 2518018., 2520850., 2523682.
+            ],
+            vec![2, 2, 4]
+        ).unwrap();
+        
+        assert_eq!(result, expected);
+    }
+
+        #[test]
+    fn test_strided_batched_matmul_i32() {
+        // Test batched matmul with strided tensors
+        let a = Tensor::<i32>::from_buf(
+            vec![
+                1, 2, 3, 4,
+                5, 6, 7, 8,
+                9, 10, 11, 12,
+                13, 14, 15, 16,
+
+                91, 92, 93, 94,
+                95, 96, 97, 98,
+                99, 910, 911, 912,
+                913, 914, 915, 916,
+            ],
+            vec![2, 4, 4]
+        ).unwrap();
+
+        let b = Tensor::<i32>::from_buf(
+            vec![
+                1, 2, 3, 4, 
+                5, 6, 7, 8,
+                9, 10, 11, 12, 
+                13, 14, 15, 16,
+                17, 18, 19, 20, 
+                21, 22, 23, 24,
+                25, 26, 27, 28, 
+                29, 30, 31, 32,
+                91, 92, 93, 94, 
+                95, 96, 97, 98,
+                99, 910, 911, 912, 
+                913, 914, 915, 916,
+                917, 918, 919, 920, 
+                921, 922, 923, 924,
+                925, 926, 927, 928, 
+                929, 930, 931, 932,
+            ],
+            vec![2, 8, 4]
+        ).unwrap();
+
+        let aslice = a.slice(1, Slice::full().step(2)).unwrap();
+        let bslice = b.slice(1, Slice::full().step(2)).unwrap();
+        
+        let result = aslice.matmul(&bslice).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 2, 4]);
+        let expected = Tensor::<i32>::from_buf(
+            vec![
+                170, 180, 190, 200,
+                586, 628, 670, 712,
+
+                189620,  264510,  264880,  265250,
+                1778086, 2518018, 2520850, 2523682
+            ],
+            vec![2, 2, 4]
+        ).unwrap();
+        
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_strided_multi_batched_matmul() {
+        // Test batched matmul with strided tensors
+        let a = Tensor::<f32>::from_buf(
+            vec![
+                1.0, 2.0, 3.0, 4.0,
+                5.0, 6.0, 7.0, 8.0,
+                9.0, 10.0, 11.0, 12.0,
+                13.0, 14.0, 15.0, 16.0,
+
+                91.0, 92.0, 93.0, 94.0,
+                95.0, 96.0, 97.0, 98.0,
+                99.0, 910.0, 911.0, 912.0,
+                913.0, 914.0, 915.0, 916.0,
+
+                21.0, 22.0, 23.0, 24.0,
+                25.0, 26.0, 27.0, 28.0,
+                29.0, 210.0, 211.0, 212.0,
+                213.0, 214.0, 215.0, 216.0,
+
+                291.0, 292.0, 293.0, 294.0,
+                295.0, 296.0, 297.0, 298.0,
+                299.0, 2910.0, 2911.0, 2912.0,
+                2913.0, 2914.0, 2915.0, 2916.0,
+            ],
+            vec![2, 2, 4, 4]
+        ).unwrap();
+
+        let b = Tensor::<f32>::from_buf(
+            vec![
+                1.0, 2.0, 3.0, 4.0, 
+                5.0, 6.0, 7.0, 8.0,
+                9.0, 10.0, 11.0, 12.0, 
+                13.0, 14.0, 15.0, 16.0,
+                17.0, 18.0, 19.0, 20.0, 
+                21.0, 22.0, 23.0, 24.0,
+                25.0, 26.0, 27.0, 28.0, 
+                29.0, 30.0, 31.0, 32.0,
+
+                91.0, 92.0, 93.0, 94.0, 
+                95.0, 96.0, 97.0, 98.0,
+                99.0, 910.0, 911.0, 912.0, 
+                913.0, 914.0, 915.0, 916.0,
+                917.0, 918.0, 919.0, 920.0, 
+                921.0, 922.0, 923.0, 924.0,
+                925.0, 926.0, 927.0, 928.0, 
+                929.0, 930.0, 931.0, 932.0,
+
+                1.0, 2.0, 3.0, 4.0, 
+                5.0, 6.0, 7.0, 8.0,
+                9.0, 10.0, 11.0, 12.0, 
+                13.0, 14.0, 15.0, 16.0,
+                17.0, 18.0, 19.0, 20.0, 
+                21.0, 22.0, 23.0, 24.0,
+                25.0, 26.0, 27.0, 28.0, 
+                29.0, 30.0, 31.0, 32.0,
+
+                91.0, 92.0, 93.0, 94.0, 
+                95.0, 96.0, 97.0, 98.0,
+                99.0, 910.0, 911.0, 912.0, 
+                913.0, 914.0, 915.0, 916.0,
+                917.0, 918.0, 919.0, 920.0, 
+                921.0, 922.0, 923.0, 924.0,
+                925.0, 926.0, 927.0, 928.0, 
+                929.0, 930.0, 931.0, 932.0,
+            ],
+            vec![2, 2, 8, 4]
+        ).unwrap();
+
+        let aslice = a.slice(2, Slice::full().step(2)).unwrap();
+        let bslice = b.slice(2, Slice::full().step(2)).unwrap();
+        
+        let result = aslice.matmul(&bslice).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 2, 2, 4]);
+        let expected = Tensor::<f32>::from_buf(
+            vec![
+                170.0, 180.0, 190.0, 200.0,
+                586.0, 628.0, 670.0, 712.0,
+
+                189620.,  264510.,  264880.,  265250.,
+                1778086., 2518018., 2520850., 2523682.,
+
+                1210.0, 1300.0, 1390.0, 1480.0,
+                10806.0, 11468.0, 12130.0, 12792.0,
+
+                596020.0, 833710.0, 834880.0, 836050.0,
+                5678286.0, 8044418.0, 8053450.0, 8062482.0,
+            ],
+            vec![2, 2, 2, 4]
+        ).unwrap();
+        
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_strided_multi_batched_matmul_i32() {
+        // Test batched matmul with strided tensors
+        let a = Tensor::<i32>::from_buf(
+            vec![
+                1, 2, 3, 4,
+                5, 6, 7, 8,
+                9, 10, 11, 12,
+                13, 14, 15, 16,
+
+                91, 92, 93, 94,
+                95, 96, 97, 98,
+                99, 910, 911, 912,
+                913, 914, 915, 916,
+
+                21, 22, 23, 24,
+                25, 26, 27, 28,
+                29, 210, 211, 212,
+                213, 214, 215, 216,
+
+                291, 292, 293, 294,
+                295, 296, 297, 298,
+                299, 2910, 2911, 2912,
+                2913, 2914, 2915, 2916,
+            ],
+            vec![2, 2, 4, 4]
+        ).unwrap();
+
+        let b = Tensor::<i32>::from_buf(
+            vec![
+                1, 2, 3, 4, 
+                5, 6, 7, 8,
+                9, 10, 11, 12, 
+                13, 14, 15, 16,
+                17, 18, 19, 20, 
+                21, 22, 23, 24,
+                25, 26, 27, 28, 
+                29, 30, 31, 32,
+
+                91, 92, 93, 94, 
+                95, 96, 97, 98,
+                99, 910, 911, 912, 
+                913, 914, 915, 916,
+                917, 918, 919, 920, 
+                921, 922, 923, 924,
+                925, 926, 927, 928, 
+                929, 930, 931, 932,
+
+                1, 2, 3, 4, 
+                5, 6, 7, 8,
+                9, 10, 11, 12, 
+                13, 14, 15, 16,
+                17, 18, 19, 20, 
+                21, 22, 23, 24,
+                25, 26, 27, 28, 
+                29, 30, 31, 32,
+
+                91, 92, 93, 94, 
+                95, 96, 97, 98,
+                99, 910, 911, 912, 
+                913, 914, 915, 916,
+                917, 918, 919, 920, 
+                921, 922, 923, 924,
+                925, 926, 927, 928, 
+                929, 930, 931, 932,
+            ],
+            vec![2, 2, 8, 4]
+        ).unwrap();
+
+        let aslice = a.slice(2, Slice::full().step(2)).unwrap();
+        let bslice = b.slice(2, Slice::full().step(2)).unwrap();
+        
+        let result = aslice.matmul(&bslice).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 2, 2, 4]);
+        let expected = Tensor::<i32>::from_buf(
+            vec![
+                170, 180, 190, 200,
+                586, 628, 670, 712,
+
+                189620,  264510,  264880,  265250,
+                1778086, 2518018, 2520850, 2523682,
+
+                1210, 1300, 1390, 1480,
+                10806, 11468, 12130, 12792,
+                596020, 833710, 834880, 836050,
+                5678286, 8044418, 8053450, 8062482,
+            ],
+            vec![2, 2, 2, 4]
+        ).unwrap();
+        
+        assert_eq!(result, expected);
+    }
+
+
 }
 
 #[cfg(all(test, feature = "cuda"))]
 mod cuda_tests {
     use super::*;
-    use crate::core::{primitives::{CudaTensor, Tensor}, MetaTensorView, tensor::TensorAccess};
+    use crate::core::{primitives::{CudaTensor, Tensor}, MetaTensorView, tensor::TensorAccess, Slice};
 
     // ============================================================================
     // F32 GEMM TESTS
@@ -1491,6 +2078,557 @@ mod cuda_tests {
         assert_eq!(result_i32.get(vec![1, 1]).unwrap(), 50);
         assert_eq!(result_i64.get(vec![1, 1]).unwrap(), 50);
     }
+
+    // ============================================================================
+    // STRIDE TESTS FOR CUDA TENSORS
+    // ============================================================================
+
+    // Test stride on left-hand side matrix with f32
+    #[test]
+    fn test_matmul_cuda_stride_lhs_f32() {
+        let a = CudaTensor::<f32>::from_buf(
+            vec![
+                1.0, 2.0, 3.0, 4.0,
+                5.0, 6.0, 7.0, 8.0,
+                9.0, 10.0, 11.0, 12.0,
+                13.0, 14.0, 15.0, 16.0,
+            ],
+            vec![4, 4]
+        ).unwrap();
+
+        let aslice = a.slice(0, Slice::full().step(2)).unwrap();
+        let b = CudaTensor::<f32>::from_buf(
+            vec![
+                1.0, 2.0,
+                3.0, 4.0,
+                5.0, 6.0,
+                7.0, 8.0,
+            ],
+            vec![4, 2]
+        ).unwrap();
+
+        let result = aslice.matmul(&b).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 2]);
+        let expected = Tensor::<f32>::from_buf(
+            vec![
+                50.0, 60.0,
+                178.0, 220.0,
+            ],
+            vec![2, 2]
+        ).unwrap();
+        
+        assert_eq!(result.cpu().unwrap(), expected);
+    }
+
+    // Test stride on left-hand side matrix with i32
+    #[test]
+    fn test_matmul_cuda_stride_lhs_i32() {
+        let a = CudaTensor::<i32>::from_buf(
+            vec![
+                1, 2, 3, 4,
+                5, 6, 7, 8,
+                9, 10, 11, 12,
+                13, 14, 15, 16,
+            ],
+            vec![4, 4]
+        ).unwrap();
+
+        let aslice = a.slice(0, Slice::full().step(2)).unwrap();
+        let b = CudaTensor::<i32>::from_buf(
+            vec![
+                1, 2,
+                3, 4,
+                5, 6,
+                7, 8,
+            ],
+            vec![4, 2]
+        ).unwrap();
+
+        let result = aslice.matmul(&b).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 2]);
+        let expected = Tensor::<i32>::from_buf(
+            vec![
+                50, 60,
+                178, 220,
+            ],
+            vec![2, 2]
+        ).unwrap();
+        
+        assert_eq!(result.cpu().unwrap(), expected);
+    }
+
+    // Test stride on right-hand side matrix with f32
+    #[test]
+    fn test_matmul_cuda_stride_rhs_f32() {
+        let a = CudaTensor::<f32>::from_buf(
+            vec![
+                1.0, 2.0,
+                3.0, 4.0,
+            ],
+            vec![2, 2]
+        ).unwrap();
+
+        let b = CudaTensor::<f32>::from_buf(
+            vec![
+                1.0, 2.0, 3.0, 4.0,
+                5.0, 6.0, 7.0, 8.0,
+                9.0, 10.0, 11.0, 12.0,
+                13.0, 14.0, 15.0, 16.0,
+            ],
+            vec![4, 4]
+        ).unwrap();
+
+        let bslice = b.slice(0, Slice::full().step(2)).unwrap();
+        let result = a.matmul(&bslice).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 4]);
+        let expected = Tensor::<f32>::from_buf(
+            vec![
+                19.0, 22.0, 25.0, 28.0,
+                39.0, 46.0, 53.0, 60.0,
+            ],
+            vec![2, 4]
+        ).unwrap();
+        
+        assert_eq!(result.cpu().unwrap(), expected);
+    }
+
+    // Test stride on right-hand side matrix with i32
+    #[test]
+    fn test_matmul_cuda_stride_rhs_i32() {
+        let a = CudaTensor::<i32>::from_buf(
+            vec![
+                1, 2,
+                3, 4,
+            ],
+            vec![2, 2]
+        ).unwrap();
+
+        let b = CudaTensor::<i32>::from_buf(
+            vec![
+                1, 2, 3, 4, 
+                5, 6, 7, 8,
+                9, 10, 11, 12, 
+                13, 14, 15, 16,
+            ],
+            vec![4, 4]
+        ).unwrap();
+
+        let bslice = b.slice(0, Slice::full().step(2)).unwrap();
+        let result = a.matmul(&bslice).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 4]);
+        let expected = Tensor::<i32>::from_buf(
+            vec![
+                19, 22, 25, 28,
+                39, 46, 53, 60,
+            ],
+            vec![2, 4]
+        ).unwrap();
+        
+        assert_eq!(result.cpu().unwrap(), expected);
+    }
+
+    // Test stride on both left and right-hand side with f32
+    #[test]
+    fn test_matmul_cuda_stride_both_f32() {
+        let a = CudaTensor::<f32>::from_buf(
+            vec![
+                1.0, 2.0, 3.0, 4.0,
+                5.0, 6.0, 7.0, 8.0,
+                9.0, 10.0, 11.0, 12.0,
+                13.0, 14.0, 15.0, 16.0,
+            ],
+            vec![4, 4]
+        ).unwrap();
+
+        let b = CudaTensor::<f32>::from_buf(
+            vec![
+                1.0, 2.0, 3.0, 4.0, 
+                5.0, 6.0, 7.0, 8.0,
+                9.0, 10.0, 11.0, 12.0, 
+                13.0, 14.0, 15.0, 16.0,
+                17.0, 18.0, 19.0, 20.0, 
+                21.0, 22.0, 23.0, 24.0,
+                25.0, 26.0, 27.0, 28.0, 
+                29.0, 30.0, 31.0, 32.0,
+            ],
+            vec![8, 4]
+        ).unwrap();
+
+        let aslice = a.slice(0, Slice::full().step(2)).unwrap();
+        let bslice = b.slice(0, Slice::full().step(2)).unwrap();
+        
+        let result = aslice.matmul(&bslice).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 4]);
+        let expected = Tensor::<f32>::from_buf(
+            vec![
+                170.0, 180.0, 190.0, 200.0,
+                586.0, 628.0, 670.0, 712.0,
+            ],
+            vec![2, 4]
+        ).unwrap();
+        
+        assert_eq!(result.cpu().unwrap(), expected);
+    }
+
+    // Test stride on both left and right-hand side with i32
+    #[test]
+    fn test_matmul_cuda_stride_both_i32() {
+        let a = CudaTensor::<i32>::from_buf(
+            vec![
+                1, 2, 3, 4,
+                5, 6, 7, 8,
+                9, 10, 11, 12,
+                13, 14, 15, 16,
+            ],
+            vec![4, 4]
+        ).unwrap();
+
+        let b = CudaTensor::<i32>::from_buf(
+            vec![
+                1, 2, 3, 4, 
+                5, 6, 7, 8,
+                9, 10, 11, 12, 
+                13, 14, 15, 16,
+                17, 18, 19, 20, 
+                21, 22, 23, 24,
+                25, 26, 27, 28, 
+                29, 30, 31, 32,
+            ],
+            vec![8, 4]
+        ).unwrap();
+
+        let aslice = a.slice(0, Slice::full().step(2)).unwrap();
+        let bslice = b.slice(0, Slice::full().step(2)).unwrap();
+        
+        let result = aslice.matmul(&bslice).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 4]);
+        let expected = Tensor::<i32>::from_buf(
+            vec![
+                170, 180, 190, 200,
+                586, 628, 670, 712,
+            ],
+            vec![2, 4]
+        ).unwrap();
+        
+        assert_eq!(result.cpu().unwrap(), expected);
+    }
+
+        #[test]
+    fn test_strided_batched_matmul() {
+        // Test batched matmul with strided tensors
+        let a = CudaTensor::<f32>::from_buf(
+            vec![
+                1.0, 2.0, 3.0, 4.0,
+                5.0, 6.0, 7.0, 8.0,
+                9.0, 10.0, 11.0, 12.0,
+                13.0, 14.0, 15.0, 16.0,
+
+                91.0, 92.0, 93.0, 94.0,
+                95.0, 96.0, 97.0, 98.0,
+                99.0, 910.0, 911.0, 912.0,
+                913.0, 914.0, 915.0, 916.0,
+            ],
+            vec![2, 4, 4]
+        ).unwrap();
+
+        let b = CudaTensor::<f32>::from_buf(
+            vec![
+                1.0, 2.0, 3.0, 4.0, 
+                5.0, 6.0, 7.0, 8.0,
+                9.0, 10.0, 11.0, 12.0, 
+                13.0, 14.0, 15.0, 16.0,
+                17.0, 18.0, 19.0, 20.0, 
+                21.0, 22.0, 23.0, 24.0,
+                25.0, 26.0, 27.0, 28.0, 
+                29.0, 30.0, 31.0, 32.0,
+
+                91.0, 92.0, 93.0, 94.0, 
+                95.0, 96.0, 97.0, 98.0,
+                99.0, 910.0, 911.0, 912.0, 
+                913.0, 914.0, 915.0, 916.0,
+                917.0, 918.0, 919.0, 920.0, 
+                921.0, 922.0, 923.0, 924.0,
+                925.0, 926.0, 927.0, 928.0, 
+                929.0, 930.0, 931.0, 932.0,
+            ],
+            vec![2, 8, 4]
+        ).unwrap();
+
+        let aslice = a.slice(1, Slice::full().step(2)).unwrap();
+        let bslice = b.slice(1, Slice::full().step(2)).unwrap();
+        
+        let result = aslice.matmul(&bslice).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 2, 4]);
+        let expected = CudaTensor::<f32>::from_buf(
+            vec![
+                170.0, 180.0, 190.0, 200.0,
+                586.0, 628.0, 670.0, 712.0,
+
+                189620.,  264510.,  264880.,  265250.,
+                1778086., 2518018., 2520850., 2523682.
+            ],
+            vec![2, 2, 4]
+        ).unwrap();
+        
+        assert_eq!(result.cpu(), expected.cpu());
+    }
+
+        #[test]
+    fn test_strided_batched_matmul_i32() {
+        // Test batched matmul with strided tensors
+        let a = CudaTensor::<i32>::from_buf(
+            vec![
+                1, 2, 3, 4,
+                5, 6, 7, 8,
+                9, 10, 11, 12,
+                13, 14, 15, 16,
+
+                91, 92, 93, 94,
+                95, 96, 97, 98,
+                99, 910, 911, 912,
+                913, 914, 915, 916,
+            ],
+            vec![2, 4, 4]
+        ).unwrap();
+
+        let b = CudaTensor::<i32>::from_buf(
+            vec![
+                1, 2, 3, 4, 
+                5, 6, 7, 8,
+                9, 10, 11, 12, 
+                13, 14, 15, 16,
+                17, 18, 19, 20, 
+                21, 22, 23, 24,
+                25, 26, 27, 28, 
+                29, 30, 31, 32,
+                91, 92, 93, 94, 
+                95, 96, 97, 98,
+                99, 910, 911, 912, 
+                913, 914, 915, 916,
+                917, 918, 919, 920, 
+                921, 922, 923, 924,
+                925, 926, 927, 928, 
+                929, 930, 931, 932,
+            ],
+            vec![2, 8, 4]
+        ).unwrap();
+
+        let aslice = a.slice(1, Slice::full().step(2)).unwrap();
+        let bslice = b.slice(1, Slice::full().step(2)).unwrap();
+        
+        let result = aslice.matmul(&bslice).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 2, 4]);
+        let expected = CudaTensor::<i32>::from_buf(
+            vec![
+                170, 180, 190, 200,
+                586, 628, 670, 712,
+
+                189620,  264510,  264880,  265250,
+                1778086, 2518018, 2520850, 2523682
+            ],
+            vec![2, 2, 4]
+        ).unwrap();
+        
+        assert_eq!(result.cpu(), expected.cpu());
+    }
+
+    #[test]
+    fn test_strided_multi_batched_matmul() {
+        // Test batched matmul with strided tensors
+        let a = CudaTensor::<f32>::from_buf(
+            vec![
+                1.0, 2.0, 3.0, 4.0,
+                5.0, 6.0, 7.0, 8.0,
+                9.0, 10.0, 11.0, 12.0,
+                13.0, 14.0, 15.0, 16.0,
+
+                91.0, 92.0, 93.0, 94.0,
+                95.0, 96.0, 97.0, 98.0,
+                99.0, 910.0, 911.0, 912.0,
+                913.0, 914.0, 915.0, 916.0,
+
+                21.0, 22.0, 23.0, 24.0,
+                25.0, 26.0, 27.0, 28.0,
+                29.0, 210.0, 211.0, 212.0,
+                213.0, 214.0, 215.0, 216.0,
+
+                291.0, 292.0, 293.0, 294.0,
+                295.0, 296.0, 297.0, 298.0,
+                299.0, 2910.0, 2911.0, 2912.0,
+                2913.0, 2914.0, 2915.0, 2916.0,
+            ],
+            vec![2, 2, 4, 4]
+        ).unwrap();
+
+        let b = CudaTensor::<f32>::from_buf(
+            vec![
+                1.0, 2.0, 3.0, 4.0, 
+                5.0, 6.0, 7.0, 8.0,
+                9.0, 10.0, 11.0, 12.0, 
+                13.0, 14.0, 15.0, 16.0,
+                17.0, 18.0, 19.0, 20.0, 
+                21.0, 22.0, 23.0, 24.0,
+                25.0, 26.0, 27.0, 28.0, 
+                29.0, 30.0, 31.0, 32.0,
+
+                91.0, 92.0, 93.0, 94.0, 
+                95.0, 96.0, 97.0, 98.0,
+                99.0, 910.0, 911.0, 912.0, 
+                913.0, 914.0, 915.0, 916.0,
+                917.0, 918.0, 919.0, 920.0, 
+                921.0, 922.0, 923.0, 924.0,
+                925.0, 926.0, 927.0, 928.0, 
+                929.0, 930.0, 931.0, 932.0,
+
+                1.0, 2.0, 3.0, 4.0, 
+                5.0, 6.0, 7.0, 8.0,
+                9.0, 10.0, 11.0, 12.0, 
+                13.0, 14.0, 15.0, 16.0,
+                17.0, 18.0, 19.0, 20.0, 
+                21.0, 22.0, 23.0, 24.0,
+                25.0, 26.0, 27.0, 28.0, 
+                29.0, 30.0, 31.0, 32.0,
+
+                91.0, 92.0, 93.0, 94.0, 
+                95.0, 96.0, 97.0, 98.0,
+                99.0, 910.0, 911.0, 912.0, 
+                913.0, 914.0, 915.0, 916.0,
+                917.0, 918.0, 919.0, 920.0, 
+                921.0, 922.0, 923.0, 924.0,
+                925.0, 926.0, 927.0, 928.0, 
+                929.0, 930.0, 931.0, 932.0,
+            ],
+            vec![2, 2, 8, 4]
+        ).unwrap();
+
+        let aslice = a.slice(2, Slice::full().step(2)).unwrap();
+        let bslice = b.slice(2, Slice::full().step(2)).unwrap();
+        
+        let result = aslice.matmul(&bslice).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 2, 2, 4]);
+        let expected = Tensor::<f32>::from_buf(
+            vec![
+                170.0, 180.0, 190.0, 200.0,
+                586.0, 628.0, 670.0, 712.0,
+
+                189620.,  264510.,  264880.,  265250.,
+                1778086., 2518018., 2520850., 2523682.,
+
+                1210.0, 1300.0, 1390.0, 1480.0,
+                10806.0, 11468.0, 12130.0, 12792.0,
+
+                596020.0, 833710.0, 834880.0, 836050.0,
+                5678286.0, 8044418.0, 8053450.0, 8062482.0,
+            ],
+            vec![2, 2, 2, 4]
+        ).unwrap();
+        
+        assert_eq!(result.cpu().unwrap(), expected);
+    }
+
+    #[test]
+    fn test_strided_multi_batched_matmul_i32() {
+        // Test batched matmul with strided tensors
+        let a = CudaTensor::<i32>::from_buf(
+            vec![
+                1, 2, 3, 4,
+                5, 6, 7, 8,
+                9, 10, 11, 12,
+                13, 14, 15, 16,
+
+                91, 92, 93, 94,
+                95, 96, 97, 98,
+                99, 910, 911, 912,
+                913, 914, 915, 916,
+
+                21, 22, 23, 24,
+                25, 26, 27, 28,
+                29, 210, 211, 212,
+                213, 214, 215, 216,
+
+                291, 292, 293, 294,
+                295, 296, 297, 298,
+                299, 2910, 2911, 2912,
+                2913, 2914, 2915, 2916,
+            ],
+            vec![2, 2, 4, 4]
+        ).unwrap();
+
+        let b = CudaTensor::<i32>::from_buf(
+            vec![
+                1, 2, 3, 4, 
+                5, 6, 7, 8,
+                9, 10, 11, 12, 
+                13, 14, 15, 16,
+                17, 18, 19, 20, 
+                21, 22, 23, 24,
+                25, 26, 27, 28, 
+                29, 30, 31, 32,
+
+                91, 92, 93, 94, 
+                95, 96, 97, 98,
+                99, 910, 911, 912, 
+                913, 914, 915, 916,
+                917, 918, 919, 920, 
+                921, 922, 923, 924,
+                925, 926, 927, 928, 
+                929, 930, 931, 932,
+
+                1, 2, 3, 4, 
+                5, 6, 7, 8,
+                9, 10, 11, 12, 
+                13, 14, 15, 16,
+                17, 18, 19, 20, 
+                21, 22, 23, 24,
+                25, 26, 27, 28, 
+                29, 30, 31, 32,
+
+                91, 92, 93, 94, 
+                95, 96, 97, 98,
+                99, 910, 911, 912, 
+                913, 914, 915, 916,
+                917, 918, 919, 920, 
+                921, 922, 923, 924,
+                925, 926, 927, 928, 
+                929, 930, 931, 932,
+            ],
+            vec![2, 2, 8, 4]
+        ).unwrap();
+
+        let aslice = a.slice(2, Slice::full().step(2)).unwrap();
+        let bslice = b.slice(2, Slice::full().step(2)).unwrap();
+        
+        let result = aslice.matmul(&bslice).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 2, 2, 4]);
+        let expected = CudaTensor::<i32>::from_buf(
+            vec![
+                170, 180, 190, 200,
+                586, 628, 670, 712,
+
+                189620,  264510,  264880,  265250,
+                1778086, 2518018, 2520850, 2523682,
+
+                1210, 1300, 1390, 1480,
+                10806, 11468, 12130, 12792,
+                596020, 833710, 834880, 836050,
+                5678286, 8044418, 8053450, 8062482,
+            ],
+            vec![2, 2, 2, 4]
+        ).unwrap();
+        
+        assert_eq!(result.cpu().unwrap(), expected.cpu().unwrap());
+    }
+
 
 }
 

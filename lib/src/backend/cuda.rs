@@ -439,10 +439,8 @@ macro_rules! generic_matmul_impl {
         impl BackendMatMul<$t> for Cuda {
             fn matmul(
                 &self,
-                lhs_buf: &Self::Buf,
-                rhs_buf: &Self::Buf,
-                lhs_offset: usize,
-                rhs_offset: usize,
+                lhs: (&Self::Buf, &MetaTensor),
+                rhs: (&Self::Buf, &MetaTensor),
                 b: usize,
                 m: usize,
                 k: usize,
@@ -451,14 +449,32 @@ macro_rules! generic_matmul_impl {
                 let stream = self.stream();
                 let res = self.alloc(b * m * n)?;
                 
+                let (lhs_buf, lhs_meta) = lhs;
+                let (rhs_buf, rhs_meta) = rhs;
+
                 let (lhs_ptr, _) = lhs_buf.ptr.device_ptr(&stream);
                 let (rhs_ptr, _) = rhs_buf.ptr.device_ptr(&stream);
                 let (res_ptr, _) = res.ptr.device_ptr(&stream);
                 
+                let bstride_lhs = if lhs_meta.rank() > 2 {
+                    lhs_meta.strides()[lhs_meta.rank() - 3] as usize
+                } else{
+                    m * k
+                };
+
+                let bstride_rhs = if rhs_meta.rank() > 2 {
+                    rhs_meta.strides()[rhs_meta.rank() - 3] as usize
+                } else{
+                    k * n
+                };
+
+                let lda = lhs_meta.strides()[lhs_meta.rank() - 2] as usize;
+                let ldb = rhs_meta.strides()[rhs_meta.rank() - 2] as usize;
+                let ldc = n; // row-major
                 // For batched matrix multiplication
                 for batch_idx in 0..b {
-                    let a_offset = lhs_offset + batch_idx * m * k;
-                    let b_offset = rhs_offset + batch_idx * k * n;
+                    let a_offset = lhs_meta.offset + batch_idx * bstride_lhs;
+                    let b_offset = rhs_meta.offset + batch_idx * bstride_rhs;
                     let c_offset = batch_idx * m * n;
                     
                     let a_ptr = unsafe { (lhs_ptr as *const $t).add(a_offset) };
@@ -473,9 +489,9 @@ macro_rules! generic_matmul_impl {
                             m,
                             n,
                             k,
-                            k,  // lda: leading dimension of A (row-major, so stride is k)
-                            n,  // ldb: leading dimension of B
-                            n,  // ldc: leading dimension of C
+                            lda,
+                            ldb,
+                            ldc,
                             DEFAULT_BLOCK_SIZE,
                         );
                     }
@@ -493,10 +509,8 @@ macro_rules! cublas_impl {
         impl BackendMatMul<$t> for Cuda {
             fn matmul(
                 &self,
-                lhs_buf: &Self::Buf,
-                rhs_buf: &Self::Buf,
-                lhs_offset: usize,
-                rhs_offset: usize,
+                lhs: (&Self::Buf, &MetaTensor),
+                rhs: (&Self::Buf, &MetaTensor),
                 b: usize,
                 m: usize,
                 k: usize,
@@ -507,6 +521,25 @@ macro_rules! cublas_impl {
                 // This means we swap A and B, and swap m and n
                 let (m, n) = (n, m);
                 
+                let (lhs_buf, lhs_meta) = lhs;
+                let (rhs_buf, rhs_meta) = rhs;
+
+                let lda = lhs_meta.strides()[rhs_meta.rank() - 2] as i32; // flipped 
+                let ldb = rhs_meta.strides()[lhs_meta.rank() - 2] as i32;
+                let ldc = m as i32;
+
+                let bstride_lhs = if lhs_meta.rank() > 2 {
+                    lhs_meta.strides()[lhs_meta.rank() - 3] as usize
+                } else{
+                    m as usize * k as usize
+                };
+
+                let bstride_rhs = if rhs_meta.rank() > 2 {
+                    rhs_meta.strides()[rhs_meta.rank() - 3] as usize
+                } else{
+                    k as usize * n as usize
+                };
+
                 let cfg = GemmConfig {
                     transa: cublasOperation_t::CUBLAS_OP_N,
                     transb: cublasOperation_t::CUBLAS_OP_N,
@@ -514,16 +547,16 @@ macro_rules! cublas_impl {
                     n: n as i32,
                     k: k as i32,
                     alpha: 1.0,
-                    lda: m as i32,  // leading dimension of B (now first operand)
-                    ldb: k as i32,  // leading dimension of A (now second operand)
+                    lda: lda,  // leading dimension of B (now first operand)
+                    ldb: ldb,  // leading dimension of A (now second operand)
                     beta: 0.0,
-                    ldc: m as i32,  // leading dimension of C
+                    ldc: ldc,  // leading dimension of C
                 };
                 let cfg = StridedBatchedConfig {
                     gemm: cfg,
                     batch_size: b as i32,
-                    stride_a: (k*m) as i64,  // stride for B
-                    stride_b: (n*k) as i64,  // stride for A
+                    stride_a: bstride_rhs as i64,  // stride for B
+                    stride_b: bstride_lhs as i64,  // stride for A
                     stride_c: (n*m) as i64,
                 };
                 let mut res = self.alloc(b*n*m)?;
@@ -532,8 +565,8 @@ macro_rules! cublas_impl {
                     // Note: operands are swapped (B, A instead of A, B)
                     self.cublas.gemm_strided_batched(
                         cfg, 
-                        &rhs_buf.ptr.slice(rhs_offset..),  // B comes first
-                        &lhs_buf.ptr.slice(lhs_offset..),  // A comes second
+                        &rhs_buf.ptr.slice(rhs_meta.offset..),  // B comes first
+                        &lhs_buf.ptr.slice(lhs_meta.offset..),  // A comes second
                         &mut res.ptr,
                     ).map_err(|e| TensorError::CudaError(e.to_string()))?;
                 }

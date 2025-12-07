@@ -325,6 +325,7 @@ impl<'a> Iterator for CoordIter<'a> {
 
 
 /// Computes the standard row-major stride for a given shape.
+#[inline(always)] // sits on matmul critical path
 pub fn shape_to_stride(shape: &Shape) -> Strides {
     let mut stride: Vec<isize> = vec![1; shape.len()];
     for i in (0..shape.len()).rev() {
@@ -338,7 +339,7 @@ pub fn shape_to_stride(shape: &Shape) -> Strides {
 
 /// Checks whether a layout (shape/stride) is contiguous in a relaxed sense:
 /// ignores singleton dimensions and accepts empty shapes.
-#[inline]
+#[inline(always)]
 pub(crate) fn is_contiguous_relaxed(shape: &Shape, stride: &Strides) -> bool {
     if shape.is_empty() { return true; }
     if shape.contains(&0) { return true; }
