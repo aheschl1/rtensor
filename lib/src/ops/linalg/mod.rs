@@ -1478,8 +1478,14 @@ mod cuda_tests {
         let result = a.matmul(&b).unwrap();
         assert_eq!(*result.shape(), vec![2, 2]);
         
-        let result_cpu = result.cpu().unwrap();
-        assert!((result_cpu.get(vec![0, 0]).unwrap() - 22.0).abs() < 1e-5);
+        let expected = Tensor::<f32>::from_buf(
+            vec![
+                49.0, 64.0,
+                76.0, 100.0,
+            ],
+            vec![2, 2]
+        ).unwrap();
+        assert_eq!(result.cpu().unwrap(), expected);
     }
 
     #[test]
