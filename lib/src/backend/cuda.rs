@@ -3,6 +3,7 @@ use std::sync::{atomic::{AtomicBool, Ordering}, Arc, LazyLock};
 use cudarc::{cublas::{sys::cublasOperation_t, CudaBlas, Gemm, GemmConfig, StridedBatchedConfig}, driver::{CudaContext, CudaSlice, DevicePtr}};
 
 use crate::{backend::{Backend, BackendMatMul}, core::{tensor::TensorError, value::TensorValue, MetaTensor}, ops::base::OpType};
+use crate::backend::ContiguityTypes;
 
 // Include bindgen-generated FFI declarations for CUDA kernel launchers
 #[allow(non_camel_case_types)]
@@ -450,6 +451,7 @@ macro_rules! generic_matmul_impl {
                 m: usize,
                 k: usize,
                 n: usize,
+                contiguity: ContiguityTypes
             ) -> Result<Self::Buf, TensorError> {
                 let stream = self.stream();
                 let res = self.alloc(b * m * n)?;
@@ -520,6 +522,7 @@ macro_rules! cublas_impl {
                 m: usize,
                 k: usize,
                 n: usize,
+                contiguity: ContiguityTypes
             ) -> Result<Self::Buf, TensorError> {
                 // cuBLAS uses column-major order, but our tensors are row-major
                 // To compute C = A * B in row-major, we compute C^T = B^T * A^T in column-major

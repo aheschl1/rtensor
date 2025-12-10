@@ -1,5 +1,6 @@
 
 use crate::{backend::{Backend, BackendMatMul}, core::{meta::TensorOffsetIterator, tensor::TensorError, value::TensorValue, MetaTensor}, openblas::{blasint, cblas_dgemm, cblas_sgemm, CBLAS_ORDER, CBLAS_TRANSPOSE}, ops::base::OpType};
+use crate::backend::ContiguityTypes;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Cpu;
@@ -198,6 +199,7 @@ macro_rules! blas_impl {
                 m: usize,
                 k: usize,
                 n: usize,
+                contiguity: ContiguityTypes
             ) -> Result<Self::Buf, TensorError> {
                 let mut out_buf: Box<[$t]> = self.alloc(b * m * n)?;
                 let (lhs_buf, lhs_meta): (&Self::Buf, &MetaTensor) = lhs;
@@ -228,7 +230,7 @@ macro_rules! blas_impl {
 
                     unsafe {
                         $gemm_fn(
-                            CBLAS_ORDER::CblasRowMajor,
+                            if contiguity == ContiguityTypes::ColumnMajor { CBLAS_ORDER::CblasColMajor } else { CBLAS_ORDER::CblasRowMajor },
                             CBLAS_TRANSPOSE::CblasNoTrans,
                             CBLAS_TRANSPOSE::CblasNoTrans,
                             m as blasint,
@@ -263,6 +265,7 @@ macro_rules! generic_backend_blas {
                 m: usize,
                 k: usize,
                 n: usize,
+                contiguity: ContiguityTypes
             ) -> Result<Self::Buf, TensorError> {
                 let mut out_buf = self.alloc(b * m * n)?;
                 let (lhs_buf, lhs_meta): (&Self::Buf, &MetaTensor) = lhs;
