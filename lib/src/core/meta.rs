@@ -515,3 +515,10 @@ impl AsRef<[isize]> for Strides {
         &self.0
     }
 }
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum ContiguityTypes {
+    RowMajor,
+    ColumnMajor,
+    None
+}

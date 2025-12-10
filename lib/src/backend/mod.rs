@@ -1,6 +1,6 @@
 
 
-use crate::{core::{tensor::TensorError, value::TensorValue, MetaTensor, MetaTensorView}, ops::{base::OpType}};
+use crate::{core::{meta::ContiguityTypes, tensor::TensorError, value::TensorValue, MetaTensor, MetaTensorView}, ops::base::OpType};
 
 pub mod cpu;
 
@@ -102,5 +102,6 @@ pub trait BackendMatMul<T: TensorValue>: Backend<T> {
         m: usize,
         k: usize,
         n: usize,
+        contiguity: ContiguityTypes,
     ) -> Result<Self::Buf, TensorError>;
 }

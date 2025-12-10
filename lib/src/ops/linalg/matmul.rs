@@ -1,4 +1,4 @@
-use crate::{backend::BackendMatMul, core::{primitives::TensorBase, shape_to_stride, tensor::{AsTensor, AsView, TensorAccess, TensorError}, value::TensorValue, Dim, MetaTensor, MetaTensorView, Shape}, ops::linalg::MatMul};
+use crate::{backend::BackendMatMul, core::{meta::ContiguityTypes, primitives::TensorBase, shape_to_stride, tensor::{AsTensor, AsView, TensorAccess, TensorError}, value::TensorValue, Dim, MetaTensor, MetaTensorView, Shape}, ops::linalg::MatMul};
 
 impl<L, R, T, B> MatMul<R, T, B> for L
 where
@@ -18,23 +18,59 @@ where
         let rhs_view0 = rhs.view();
 
         let mut _lhs_storage = None;
-        let lhs_view = if !materialize_contiguous(&lhs_view0.meta){
-            lhs_view0
-        } else {
-            let c = lhs_view0.contiguous();
-            _lhs_storage = Some(c);
-            println!("Materialized LHS contiguous for matmul");
-            unsafe {_lhs_storage.as_ref().unwrap_unchecked().view()}
+        let mut _rhs_storage = None;
+
+        let contiguity_type_lhs = contiguity_type(&lhs_view0.meta)
+            .map_err(|()| TensorError::InvalidShape("LHS tensor must have rank >= 2 for matmul".to_string()))?;
+        let contiguity_type_rhs =  contiguity_type(&rhs_view0.meta)
+            .map_err(|()| TensorError::InvalidShape("RHS tensor must have rank >= 2 for matmul".to_string()))?;
+
+        // the 0 copy scenario is both are already row major or both are column major
+        // the 1 copy case is one is row major, the other is not
+        // so, unless both are column major, we will target row major output
+        // furthermore, no routine exists for producing fortran contiguous arrays from any other status
+        let target_contiguity = match (&contiguity_type_lhs, &contiguity_type_rhs) {
+            (ContiguityTypes::ColumnMajor, ContiguityTypes::ColumnMajor) => ContiguityTypes::ColumnMajor,
+            _ => ContiguityTypes::RowMajor,
         };
 
-        let mut _rhs_storage = None;
-        let rhs_view = if !materialize_contiguous(&rhs_view0.meta) {
-            rhs_view0
-        } else {
-            let c = rhs_view0.contiguous();
-            _rhs_storage = Some(c);
-            println!("Materialized RHS contiguous for matmul");
-            unsafe {_rhs_storage.as_ref().unwrap_unchecked().view()}
+        // println!("LHS contiguity: {:?}, RHS contiguity: {:?}, target contiguity: {:?}", contiguity_type_lhs, contiguity_type_rhs, target_contiguity);
+
+        debug_assert!(
+            target_contiguity == ContiguityTypes::RowMajor || target_contiguity == ContiguityTypes::ColumnMajor,
+            "target contiguity must be either row major or column major"
+        );
+
+
+        // materialize lhs to target contiguity if needed
+        let lhs_view = match (&contiguity_type_lhs, &target_contiguity) {
+            (ContiguityTypes::None, _) | (ContiguityTypes::ColumnMajor, ContiguityTypes::RowMajor) => {
+                debug_assert!(target_contiguity == ContiguityTypes::RowMajor);
+                let c = lhs_view0.contiguous();
+                _lhs_storage = Some(c);
+                unsafe{_lhs_storage.as_ref().unwrap_unchecked().view()}
+            },
+            (ContiguityTypes::RowMajor, _) | (ContiguityTypes::ColumnMajor, ContiguityTypes::ColumnMajor) => {
+                debug_assert!(target_contiguity == ContiguityTypes::RowMajor);
+                lhs_view0
+                // let c = lhs_view0.contiguous();
+                // _lhs_storage = Some(c);
+                // unsafe{_lhs_storage.as_ref().unwrap_unchecked().view()}
+            },
+            _ => unreachable!("this is bug :("),
+        };
+        // materialize rhs to target contiguity if needed
+        let rhs_view = match (&contiguity_type_rhs, &target_contiguity) {
+            (ContiguityTypes::None, _) | (ContiguityTypes::ColumnMajor, ContiguityTypes::RowMajor) => {
+                debug_assert!(target_contiguity == ContiguityTypes::RowMajor);
+                let c = rhs_view0.contiguous();
+                _rhs_storage = Some(c);
+                unsafe{_rhs_storage.as_ref().unwrap_unchecked().view()}
+            },
+            (ContiguityTypes::RowMajor, _) | (ContiguityTypes::ColumnMajor, ContiguityTypes::ColumnMajor) => {
+                rhs_view0
+            },
+            _ => unreachable!("this is bug :("),
         };
 
         let lhs_meta = &lhs_view.meta;
@@ -94,6 +130,7 @@ where
             m,
             k_l,
             n,
+            target_contiguity
         )?;
 
         Ok(TensorBase::from_parts(
@@ -117,20 +154,28 @@ where
 
 }
 
+
+// we are only concerned with the last two dims for matmul
+// this is because gemm expects one of the following:
+// row major, in which the last dim in contiguous, and the rows can be strided
+// column major, in which the second last dim is contiguous, and the columns can be strided
+// everything else is "non-contiguous". In fact, the requirement is "at least one of the last two dims must be contiguous"
+// 
+// in fact, only column major is supported by blas; however, there are transpose tricks to make row major work as well
 #[inline]
-fn materialize_contiguous(
+fn contiguity_type(
     meta: &MetaTensor,
-) -> bool {
+) -> Result<ContiguityTypes, ()> {
     let shape = &meta.shape;
     let strides = &meta.strides;
 
     if shape.len() < 2 {
-        return false;
+        return Err(());
     }
 
     if strides[shape.len() - 1] != 1isize {
-        return true;
+        return Ok(ContiguityTypes::None);
     }
 
-    false
+    Ok(ContiguityTypes::RowMajor)
 }

@@ -27,7 +27,7 @@ Goal is high performance ML stack with minimal dependencies and maximal flexibil
 - [ ] Matmul not using openblas for other than T=f32/f64
 - [ ] when does a tensor need to be materialized before matmul
 - [ ] .dot() has an extra mem copy (minimal because item); however, this is due to a potential design flaw.
-should methods like squeeze(), unsqueeze(), transpose(), permute() modify the current view instead of returning a new one?
+should methods like squeeze(), unsqueeze(), transpose(), permute() modify the current view instead of returning a new one? ALSO blas dot?
 
 ## Some examples
 
