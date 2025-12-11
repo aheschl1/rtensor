@@ -3,27 +3,7 @@
 Tensor primitives with Cuda and CPU backends.
 Uses BLAS, cuBLAS, and custom kernels.
 
-Goal is high performance ML stack with minimal dependencies and maximal flexibility
-
-## todo
-
-- [ ] Slicing macro
-- [ ] x86 SIMD paths (currently relying on llvm auto-vectorization for CPU which only works for contiguous memory)
-- [ ] Multiple gpu devices allowed
-- [ ] strides and offset as bytes (entails cutom dtypes. enable bool)
-- [ ] Pull out ops into crate defined traits, which return Result, and call that from Add and AddAssign impls (panic there)
-- [ ] Matmul with broadcasting?
-
-## to optimize
-
-- [ ] collapse dims to allow backend to access contiguous fast paths in things like broadcast unary
-- [ ] Do we need implmentation of broadcast for unary, when we can just make a scalar tensor and reuse the binary broadcast?
-- [ ] `view_to_owned` can probably be optimized to copy larger chunks at once
-- [ ] O(rank * size) instead of O(size) broadcasting ops is bad
-- [ ] Broadcast cuda kernel puts a cap on tensor dim size - fix
-- [ ] Dot use gem (although, this is minimal optim)
-- [ ] .dot() has an extra mem copy (minimal because item); however, this is due to a potential design flaw.
-should methods like squeeze(), unsqueeze(), transpose(), permute() modify the current view instead of returning a new one? ALSO blas dot?
+Goal is high performance ML stack with minimal dependencies, and the flexibility of numpy.
 
 ## Some examples
 
