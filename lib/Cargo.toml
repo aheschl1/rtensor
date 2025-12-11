@@ -6,6 +6,7 @@ edition = "2021"
 [features]
 default = []
 cuda = ["cudarc"]
+remote = []
 
 [dependencies]
 cudarc = { version = "0.18.1", features = ["cuda-13000"], optional = true }

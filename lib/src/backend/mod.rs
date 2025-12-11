@@ -8,6 +8,8 @@ pub mod cpu;
 pub mod cuda;
 #[cfg(feature = "cuda")]
 pub mod cuda_tests;
+#[cfg(feature = "remote")]
+pub mod remote;
 
 pub trait Backend<T: TensorValue> {
     type Buf;
