@@ -3,6 +3,17 @@ use super::{Shape, Strides};
 use super::tensor::TensorError;
 
 
+/// Represents a slice specification with start, end, and step.
+/// 
+/// # Examples
+/// ```ignore
+/// // From a range
+/// let slice: Slice = (2..5).into();
+/// 
+/// // With explicit step
+/// let slice = Slice::full().step(-1);  // Reverse entire dimension
+/// let slice = Slice::from(0..10).step(2);  // Every other element
+/// ```
 #[derive(Debug, PartialEq, Eq, Clone, Default)]
 pub struct Slice {
     pub start: Option<usize>,
@@ -11,6 +22,7 @@ pub struct Slice {
 }
 
 impl Slice {
+    /// Creates a new slice with explicit start, end, and step.
     pub fn new(start: Option<usize>, end: Option<usize>, step: isize) -> Self {
         Slice { start, end, step }
     }
@@ -20,16 +32,19 @@ impl Slice {
         Slice { start: None, end: None, step: 1 }
     }
 
+    /// Sets the step value.
     pub fn step(mut self, step: isize) -> Self {
         self.step = step;
         self
     }
 
+    /// Sets the start index.
     pub fn start(mut self, start: usize) -> Self {
         self.start = Some(start);
         self
     }
 
+    /// Sets the end index.
     pub fn end(mut self, end: usize) -> Self {
         self.end = Some(end);
         self

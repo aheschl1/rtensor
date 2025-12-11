@@ -3,6 +3,7 @@ use crate::{backend::Backend, core::{idx::Idx, meta::is_contiguous_relaxed, prim
 use super::slice::{Slice, compute_sliced_parameters};
 use thiserror::Error;
 
+/// Errors that can occur during tensor operations.
 #[derive(Debug, Error, PartialEq, Eq, Clone)]
 pub enum TensorError {
     #[error("index out of bounds {0}")]
@@ -34,26 +35,39 @@ pub enum TensorError {
     CudaError(String),
 }
 
+/// Provides immutable view access to tensor data.
 pub trait AsView<T: TensorValue, B: Backend<T>> {
-    /// Returns an immutable view over the tensor data, sharing the same
-    /// underlying buffer and metadata (shape/stride/offset) without copying.
+    /// Returns the device type where this tensor resides.
     fn device(&self) -> DeviceType {
         B::device_type()
     }
+    
+    /// Returns an immutable view over the tensor data, sharing the same
+    /// underlying buffer and metadata (shape/stride/offset) without copying.
     fn view(&self) -> TensorView<'_, T, B>;
+    
+    /// Returns a view with a different shape, collapsing dimensions as needed.
+    /// The tensor must be contiguous.
     fn view_as(&self, shape: Shape) -> Result<TensorView<'_, T, B>, TensorError>;
 }
 
+/// Provides mutable view access to tensor data.
 pub trait AsViewMut<T: TensorValue, B: Backend<T>> : AsView<T, B> {
     /// Returns a mutable view over the tensor data, sharing the same
     /// underlying buffer and metadata (shape/stride/offset) without copying.
     fn view_mut(&'_ mut self) -> TensorViewMut<'_, T, B>;
+    
+    /// Returns a mutable view with a different shape, collapsing dimensions as needed.
+    /// The tensor must be contiguous.
     fn view_as_mut(&'_ mut self, shape: Shape) -> Result<TensorViewMut<'_, T, B>, TensorError>;
 }
 
+/// Converts tensor views or references to owned tensors.
 pub trait AsTensor<T: TensorValue, B: Backend<T>> {
-    /// Converts to an owned tensor, copying data.
+    /// Converts to an owned tensor, copying data if necessary.
     fn owned(&self) -> TensorBase<T, B>;
+    
+    /// Ensures the tensor has a contiguous memory layout, copying if needed.
     fn contiguous(&self) -> TensorBase<T, B>;
 }
 
@@ -194,47 +208,99 @@ fn view_to_contiguous<T: TensorValue, B: Backend<T>>(meta: &MetaTensor, raw: &B:
     Ok(TensorBase::from_parts(new_backend, new_buf, new_meta))
 }
 
+/// Provides read access to tensor elements and slicing operations.
 pub trait TensorAccess<T: TensorValue, B: Backend<T>>: Sized {
-    /// Get element at given index
+    /// Get element at given index.
+    /// 
+    /// # Examples
+    /// ```ignore
+    /// let value = tensor.get((0, 1)).unwrap();
+    /// let value = tensor.get(coord![2, 3]).unwrap();
+    /// ```
     fn get<I: Into<Idx>>(&self, idx: I) -> Result<T, TensorError>;
 
+    /// Get the single element from a scalar tensor (rank 0).
     fn item(&self) -> Result<T, TensorError> {
         self.get(Idx::Item)
     }
-    /// Create a slice/view of the tensor along a specific dimension at a given index
+    
+    /// Create a slice/view of the tensor along a specific dimension.
+    /// 
+    /// # Examples
+    /// ```ignore
+    /// let slice = tensor.slice(0, 2..5).unwrap();  // rows 2-4
+    /// let slice = tensor.slice(1, 3).unwrap();     // column 3
+    /// ```
     fn slice<S: Into<Slice>>(&self, dim: Dim, idx: S) -> Result<TensorView<'_, T, B>, TensorError> where Self: Sized;
-    /// take a slice at given index
+    
+    /// Take a slice at a specific index along a dimension.
     fn slice_at(&self, dim: Dim, at: usize) -> Result<TensorView<'_, T, B>, TensorError> where Self: Sized{
         self.slice(dim, at)
     }
 
+    /// Permute the dimensions of the tensor.
+    /// 
+    /// # Examples
+    /// ```ignore
+    /// let permuted = tensor.permute(vec![2, 0, 1]).unwrap();
+    /// ```
     fn permute(&self, dims: impl Into<Idx>) -> Result<TensorView<'_, T, B>, TensorError>;
+    
+    /// Transpose all dimensions (reverse dimension order).
     fn transpose(&self) -> TensorView<'_, T, B>;
+    
+    /// Add a dimension of size 1 at the specified position.
     fn unsqueeze_at(&self, dim: Dim) -> Result<TensorView<'_, T, B>, TensorError>;
+    
+    /// Add a dimension of size 1 at the beginning.
     fn unsqueeze(&self) -> TensorView<'_, T, B> {
         unsafe{self.unsqueeze_at(0).unwrap_unchecked()}
     }
+    
+    /// Remove a dimension of size 1 at the specified position.
     fn squeeze_at(&self, dim: Dim) -> Result<TensorView<'_, T, B>, TensorError>;
+    
+    /// Remove all dimensions of size 1.
     fn squeeze(&self) -> TensorView<'_, T, B>;
 }
 
+/// Provides mutable access to tensor elements and slicing operations.
 pub trait TensorAccessMut<T: TensorValue, B: Backend<T>>: TensorAccess<T, B> {
-    /// Slice mutable tensor to get a mutable view
+    /// Create a mutable slice/view of the tensor along a specific dimension.
     fn slice_mut<S: Into<Slice>>(&mut self, dim: Dim, idx: S) -> Result<TensorViewMut<'_, T, B>, TensorError> where Self: Sized;
-    /// sets a value at given index
+    
+    /// Sets a value at given index.
+    /// 
+    /// # Examples
+    /// ```ignore
+    /// tensor.set((0, 1), 42.0).unwrap();
+    /// tensor.set(coord![2, 3], 1.5).unwrap();
+    /// ```
     fn set<I: Into<Idx>>(&mut self, idx: I, value: T) -> Result<(), TensorError>;
-    /// take a mutable slice at given index
+    
+    /// Take a mutable slice at given index.
     fn slice_at_mut(&mut self, dim: Dim, idx: Dim) -> Result<TensorViewMut<'_, T, B>, TensorError> where Self: Sized{
         self.slice_mut(dim, idx)
     }
 
+    /// Permute the dimensions of the tensor (mutable).
     fn permute_mut(&mut self, dims: impl Into<Idx>) -> Result<TensorViewMut<'_, T, B>, TensorError> ;
+    
+    /// Transpose all dimensions (mutable).
     fn transpose_mut(&mut self) -> TensorViewMut<'_, T, B>;
+    
+    /// Add a dimension of size 1 at the specified position (mutable).
     fn unsqueeze_at_mut(&mut self, dim: Dim) -> Result<TensorViewMut<'_, T, B>, TensorError>;
+    
+    /// Add a dimension of size 1 at the beginning (mutable).
     fn unsqueeze_mut(&mut self) -> Result<TensorViewMut<'_, T, B>, TensorError> {
         self.unsqueeze_at_mut(0)
     }
+    
+    /// Remove a dimension of size 1 at the specified position (mutable).
     fn squeeze_at_mut(&mut self, dim: Dim) -> Result<TensorViewMut<'_, T, B>, TensorError>;
+    
+    /// Remove all dimensions of size 1 (mutable).
     fn squeeze_mut(&mut self) -> TensorViewMut<'_, T, B>;
 }
 

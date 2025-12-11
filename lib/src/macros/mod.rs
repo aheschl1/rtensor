@@ -1,4 +1,11 @@
 
+/// Creates an `Idx::Coord` from a comma-separated list of indices.
+/// 
+/// # Examples
+/// ```ignore
+/// let idx = coord![0, 1, 2];
+/// let value = tensor.get(coord![0, 1]).unwrap();
+/// ```
 #[macro_export]
 macro_rules! coord {
     ($($idx:expr),* $(,)?) => {
@@ -6,6 +13,12 @@ macro_rules! coord {
     };
 }
 
+/// Convenience macro for getting a value from a tensor at specific coordinates.
+/// 
+/// # Examples
+/// ```ignore
+/// let value = get!(tensor, 0, 1, 2).unwrap();
+/// ```
 #[macro_export]
 macro_rules! get {
     ($tensor_view:expr $(, $idx:expr)+ $(,)?) => {{
@@ -14,6 +27,12 @@ macro_rules! get {
     }};
 }
 
+/// Convenience macro for setting a value in a tensor at specific coordinates.
+/// 
+/// # Examples
+/// ```ignore
+/// set!(tensor, v: 42.0, 0, 1, 2).unwrap();
+/// ```
 #[macro_export]
 macro_rules! set {
     ($tensor_view:expr, v:$value:expr $(, $idx:expr)+ $(,)?) => {{

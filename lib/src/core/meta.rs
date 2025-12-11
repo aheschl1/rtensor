@@ -6,6 +6,7 @@ use super::primitives::TensorView;
 
 pub type Dim = usize;
 
+/// Represents the strides of a tensor (spacing between elements in each dimension).
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Strides(pub Vec<isize>);
 
@@ -67,6 +68,7 @@ impl PartialEq<Vec<isize>> for Strides {
     }
 }
 
+/// Represents the shape of a tensor (size of each dimension).
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Shape(pub Vec<Dim>);
 
@@ -141,10 +143,13 @@ impl PartialEq<Vec<Dim>> for Shape {
 }
 
 
+/// Tensor metadata containing shape, strides, and offset information.
+/// 
+/// This describes how to interpret a flat buffer as a multi-dimensional tensor.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct MetaTensor {
     pub shape: Shape,
-    pub strides: Strides, //afine
+    pub strides: Strides,
     pub offset: usize,
 }
 
@@ -156,37 +161,54 @@ impl MetaTensor {
 
     /// Returns true when the metadata describes a scalar (rank 0).
     pub fn is_scalar(&self) -> bool { self.strides.is_empty() }
+    
     /// Returns true when the metadata describes a 1xN row tensor.
     pub fn is_row(&self) -> bool { self.shape.len() == 2 && self.shape[0] == 1 }
+    
     /// Returns true when the metadata describes a 1-D column tensor.
     pub fn is_column(&self) -> bool { self.shape.len() == 1 }
+    
     /// Number of dimensions (rank).
     pub fn dims(&self) -> usize { self.shape.len() }
+    
     /// Total number of elements (product of all dimensions).
     pub fn size(&self) -> usize { self.shape.iter().product() }
-    /// Whether the layout is contiguous in row-major order, allowing strides of
-    /// one for non-singleton dims and ignoring dims of size 1.
+    
+    /// Whether the layout is contiguous in row-major order.
     pub fn is_contiguous(&self) -> bool { is_contiguous_relaxed(&self.shape, &self.strides) }
+    
     /// Borrow the shape vector.
     pub fn shape(&self) -> &Shape { &self.shape }
+    
     /// Borrow the stride vector.
     pub fn strides(&self) -> &Strides { &self.strides }
+    
+    /// Convert strides to byte strides given the item size.
     pub fn byte_strides(&self, item_size: usize) -> Vec<isize> {
         self.strides.iter().map(|s| s * item_size as isize).collect()
     }
+    
     /// Return the starting offset (in elements) into the underlying buffer.
     pub fn offset(&self) -> usize { self.offset }
+    
     /// Returns the size of a single dimension by index.
     pub fn dim(&self, dim: Dim) -> Dim { self.shape[dim] }
+    
+    /// Returns the number of dimensions (alias for `dims`).
     pub fn rank(&self) -> usize { self.shape.len() }
+    
     /// Returns an iterator over all offsets in the underlying buffer for this tensor/view.
     pub fn iter_offsets(&self) -> impl Iterator<Item = usize> + '_ {
         let offset = self.offset;
         TensorOffsetIterator::new(self.shape.as_slice(), self.strides.as_slice(), offset)
     }
+    
+    /// Returns an iterator over all coordinate vectors.
     pub fn iter_coords(&self) -> impl Iterator<Item = Vec<usize>> + '_ {
         CoordIter::new(self.shape.as_slice())
     }
+    
+    /// Returns the offset for the i-th element in row-major order.
     pub fn ith_offset(&self, i: usize) -> usize {
         let mut idx = i;
         let mut coords = vec![0; self.rank()];
@@ -328,6 +350,10 @@ impl<'a> Iterator for CoordIter<'a> {
 
 
 /// Computes the standard row-major stride for a given shape.
+/// 
+/// This calculates the strides needed for contiguous row-major memory layout,
+/// where the last dimension has stride 1 and each earlier dimension's stride
+/// is the product of all later dimensions' sizes.
 #[inline(always)] // sits on matmul critical path
 pub fn shape_to_stride(shape: &Shape) -> Strides {
     let mut stride: Vec<isize> = vec![1; shape.len()];
@@ -360,37 +386,53 @@ pub(crate) fn is_contiguous_relaxed(shape: &Shape, stride: &Strides) -> bool {
     true
 }
 
-/// Read-only metadata view for tensors and views.
+/// Provides read-only access to tensor metadata (shape, strides, offset).
+/// 
+/// Implemented for `MetaTensor`, `TensorBase`, `TensorView`, and `TensorViewMut`.
 pub trait MetaTensorView {
 
+    /// Returns a reference to the underlying metadata.
     fn meta(&self) -> &MetaTensor;
+    
     /// Borrow the shape vector.
     fn shape(&self) -> &Shape { &self.meta().shape }
+    
     /// Borrow the stride vector.
     fn strides(&self) -> &Strides { &self.meta().strides }
+    
+    /// Convert strides to byte strides given the item size.
     fn byte_strides(&self, item_size: usize) -> Vec<isize> {
         self.meta().byte_strides(item_size)
     }
+    
     /// Starting offset (in elements) into the underlying buffer.
     fn offset(&self) -> usize { self.meta().offset }
+    
     /// Number of dimensions (rank).
     fn dims(&self) -> usize { self.meta().dims() }
+    
     /// Size of one dimension by index.
     fn dim(&self, dim: Dim) -> Dim { self.meta().dim(dim) }
+    
     /// Total number of elements (product of all dimensions).
     fn size(&self) -> usize { self.meta().size() }
+    
     /// True for rank-0 (scalar) tensors.
     fn is_scalar(&self) -> bool { self.meta().is_scalar() }
+    
     /// True for 1xN row tensors.
     fn is_row(&self) -> bool { self.meta().is_row() }
+    
     /// True for 1-D column tensors.
     fn is_column(&self) -> bool { self.meta().is_column() }
 
+    /// Number of dimensions (alias for `dims`).
     fn rank(&self) -> usize { self.meta().rank() }
-    /// Whether the layout is contiguous in row-major order under relaxed rules
-    /// (ignoring singleton dimensions).
+    
+    /// Whether the layout is contiguous in row-major order.
     fn is_contiguous(&self) -> bool { self.meta().is_contiguous() }
 
+    /// Returns an iterator over all buffer offsets for this tensor/view.
     fn iter_offsets(&self) -> impl Iterator<Item = usize> + '_ { self.meta().iter_offsets() }
 
     /// Returns a vector of (dim_index, dim_size, dim_stride) for all non-singleton dimensions.

@@ -2,12 +2,35 @@ use crate::{backend::Backend, core::{primitives::TensorBase, tensor::TensorError
 
 mod matmul;
 
+/// Linear algebra operations: matrix multiplication and dot product.
+/// 
+/// For f32 and f64 types, uses OpenBLAS on CPU and cuBLAS on CUDA for optimized performance.
 pub trait MatMul<Rhs, T, B> 
 where 
     T: TensorValue,
     B: Backend<T>,
 {
+    /// Performs matrix multiplication.
+    /// 
+    /// # Examples
+    /// ```ignore
+    /// let a = Tensor::<f32>::from_buf(vec![1.0, 2.0, 3.0, 4.0], (2, 2)).unwrap();
+    /// let b = Tensor::<f32>::from_buf(vec![5.0, 6.0, 7.0, 8.0], (2, 2)).unwrap();
+    /// let c = a.matmul(&b).unwrap();
+    /// ```
     fn matmul(&self, rhs: &Rhs) -> Result<TensorBase<T, B>, TensorError>;
+    
+    /// Computes the dot product of two 1-D tensors.
+    /// 
+    /// For higher-dimensional tensors, this performs dimension manipulation 
+    /// and calls `matmul` internally.
+    /// 
+    /// # Examples
+    /// ```ignore
+    /// let a = Tensor::<f32>::from_buf(vec![1.0, 2.0, 3.0], (3,)).unwrap();
+    /// let b = Tensor::<f32>::from_buf(vec![4.0, 5.0, 6.0], (3,)).unwrap();
+    /// let result = a.dot(&b).unwrap(); // Scalar: 32.0
+    /// ```
     fn dot(&self, rhs: &Rhs) -> Result<TensorBase<T, B>, TensorError>;
 }
 

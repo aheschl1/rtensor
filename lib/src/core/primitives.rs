@@ -6,6 +6,10 @@ use crate::core::value::TensorValue;
 use crate::core::{shape_to_stride, Shape, MetaTensor};
 use crate::core::tensor::TensorError;
 
+/// A generic tensor with backend-specific storage.
+/// 
+/// This is the base type for all tensors, parameterized by element type `T` and backend `B`.
+/// Most users will use type aliases like `Tensor<T>` (CPU) or `CudaTensor<T>` (GPU).
 #[derive(Debug, PartialEq, Eq)]
 pub struct TensorBase<T: TensorValue, B: Backend<T>> {
     pub(crate) backend: B,
@@ -28,19 +32,22 @@ impl<B: Backend<T>, T: TensorValue> Clone for TensorBase<T, B> {
     }
 }
 
-/// An owned, contiguous tensor stored in row-major order.
-///
-/// Holds the backing buffer and the associated layout metadata. The `offset`
-/// in `meta` is expected to be zero for owned tensors created via
-/// `from_buf`/`row`/`column`/`scalar`.
+/// An owned CPU tensor stored in row-major order.
+/// 
+/// # Examples
+/// ```ignore
+/// let tensor = Tensor::<f32>::zeros((3, 4));
+/// let tensor = Tensor::<i32>::from_buf(vec![1, 2, 3, 4], (2, 2)).unwrap();
+/// ```
 pub type Tensor<T> = TensorBase<T, Cpu>;
 
 #[cfg(feature = "cuda")]
+/// An owned GPU tensor stored on CUDA device.
 pub type CudaTensor<T> = TensorBase<T, crate::backend::cuda::Cuda>;
 
 #[cfg(feature = "cuda")]
 impl<T: TensorValue> CudaTensor<T> {
-    /// Transfers this tensor from the CUDA backend to a CPU tensor.
+    /// Transfers this tensor from the CUDA device to CPU memory.
     pub fn cpu(&self) -> Result<Tensor<T>, TensorError> {
         let cpu_backend = Cpu;
         let cpu_buffer = self.backend.dump(&self.buf)?;
@@ -51,7 +58,7 @@ impl<T: TensorValue> CudaTensor<T> {
 
 #[cfg(feature = "cuda")]
 impl<T: TensorValue> Tensor<T> {
-    /// Transfers this tensor from the CPU backend to a CUDA tensor.
+    /// Transfers this tensor from CPU to the CUDA device.
     pub fn cuda(&self) -> Result<CudaTensor<T>, TensorError> {
         let cuda_backend = crate::backend::cuda::Cuda::construct(0)?;
         let cuda_buffer = cuda_backend.alloc_from_slice(self.backend.dump(&self.buf)?)?;
@@ -60,11 +67,10 @@ impl<T: TensorValue> Tensor<T> {
     }
 }
 
-/// A non-owning view over tensor data with explicit layout metadata.
-///
-/// The `B` parameter abstracts over borrowed storage (e.g., `&[T]` or
-/// `&mut [T]`), while `meta` carries shape, stride, and offset describing how
-/// to interpret the underlying buffer.
+/// A non-owning immutable view over tensor data.
+/// 
+/// Views share the underlying buffer with the source tensor and have their own
+/// metadata (shape, stride, offset) to represent different interpretations of the data.
 pub struct TensorView<'a, T, B>
 where
     T: TensorValue,
@@ -75,6 +81,9 @@ where
     pub(crate) meta: MetaTensor,
 }
 
+/// A non-owning mutable view over tensor data.
+/// 
+/// Like `TensorView` but allows mutation of the underlying data.
 pub struct TensorViewMut<'a, T, B>
 where
     T: TensorValue,
@@ -147,11 +156,18 @@ where
         }
     }
 
-    /// Constructs a tensor from a contiguous buffer in row-major order and a
-    /// given shape. Validates that `shape` size equals `raw.len()`.
-    ///
-    /// Errors
-    /// - `InvalidShape` if element count doesn't match.
+    /// Constructs a tensor from a buffer and shape.
+    /// 
+    /// The buffer must be contiguous and in row-major order.
+    /// 
+    /// # Errors
+    /// - `InvalidShape` if the buffer size doesn't match the shape.
+    /// - `InvalidShape` if the shape has more than 128 dimensions.
+    /// 
+    /// # Examples
+    /// ```ignore
+    /// let tensor = Tensor::<f32>::from_buf(vec![1.0, 2.0, 3.0, 4.0], (2, 2)).unwrap();
+    /// ```
     pub fn from_buf(raw: impl Into<Box<[T]>>, shape: impl Into<Shape>) -> Result<Self, TensorError> {
         let shape: Shape = shape.into();
         if shape.len() > 128 {
@@ -179,30 +195,49 @@ where
         })
     }
 
-    /// Creates a rank-0 (scalar) tensor holding `value`.
+    /// Creates a rank-0 (scalar) tensor.
+    /// 
+    /// # Examples
+    /// ```ignore
+    /// let scalar = Tensor::<f32>::scalar(42.0);
+    /// ```
     pub fn scalar(value: T) -> Self {
         Self::from_buf(vec![value], vec![]).unwrap()
     }
 
-    /// Creates a 1-D column tensor from the provided values.
+    /// Creates a 1-D column tensor from values.
+    /// 
+    /// # Examples
+    /// ```ignore
+    /// let col = Tensor::<i32>::column(vec![1, 2, 3]);
+    /// ```
     pub fn column(column: impl Into<Box<[T]>>) -> Self {
         let column = column.into();
         let shape = vec![column.len()];
         Self::from_buf(column, shape).unwrap()
     }
 
-    /// Creates a 1xN row tensor from the provided values.
+    /// Creates a 1xN row tensor from values.
+    /// 
+    /// # Examples
+    /// ```ignore
+    /// let row = Tensor::<f32>::row(vec![1.0, 2.0, 3.0]);
+    /// ```
     pub fn row(row: impl Into<Box<[T]>>) -> Self {
         let row = row.into();
         let shape = vec![1, row.len()];
         Self::from_buf(row, shape).unwrap()
     }
 
-    /// Creates a tensor filled with zeroes for the given shape.
+    /// Creates a tensor filled with zeros.
     /// 
     /// # Panics
     /// Panics if memory allocation fails.
-    /// Use `TensorBase::from_buf` for fallible allocation.
+    /// 
+    /// # Examples
+    /// ```ignore
+    /// let zeros = Tensor::<f32>::zeros((3, 4));
+    /// ```
     pub fn zeros(shape: impl Into<Shape>) -> Self {
         let shape: Shape = shape.into();
         let element_count = shape.iter().product::<usize>();
@@ -210,11 +245,15 @@ where
         Self::from_buf(zero_buf, shape).expect("Failed to allocate memory")
     }
 
-    /// Creates a tensor filled with ones for the given shape.
+    /// Creates a tensor filled with ones.
     /// 
     /// # Panics
     /// Panics if memory allocation fails.
-    /// Use `TensorBase::from_buf` for fallible allocation.
+    /// 
+    /// # Examples
+    /// ```ignore
+    /// let ones = Tensor::<f32>::ones((2, 2));
+    /// ```
     pub fn ones(shape: impl Into<Shape>) -> Self {
         let shape: Shape = shape.into();
         let element_count = shape.iter().product::<usize>();
@@ -222,11 +261,10 @@ where
         Self::from_buf(one_buf, shape).expect("Failed to allocate memory")
     }
 
-    /// Creates a tensor filled with the maximum value for the given shape.
+    /// Creates a tensor filled with the maximum value for type `T`.
     /// 
     /// # Panics
     /// Panics if memory allocation fails.
-    /// Use `TensorBase::from_buf` for fallible allocation.
     pub fn max(shape: impl Into<Shape>) -> Self {
         let shape: Shape = shape.into();
         let element_count = shape.iter().product::<usize>();
@@ -234,11 +272,10 @@ where
         Self::from_buf(max_buf, shape).expect("Failed to allocate memory")
     }
 
-    /// Creates a tensor filled with the minimum value for the given shape.
+    /// Creates a tensor filled with the minimum value for type `T`.
     /// 
     /// # Panics
     /// Panics if memory allocation fails.
-    /// Use `TensorBase::from_buf` for fallible allocation.
     pub fn min(shape: impl Into<Shape>) -> Self {
         let shape: Shape = shape.into();
         let element_count = shape.iter().product::<usize>();
@@ -248,9 +285,12 @@ where
 
 }
 
+/// Indicates where a tensor's data resides.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeviceType {
+    /// CPU memory
     Cpu,
     #[cfg(feature = "cuda")]
+    /// CUDA device memory (GPU), with device index
     Cuda(usize),
 }

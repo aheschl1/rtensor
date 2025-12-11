@@ -3,6 +3,9 @@ use cudarc::driver::DeviceRepr;
 
 
 #[cfg(feature = "cuda")]
+/// Trait for types that can be stored in tensors (with CUDA support).
+/// 
+/// Implemented for standard numeric types: f32, f64, i8-i128, u8-u128, isize, usize, bool.
 pub trait TensorValue: 
     Copy + 
     Default +
@@ -15,6 +18,9 @@ pub trait TensorValue:
 {}
 
 #[cfg(not(feature = "cuda"))]
+/// Trait for types that can be stored in tensors.
+/// 
+/// Implemented for standard numeric types: f32, f64, i8-i128, u8-u128, isize, usize, bool.
 pub trait TensorValue: 
     Copy + 
     Default +
@@ -25,10 +31,18 @@ pub trait TensorValue:
     'static
 {}
 
+/// Provides default constant values for tensor element types.
 pub trait TensorDefault {
+    /// Returns the zero value.
     fn zero() -> Self;
+    
+    /// Returns the one value.
     fn one() -> Self;
+    
+    /// Returns the minimum value.
     fn min() -> Self;
+    
+    /// Returns the maximum value.
     fn max() -> Self;
 }
 

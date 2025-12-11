@@ -1,8 +1,29 @@
 use crate::core::Dim;
 
+/// Represents an index into a tensor.
+/// 
+/// Can be created from tuples, vectors, or single values.
+/// 
+/// # Examples
+/// ```ignore
+/// // From tuple
+/// let idx: Idx = (0, 1, 2).into();
+/// 
+/// // From vector
+/// let idx: Idx = vec![0, 1, 2].into();
+/// 
+/// // Using the coord! macro
+/// let idx = coord![0, 1, 2];
+/// 
+/// // Single value
+/// let idx: Idx = 5.into();
+/// ```
 pub enum Idx {
+    /// Multi-dimensional coordinates
     Coord(Vec<Dim>),
+    /// Single position in a 1D tensor
     At(usize),
+    /// Scalar access (rank-0 tensor)
     Item
 }
 
