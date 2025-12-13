@@ -1,187 +1,334 @@
-// Include the generated protobuf code
-pub mod proto {
-    include!(concat!(env!("OUT_DIR"), "/tensors.backend.rs"));
+use serde::{Deserialize, Serialize};
+
+use crate::{backend::remote::client::RemoteBuf, core::{meta::ContiguityTypes, primitives::DeviceType, tensor::TensorError, value::{DType, TensorValue}, MetaTensor}, ops::base::OpType};
+
+
+#[derive(Serialize, Deserialize)]
+pub(crate) struct Slice {
+    data: Vec<u8>, // bytes
+    dtype: DType,
 }
 
-pub use proto::*;
-
-
-impl From<crate::core::value::DType> for DType {
-    fn from(dtype: crate::core::value::DType) -> Self {
-        match dtype {
-            crate::core::value::DType::U8 => DType::U8,
-            crate::core::value::DType::I8 => DType::I8,
-            crate::core::value::DType::U16 => DType::U16,
-            crate::core::value::DType::I16 => DType::I16,
-            crate::core::value::DType::U32 => DType::U32,
-            crate::core::value::DType::U128 => DType::U128,
-            crate::core::value::DType::I32 => DType::I32,
-            crate::core::value::DType::U64 => DType::U64,
-            crate::core::value::DType::I64 => DType::I64,
-            crate::core::value::DType::I128 => DType::I128,
-            crate::core::value::DType::F32 => DType::F32,
-            crate::core::value::DType::F64 => DType::F64,
-        }
-    }
-}
-
-impl From<DType> for crate::core::value::DType {
-    fn from(dtype: DType) -> Self {
-        match dtype {
-            DType::U8 => crate::core::value::DType::U8,
-            DType::I8 => crate::core::value::DType::I8,
-            DType::U16 => crate::core::value::DType::U16,
-            DType::I16 => crate::core::value::DType::I16,
-            DType::U32 => crate::core::value::DType::U32,
-            DType::U128 => crate::core::value::DType::U128,
-            DType::I32 => crate::core::value::DType::I32,
-            DType::U64 => crate::core::value::DType::U64,
-            DType::I64 => crate::core::value::DType::I64,
-            DType::I128 => crate::core::value::DType::I128,
-            DType::F32 => crate::core::value::DType::F32,
-            DType::F64 => crate::core::value::DType::F64,
-        }
-    }
-}
-
-impl From<i32> for crate::core::value::DType {
-    fn from(dtype: i32) -> Self {
-        DType::try_from(dtype).unwrap().into()
-    }
-}
-
-
-impl From<crate::ops::base::OpType> for OpType {
-    fn from(op: crate::ops::base::OpType) -> Self {
-        match op {
-            crate::ops::base::OpType::Add => OpType::Add,
-            crate::ops::base::OpType::Sub => OpType::Sub,
-            crate::ops::base::OpType::Mul => OpType::Mul,
-        }
-    }
-}
-
-impl From<OpType> for crate::ops::base::OpType {
-    fn from(op: OpType) -> Self {
-        match op {
-            OpType::Add => crate::ops::base::OpType::Add,
-            OpType::Sub => crate::ops::base::OpType::Sub,
-            OpType::Mul => crate::ops::base::OpType::Mul,
-        }
-    }
-}
-
-impl From<crate::core::meta::ContiguityTypes> for ContiguityType {
-    fn from(contiguity: crate::core::meta::ContiguityTypes) -> Self {
-        match contiguity {
-            crate::core::meta::ContiguityTypes::RowMajor => ContiguityType::RowMajor,
-            crate::core::meta::ContiguityTypes::ColumnMajor => ContiguityType::ColumnMajor,
-            crate::core::meta::ContiguityTypes::None => ContiguityType::None,
-        }
-    }
-}
-
-impl From<ContiguityType> for crate::core::meta::ContiguityTypes {
-    fn from(contiguity: ContiguityType) -> Self {
-        match contiguity {
-            ContiguityType::RowMajor => crate::core::meta::ContiguityTypes::RowMajor,
-            ContiguityType::ColumnMajor => crate::core::meta::ContiguityTypes::ColumnMajor,
-            ContiguityType::None => crate::core::meta::ContiguityTypes::None,
-        }
-    }
-}
-
-impl From<crate::core::primitives::DeviceType> for DeviceType {
-    fn from(device: crate::core::primitives::DeviceType) -> Self {
-        match device {
-            crate::core::primitives::DeviceType::Cpu => DeviceType::Cpu,
-            #[cfg(feature = "cuda")]
-            crate::core::primitives::DeviceType::Cuda(_) => DeviceType::Cuda,
-            #[cfg(feature = "remote")]
-            crate::core::primitives::DeviceType::Remote { .. } => DeviceType::Remote,
-        }
-    }
-}
-
-impl From<crate::core::primitives::DeviceType> for Device {
-    fn from(device: crate::core::primitives::DeviceType) -> Self {
-        match device {
-            crate::core::primitives::DeviceType::Cpu => Device {
-                device: Some(proto::device::Device::Cpu(CpuDevice {})),
-            },
-            #[cfg(feature = "cuda")]
-            crate::core::primitives::DeviceType::Cuda(index) => Device {
-                device: Some(proto::device::Device::Cuda(CudaDevice {
-                    device_index: index as u32,
-                })),
-            },
-            #[cfg(feature = "remote")]
-            crate::core::primitives::DeviceType::Remote { ip, port, remote_type } => Device {
-                device: Some(proto::device::Device::Remote(Box::new(RemoteDeviceInfo {
-                    ip: ip.to_string(),
-                    port: port as u32,
-                    remote_type: Some(Box::new((*remote_type).into())),
-                }))),
-            },
-        }
-    }
-}
-
-impl TryFrom<Device> for crate::core::primitives::DeviceType {
-    type Error = &'static str;
-
-    fn try_from(device: Device) -> Result<Self, Self::Error> {
-        match device.device {
-            Some(proto::device::Device::Cpu(_)) => Ok(crate::core::primitives::DeviceType::Cpu),
-            #[cfg(feature = "cuda")]
-            Some(proto::device::Device::Cuda(cuda)) => {
-                Ok(crate::core::primitives::DeviceType::Cuda(cuda.device_index as usize))
-            },
-            #[cfg(feature = "remote")]
-            Some(proto::device::Device::Remote(remote_info)) => {
-                use std::net::IpAddr;
-                let ip: IpAddr = remote_info.ip.parse()
-                    .map_err(|_| "Invalid IP address")?;
-                let remote_type = remote_info.remote_type
-                    .ok_or("Missing remote_type")?;
-                let remote_device = (*remote_type).try_into()?;
-                Ok(crate::core::primitives::DeviceType::Remote {
-                    ip,
-                    port: remote_info.port as u16,
-                    remote_type: Box::new(remote_device),
-                })
-            },
-            None => Err("Device oneof is not set"),
-            #[cfg(not(feature = "cuda"))]
-            Some(proto::device::Device::Cuda(_)) => Err("CUDA feature not enabled"),
-            #[cfg(not(feature = "remote"))]
-            Some(proto::device::Device::Remote(_)) => Err("Remote feature not enabled"),
-        }
-    }
-}
-
-/// Convert bytes and dtype to the appropriate TensorValue variant
-impl proto::TensorValue {
-    pub fn from_bytes_and_dtype(bytes: Vec<u8>, dtype: DType) -> Self {
-        use proto::tensor_value::Value;
-        
-        let value = match dtype {
-            DType::F32 => Value::F32Value(bytes),
-            DType::F64 => Value::F64Value(bytes),
-            DType::I8 => Value::I8Value(bytes),
-            DType::I16 => Value::I16Value(bytes),
-            DType::I32 => Value::I32Value(bytes),
-            DType::I64 => Value::I64Value(bytes),
-            DType::I128 => Value::I128Value(bytes),
-            DType::U8 => Value::U8Value(bytes),
-            DType::U16 => Value::U16Value(bytes),
-            DType::U32 => Value::U32Value(bytes),
-            DType::U64 => Value::U64Value(bytes),
-            DType::U128 => Value::U128Value(bytes),
+impl Slice {
+    #[inline(always)]
+    pub(crate) fn from_boxed_slice<T: TensorValue>(boxed: Box<[T]>) -> Self {
+        let dtype = T::DTYPE;
+        let data = unsafe {
+            let len = boxed.len() * std::mem::size_of::<T>();
+            let ptr = Box::into_raw(boxed) as *mut u8;
+            Vec::from_raw_parts(ptr, len, len)
         };
-        
-        TensorValue {
-            value: Some(value),
+        Self { data, dtype }
+    }
+
+    #[inline(always)]
+    pub(crate) fn from_slice<T: TensorValue>(slice: &[T]) -> Self {
+        let dtype = T::DTYPE;
+        let data = unsafe {
+            let len = slice.len() * std::mem::size_of::<T>();
+            let ptr = slice.as_ptr() as *const u8;
+            let mut vec = Vec::with_capacity(len);
+            vec.set_len(len);
+            std::ptr::copy_nonoverlapping(ptr, vec.as_mut_ptr(), len);
+            vec
+        };
+        Self { data, dtype }
+    }
+
+    #[inline(always)]
+    pub(crate) fn to_boxed_slice<T: TensorValue>(self) -> Result<Box<[T]>, TensorError> {
+        if self.dtype != T::DTYPE {
+            return Err(TensorError::BackendError(format!(
+                "Type mismatch: expected {:?}, got {:?}",
+                T::DTYPE, self.dtype
+            )));
+        }
+        let boxed = unsafe {
+            let len = self.data.len() / std::mem::size_of::<T>();
+            let ptr = self.data.as_ptr() as *mut T;
+            std::mem::forget(self.data);
+            Box::from_raw(std::slice::from_raw_parts_mut(ptr, len))
+        };
+        Ok(boxed)
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub(crate) struct Value {
+    data: Vec<u8>, // bytes
+    dtype: DType,
+}
+
+impl Value {
+    #[inline(always)]
+    pub(crate) fn from_value<T: TensorValue>(value: T) -> Self {
+        let dtype = T::DTYPE;
+        let data = unsafe {
+            let size = std::mem::size_of::<T>();
+            let ptr = &value as *const T as *const u8;
+            let mut vec = Vec::with_capacity(size);
+            vec.set_len(size);
+            std::ptr::copy_nonoverlapping(ptr, vec.as_mut_ptr(), size);
+            vec
+        };
+        Self { data, dtype }
+    }
+
+    #[inline(always)]
+    pub(crate) fn to_value<T: TensorValue>(self) -> Result<T, TensorError> {
+        if self.dtype != T::DTYPE {
+            return Err(TensorError::BackendError(format!(
+                "Type mismatch: expected {:?}, got {:?}",
+                T::DTYPE, self.dtype
+            )));
+        }
+        let value = unsafe {
+            let ptr = self.data.as_ptr() as *const T;
+            std::ptr::read(ptr)
+        };
+        Ok(value)
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub(crate) struct TypelessBuf {
+    pub(crate) id: u32,
+    pub(crate) dtype: DType,
+}
+
+#[derive(Serialize, Deserialize)]
+pub(crate) struct Response {
+    pub(crate) asynchronous: bool,
+    pub(crate) complete: bool,
+    pub(crate) task_id: u32,
+    pub(crate) message: Messages,
+}
+
+#[derive(Serialize, Deserialize)]
+pub(crate) struct Request {
+    pub(crate) message_id: u32,
+    pub(crate) message: Messages,
+}
+
+impl Request {
+    #[inline(always)]
+    pub fn serialize(&self) -> Result<Vec<u8>, serde_json::Error> {
+        debug_assert!(self.message.is_response());
+        serde_json::to_vec(self)
+    }
+
+    #[inline(always)]
+    pub fn deserialize(data: &[u8]) -> Result<Self, serde_json::Error> {
+        let resp: Request = serde_json::from_slice(data)?;
+        debug_assert!(!resp.message.is_response());
+        Ok(resp)
+    }
+}
+
+impl Response {
+    #[inline(always)]
+    pub fn serialize(&self) -> Result<Vec<u8>, serde_json::Error> {
+        debug_assert!(self.message.is_response());
+        serde_json::to_vec(self)
+    }
+
+    #[inline(always)]
+    pub fn deserialize(data: &[u8]) -> Result<Self, serde_json::Error> {
+        let resp: Response = serde_json::from_slice(data)?;
+        debug_assert!(resp.message.is_response());
+        Ok(resp)
+    }
+}
+
+impl<T: TensorValue> From<RemoteBuf<T>> for TypelessBuf {
+    fn from(buf: RemoteBuf<T>) -> Self {
+        Self {
+            id: buf.id,
+            dtype: buf.dtype,
+        }
+    }
+}
+
+macro_rules! impl_typeless_buf_conversions {
+    ($($type:ty),+ $(,)?) => {
+        $(
+            impl From<TypelessBuf> for RemoteBuf<$type> {
+                fn from(buf: TypelessBuf) -> Self {
+                    Self {
+                        id: buf.id,
+                        dtype: buf.dtype,
+                        _marker: std::marker::PhantomData::<$type>,
+                    }
+                }
+            }
+        )+
+    };
+}
+
+impl_typeless_buf_conversions!(
+    f32, f64,
+    i8, i16, i32, i64, i128, isize,
+    u8, u16, u32, u64, u128, usize,
+);
+
+#[derive(Serialize, Deserialize)]
+pub (crate) enum Messages {
+    DeviceType,
+    DeviceTypeResponse {
+        device_type: DeviceType
+    },
+
+    AllocFromSlice {
+        slice: Slice
+    },
+    AllocFromSliceResponse {
+        buf: Result<TypelessBuf, TensorError>
+    },
+    
+    Alloc {
+        len: usize,
+        dtype: DType,
+    },
+    AllocResponse {
+        buf: Result<TypelessBuf, TensorError>
+    },
+
+    CopyFromSlice {
+        dst: TypelessBuf,
+        src: Slice
+    },
+    CopyFromSliceResponse {
+        result: Result<(), TensorError>
+    },
+
+    Read {
+        buf: TypelessBuf,
+        offset: usize,
+    },
+    ReadResponse {
+        value: Result<Value, TensorError>,
+    },
+
+    Write {
+        buf: TypelessBuf,
+        offset: usize,
+        value: Value,
+    },
+    WriteResponse {
+        result: Result<(), TensorError>,
+    },
+
+    Len {
+        buf: TypelessBuf,
+    },
+    LenResponse {
+        len: usize,
+    },
+
+    Copy {
+        src: TypelessBuf,
+    },
+    CopyResponse {
+        buf: Result<TypelessBuf, TensorError>,
+    },
+
+    Dump {
+        src: TypelessBuf,
+    },
+    DumpResponse {
+        data: Result<Slice, TensorError>,
+    },
+
+    ApplyElementwise1DStrided {
+        buf: TypelessBuf,
+        op: (OpType, Value),
+        offset: usize,
+        stride: isize,
+        len: usize,
+    },
+    ApplyElementwise1DStridedResponse {
+        result: Result<(), TensorError>,
+    },
+
+    ApplyElementwiseContiguous {
+        buf: TypelessBuf,
+        op: (OpType, Value),
+        start: usize,
+        len: usize,
+    },
+    ApplyElementwiseContiguousResponse {
+        result: Result<(), TensorError>,
+    },
+
+    ApplyElementwiseND {
+        buf: TypelessBuf,
+        op: (OpType, Value),
+        offset: usize,
+        shape: Vec<usize>,
+        stride: Vec<isize>,
+    },
+    ApplyElementwiseNDResponse {
+        result: Result<(), TensorError>,
+    },
+
+    Broadcast {
+        left: (TypelessBuf, MetaTensor),
+        right: (TypelessBuf, MetaTensor),
+        dst: (TypelessBuf, MetaTensor),
+        op: OpType,
+    },
+    BroadcastResponse {
+        result: Result<(), TensorError>,
+    },
+
+    ApplyElementwise {
+        buf: TypelessBuf,
+        op: (OpType, Value),
+        meta: MetaTensor,
+    },
+    ApplyElementwiseResponse {
+        result: Result<(), TensorError>,
+    },
+
+    Matmul {
+        lhs: (TypelessBuf, MetaTensor),
+        rhs: (TypelessBuf, MetaTensor),
+        b: usize,
+        m: usize,
+        k: usize,
+        n: usize,
+        contiguity: ContiguityTypes
+    },
+    MatmulResponse {
+        buf: Result<TypelessBuf, TensorError>,
+    },
+
+    ActionCompleted {
+        task_id: u32,
+    }
+
+}
+
+impl Messages {
+    #[inline(always)]
+    pub fn is_response(&self) -> bool {
+        match self {
+            Messages::DeviceTypeResponse { .. } |
+            Messages::AllocFromSliceResponse { .. } |
+            Messages::AllocResponse { .. } |
+            Messages::CopyFromSliceResponse { .. } |
+            Messages::ReadResponse { .. } |
+            Messages::WriteResponse { .. } |
+            Messages::LenResponse { .. } |
+            Messages::CopyResponse { .. } |
+            Messages::DumpResponse { .. } |
+            Messages::ApplyElementwise1DStridedResponse { .. } |
+            Messages::ApplyElementwiseContiguousResponse { .. } |
+            Messages::ApplyElementwiseNDResponse { .. } |
+            Messages::BroadcastResponse { .. } |
+            Messages::ApplyElementwiseResponse { .. } |
+            Messages::MatmulResponse { .. } => true,
+            _ => false,
         }
     }
 }

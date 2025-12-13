@@ -1,6 +1,8 @@
 use crate::core::value::TensorValue;
 
-
+#[cfg(feature = "remote")]
+use serde::{Deserialize, Serialize};
+#[cfg_attr(feature = "remote", derive(Serialize, Deserialize))]
 pub enum OpType {
     Add,
     Sub,

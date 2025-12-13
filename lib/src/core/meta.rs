@@ -8,6 +8,7 @@ pub type Dim = usize;
 
 /// Represents the strides of a tensor (spacing between elements in each dimension).
 #[derive(Debug, PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "remote", derive(Serialize, Deserialize))]
 pub struct Strides(pub Vec<isize>);
 
 impl Strides {
@@ -68,8 +69,12 @@ impl PartialEq<Vec<isize>> for Strides {
     }
 }
 
+#[cfg(feature = "remote")]
+use serde::{Deserialize, Serialize};
+
 /// Represents the shape of a tensor (size of each dimension).
 #[derive(Debug, PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "remote", derive(Serialize, Deserialize))]
 pub struct Shape(pub Vec<Dim>);
 
 
@@ -142,11 +147,11 @@ impl PartialEq<Vec<Dim>> for Shape {
     }
 }
 
-
 /// Tensor metadata containing shape, strides, and offset information.
 /// 
 /// This describes how to interpret a flat buffer as a multi-dimensional tensor.
 #[derive(Debug, PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "remote", derive(Serialize, Deserialize))]
 pub struct MetaTensor {
     pub shape: Shape,
     pub strides: Strides,
@@ -557,6 +562,7 @@ impl AsRef<[isize]> for Strides {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "remote", derive(Serialize, Deserialize))]
 pub enum ContiguityTypes {
     RowMajor,
     ColumnMajor,

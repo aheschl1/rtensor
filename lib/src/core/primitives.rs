@@ -286,8 +286,12 @@ where
 
 }
 
+#[cfg(feature = "remote")]
+use serde::{Deserialize, Serialize};
+
 /// Indicates where a tensor's data resides.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "remote", derive(Serialize, Deserialize))]
 pub enum DeviceType {
     Cpu,
     #[cfg(feature = "cuda")]

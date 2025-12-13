@@ -8,22 +8,7 @@ fn main() {
     }
     setup_openblas();
     
-    #[cfg(feature = "remote")]
-    {
-        build_protobuf();
-    }
-    
     println!("cargo:rerun-if-changed=build.rs");
-}
-
-#[cfg(feature = "remote")]
-fn build_protobuf() {
-    let proto_file = "proto/backend.proto";
-    
-    println!("cargo:rerun-if-changed={}", proto_file);
-    
-    prost_build::compile_protos(&[proto_file], &["proto/"])
-        .expect("Failed to compile protobuf files");
 }
 
 fn setup_openblas() {

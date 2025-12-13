@@ -6,20 +6,16 @@ edition = "2021"
 [features]
 default = []
 cuda = ["cudarc"]
-remote = []
+remote = ["serde", "serde_json", "lfqueue"]
 
 [dependencies]
 cudarc = { version = "0.18.1", features = ["cuda-13000"], optional = true }
 thiserror = "2.0.17"
-prost = "0.13"
-bytes = "1.9"
-tracing = {version = "0.1", features = ["release_max_level_info"]}
-
-[dev-dependencies]
-tracing-subscriber = "0.3"
+serde = { version = "1.0", features = ["derive"], optional = true }
+serde_json = { version = "1.0", optional = true }
+lfqueue = { version = "0.8.1", optional = true }
 
 [build-dependencies]
 cc = "1.0.82"
 bindgen = "0.72.1"
 regex = "1.12.2"
-prost-build = "0.13"

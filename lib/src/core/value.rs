@@ -92,7 +92,12 @@ impl_default!(u128, 0u128, 1u128, u128::MIN, u128::MAX);
 impl_default!(usize, 0usize, 1usize, usize::MIN, usize::MAX);
 impl_default!(bool, false, true, false, true);
 
+
+#[cfg(feature = "remote")]
+use serde::{Deserialize, Serialize};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "remote", derive(Serialize, Deserialize))]
 pub enum DType {
     U8,
     I8,

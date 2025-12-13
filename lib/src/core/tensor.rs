@@ -3,8 +3,12 @@ use crate::{backend::Backend, core::{idx::Idx, meta::is_contiguous_relaxed, prim
 use super::slice::{Slice, compute_sliced_parameters};
 use thiserror::Error;
 
+#[cfg(feature = "remote")]
+use serde::{Deserialize, Serialize};
+
 /// Errors that can occur during tensor operations.
 #[derive(Debug, Error, PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "remote", derive(Serialize, Deserialize))]
 pub enum TensorError {
     #[error("index out of bounds {0}")]
     IdxOutOfBounds(String),
