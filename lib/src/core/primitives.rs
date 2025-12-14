@@ -1,5 +1,4 @@
 use std::marker::PhantomData;
-use std::net::IpAddr;
 
 
 use crate::backend::Backend;
