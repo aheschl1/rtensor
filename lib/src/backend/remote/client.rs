@@ -1,8 +1,9 @@
-use std::{collections::HashMap, io::{Read, Write}, net::IpAddr, sync::{atomic::{AtomicU32, Ordering}, mpsc, Arc, Condvar, Mutex, RwLock}};
+use std::{collections::HashMap, fmt::{Debug, Display}, io::{Read, Write}, net::IpAddr, sync::{atomic::{AtomicU32, Ordering}, mpsc, Arc, Condvar, Mutex, RwLock}};
 
 use crate::{backend::{remote::protocol::{Messages, Request, Response, Slice, TypelessBuf, Value}, Backend, BackendMatMul}, core::{primitives::DeviceType, tensor::TensorError, value::{DType, TensorValue}}};
 
 
+#[derive(Debug, Clone)]
 pub struct RemoteBuf<T: TensorValue> {
     pub(crate) id: u32,
     pub(crate) dtype: DType,
@@ -55,7 +56,20 @@ pub struct RemoteBackend {
     outgoing: Arc<lfqueue::UnboundedQueue<Request>>,
     pending_response: Arc<RwLock<HashMap<u32, mpsc::Sender<Messages>>>>,
 }
+    
+impl Debug for RemoteBackend {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RemoteBackend")
+            .field("remote_addr", &self.remote_addr)
+            .field("remote_port", &self.remote_port)
+            .field("message_id", &self.message_id)
+            .field("pending", &self.pending)
+            .field("pending_response", &self.pending_response)
+            .finish()
+    }
+}
 
+#[derive(Debug)]
 pub struct Pending {
     count: AtomicU32,
     lock: Mutex<()>,
@@ -119,7 +133,7 @@ impl RemoteBackend {
         receiver
     }
 
-    fn launch_threads(&mut self) -> Result<(), std::io::Error> {
+    pub(crate) fn connect(&mut self) -> Result<(), std::io::Error> {
         let stream = std::net::TcpStream::connect((self.remote_addr, self.remote_port))?;
         stream.set_nodelay(true)?;
 
@@ -186,6 +200,7 @@ impl Backend for RemoteBackend {
     }
 
     fn copy_from_slice<T: TensorValue>(&self, dst: &mut Self::Buf<T>, src: &[T]) -> Result<(), crate::core::tensor::TensorError> {
+        self.pending.sync();
         let message = Messages::CopyFromSlice {
             dst: dst.to_typeless(),
             src: Slice::from_slice(src),
@@ -194,6 +209,7 @@ impl Backend for RemoteBackend {
     }
 
     fn read<T: TensorValue>(&self, buf: &Self::Buf<T>, offset: usize) -> Result<T, crate::core::tensor::TensorError> {
+        self.pending.sync();
         let message = Messages::Read {
             buf: buf.to_typeless(),
             offset,
@@ -204,6 +220,7 @@ impl Backend for RemoteBackend {
     }
 
     fn write<T: TensorValue>(&self, buf: &mut Self::Buf<T>, offset: usize, value: T) -> Result<(), crate::core::tensor::TensorError> {
+        self.pending.sync();
         let message = Messages::Write {
             buf: buf.to_typeless(),
             offset,
@@ -224,6 +241,7 @@ impl Backend for RemoteBackend {
     }
 
     fn copy<T: TensorValue>(&self, src: &Self::Buf<T>) -> Result<Self::Buf<T>, crate::core::tensor::TensorError> {
+        self.pending.sync();
         let message = Messages::Copy {
             src: src.to_typeless(),
         };
@@ -233,6 +251,7 @@ impl Backend for RemoteBackend {
     }
 
     fn dump<T: TensorValue>(&self, src: &Self::Buf<T>) -> Result<Box<[T]>, crate::core::tensor::TensorError> {
+        self.pending.sync();
         let message = Messages::Dump {
             src: src.to_typeless(),
         };
@@ -339,11 +358,13 @@ fn drain_outgoing(remote: RemoteBackend, mut stream: std::net::TcpStream) {
     let queue_handle = remote.outgoing.clone();
     loop {
         if let Some(req) = queue_handle.dequeue() {
+            println!("serializing request");
             let serialized = req.serialize().unwrap();
             let n = serialized.len();
             let n_bytes = (n as u32).to_le_bytes();
             stream.write_all(&n_bytes).unwrap();
             stream.write_all(&serialized).unwrap();
+            println!("sent request of length {}", n);
         }
     }
 }
@@ -360,8 +381,8 @@ fn read_incoming(remote: RemoteBackend, mut stream: std::net::TcpStream) {
         if !msg.asynchronous {
             debug_assert!(msg.complete);
             let sender = {
-                let pending = remote.pending_response.read().unwrap();
-                pending.get(&task_id).cloned()
+                let mut pending = remote.pending_response.write().unwrap();
+                pending.remove(&task_id)
             };
             if let Some(sender) = sender {
                 sender.send(msg.message).unwrap();
@@ -369,12 +390,14 @@ fn read_incoming(remote: RemoteBackend, mut stream: std::net::TcpStream) {
             remote.pending.dec();
         }else{
             if msg.complete {
+                println!("request complete");
                 remote.pending.dec();
             }else{
+                println!("got initial response");
                 //send initial follow up to receiver, do not decrement pending yet
                 let sender = {
-                    let pending = remote.pending_response.read().unwrap();
-                    pending.get(&task_id).cloned()
+                    let mut pending = remote.pending_response.write().unwrap();
+                    pending.remove(&task_id)
                 };
                 if let Some(sender) = sender {
                     sender.send(msg.message).unwrap();

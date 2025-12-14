@@ -113,7 +113,7 @@ pub(crate) struct Request {
 impl Request {
     #[inline(always)]
     pub fn serialize(&self) -> Result<Vec<u8>, serde_json::Error> {
-        debug_assert!(self.message.is_response());
+        debug_assert!(!self.message.is_response());
         serde_json::to_vec(self)
     }
 
