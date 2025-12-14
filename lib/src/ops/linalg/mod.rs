@@ -3179,8 +3179,9 @@ mod cuda_tests {
 #[cfg(all(test, feature = "remote"))]
 mod remote_tests {
     use super::*;
-    use std::sync::Once;
+    use std::sync::{Arc, Mutex, OnceLock};
     use std::thread;
+    use crate::backend::remote::remote_backend;
     use crate::{
         backend::{remote::{client::RemoteBackend, server::RemoteServer}, Backend},
         core::{
@@ -3197,25 +3198,26 @@ mod remote_tests {
     const SERVER_IP: &str = "127.0.0.1";
     const SERVER_PORT: u16 = 7890;  // Different port from remote_tests.rs
     
-    static INIT: Once = Once::new();
+    // Lazy static backend shared across all tests
+    static BACKEND: OnceLock<Arc<Mutex<RemoteBackend>>> = OnceLock::new();
     
-    fn setup_server() {
-        INIT.call_once(|| {
+    fn get_backend() -> Arc<Mutex<RemoteBackend>> {
+        BACKEND.get_or_init(|| {
+            // Start the server
             let mut server = RemoteServer::new(SERVER_IP.parse().unwrap(), SERVER_PORT);
             thread::spawn(move || {
                 let _ = server.serve();
             });
             thread::sleep(std::time::Duration::from_millis(10));
-        });
+            
+            // Create and connect the backend
+            let backend = remote_backend(SERVER_IP.parse().unwrap(), SERVER_PORT);
+            
+            Arc::new(Mutex::new(backend))
+        }).clone()
     }
     
     fn make_remote_tensor<T: TensorValue>(buf: Vec<T>, shape: impl Into<Shape>) -> Result<RemoteTensor<T>, TensorError> {
-        setup_server();
-        let mut backend = RemoteBackend::new_with_address(SERVER_IP.parse().unwrap(), SERVER_PORT)
-            .map_err(|e| TensorError::RemoteError(e.to_string()))?;
-        backend.connect()
-            .map_err(|e| TensorError::RemoteError(e.to_string()))?;
-        
         let shape: Shape = shape.into();
         let buf_len = buf.len();
         let expected_len: usize = shape.iter().product();
@@ -3228,9 +3230,16 @@ mod remote_tests {
             )));
         }
         
+        let backend_arc = get_backend();
+        let backend = backend_arc.lock().unwrap();
         let buffer = backend.alloc_from_slice(buf.into())?;
         let stride = crate::core::shape_to_stride(&shape);
-        Ok(TensorBase::from_parts(backend, buffer, MetaTensor::new(shape, stride, 0)))
+        
+        // Clone the backend for this tensor
+        let tensor_backend = backend.clone();
+        drop(backend); // Release the lock
+        
+        Ok(TensorBase::from_parts(tensor_backend, buffer, MetaTensor::new(shape, stride, 0)))
     }
 
     #[test]
@@ -4574,8 +4583,8 @@ mod remote_tests {
         // Dot product of orthogonal unit vectors should be zero
         let a = make_remote_tensor(vec![1.0, 0.0, 0.0], vec![3]).unwrap();
         let b = make_remote_tensor(vec![0.0, 1.0, 0.0], vec![3]).unwrap();
-        println!("Tensor A: {:?}", a.cpu().unwrap());
-        println!("Tensor B: {:?}", b.cpu().unwrap());
+        println!("buffer a on device: {:?}", a.buf);
+        println!("buffer b on device: {:?}", b.buf);
         let result = a.dot(&b).unwrap();
         println!("Dot Product Result: {:?}", result.cpu().unwrap());
         assert!(result.is_scalar());

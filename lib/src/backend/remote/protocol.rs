@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{backend::remote::client::RemoteBuf, core::{meta::ContiguityTypes, primitives::DeviceType, tensor::TensorError, untyped::UntypedTensor, value::{DType, TensorValue}, MetaTensor}, ops::base::OpType};
+use crate::{backend::remote::client::RemoteBuf, core::{meta::ContiguityTypes, primitives::DeviceType, tensor::TensorError, value::{DType, TensorValue}, MetaTensor}, ops::base::OpType};
 
 
 #[derive(Serialize, Deserialize)]
@@ -112,14 +112,14 @@ pub(crate) struct Request {
 
 impl Request {
     #[inline(always)]
-    pub fn serialize(&self) -> Result<Vec<u8>, serde_json::Error> {
+    pub fn serialize(&self) -> Result<Vec<u8>, bincode::Error> {
         debug_assert!(!self.message.is_response());
-        serde_json::to_vec(self)
+        bincode::serialize(self)
     }
 
     #[inline(always)]
-    pub fn deserialize(data: &[u8]) -> Result<Self, serde_json::Error> {
-        let resp: Request = serde_json::from_slice(data)?;
+    pub fn deserialize(data: &[u8]) -> Result<Self, bincode::Error> {
+        let resp: Request = bincode::deserialize(data)?;
         debug_assert!(!resp.message.is_response());
         Ok(resp)
     }
@@ -127,14 +127,14 @@ impl Request {
 
 impl Response {
     #[inline(always)]
-    pub fn serialize(&self) -> Result<Vec<u8>, serde_json::Error> {
+    pub fn serialize(&self) -> Result<Vec<u8>, bincode::Error> {
         debug_assert!(self.message.is_response());
-        serde_json::to_vec(self)
+        bincode::serialize(self)
     }
 
     #[inline(always)]
-    pub fn deserialize(data: &[u8]) -> Result<Self, serde_json::Error> {
-        let resp: Response = serde_json::from_slice(data)?;
+    pub fn deserialize(data: &[u8]) -> Result<Self, bincode::Error> {
+        let resp: Response = bincode::deserialize(data)?;
         debug_assert!(resp.message.is_response());
         Ok(resp)
     }

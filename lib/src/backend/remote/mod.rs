@@ -1,8 +1,48 @@
+#[cfg(feature = "remote")]
+use std::net::IpAddr;
+#[cfg(feature = "remote")]
+use std::{collections::HashMap, sync::Mutex};
+#[cfg(feature = "remote")]
+use std::sync::{LazyLock, OnceLock};
+
+use crate::backend::remote::client::RemoteBackend;
+
 pub mod server;
 pub mod client;
 pub mod protocol;
 #[cfg(test)]
 mod remote_tests;
+
+#[cfg(feature = "remote")]
+static REMOTE_BACKENDS: OnceLock<Mutex<HashMap<String, RemoteBackend>>> = OnceLock::new();
+#[cfg(feature = "remote")]
+pub fn remote_backend(ip: IpAddr, port: u16) -> RemoteBackend {
+    let key = format!("{ip}:{port}");
+
+    let map = REMOTE_BACKENDS
+        .get_or_init(|| Mutex::new(HashMap::new()));
+
+    let mut guard = map.lock().unwrap();
+
+    guard.entry(key.clone()).or_insert_with(|| {
+        let mut backend = RemoteBackend::new_with_address(ip, port).unwrap();
+        backend.connect().unwrap();
+        backend
+    });
+
+    guard.get(&key).unwrap().clone()
+}
+
+#[cfg(feature = "remote")]
+pub fn get_backend_default() -> Option<RemoteBackend> {
+    REMOTE_BACKENDS
+        .get()
+        .and_then(|m| m.lock().ok())
+        .and_then(|map| map.values().next().cloned())
+}
+
+
+
 
 #[cfg(test)]
 mod tests {

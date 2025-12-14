@@ -5083,3 +5083,455 @@ mod cuda_tests {
         assert_eq!(a.view().get(vec![1]).unwrap(), 18.0);
     }
 }
+
+
+
+#[cfg(feature = "remote")]
+#[cfg(test)]
+mod remote_tests {
+    use std::{ops::Add, sync::{Arc, Mutex, OnceLock}, thread};
+
+    use crate::{backend::{remote::{client::RemoteBackend, remote_backend, server::RemoteServer}, Backend}, core::{primitives::{RemoteTensor, TensorBase}, tensor::{AsView, AsViewMut, TensorAccess, TensorAccessMut, TensorError}, value::TensorValue, MetaTensor, MetaTensorView, Shape, Tensor}};
+
+
+    const SERVER_IP: &str = "127.0.0.1";
+    const SERVER_PORT: u16 = 7891;  // Different port from remote_tests.rs
+    
+    // Lazy static backend shared across all tests
+    static BACKEND: OnceLock<Arc<Mutex<RemoteBackend>>> = OnceLock::new();
+    
+    fn get_backend() -> Arc<Mutex<RemoteBackend>> {
+
+        BACKEND.get_or_init(|| {
+            // Start the server
+            let mut server = RemoteServer::new(SERVER_IP.parse().unwrap(), SERVER_PORT);
+            let server_handle = thread::spawn(move || {
+                let _ = server.serve();
+            });
+            thread::sleep(std::time::Duration::from_millis(10));
+            
+            thread::spawn(|| {
+                // kill thread
+                thread::sleep(std::time::Duration::from_secs(120));
+                std::process::exit(0);
+            });
+
+            // Create and connect the backend
+            let backend = remote_backend(SERVER_IP.parse().unwrap(), SERVER_PORT);
+            
+            Arc::new(Mutex::new(backend))
+        }).clone()
+    }
+    
+    fn make_remote_tensor<T: TensorValue>(buf: Vec<T>, shape: impl Into<Shape>) -> Result<RemoteTensor<T>, TensorError> {
+        let shape: Shape = shape.into();
+        let buf_len = buf.len();
+        let expected_len: usize = shape.iter().product();
+        
+        if buf_len != expected_len {
+            return Err(TensorError::InvalidShape(format!(
+                "Element count mismatch: shape implies {} elements, but buffer has {} elements",
+                expected_len,
+                buf_len
+            )));
+        }
+        
+        let backend_arc = get_backend();
+        let backend = backend_arc.lock().unwrap();
+        let buffer = backend.alloc_from_slice(buf.into())?;
+        let stride = crate::core::shape_to_stride(&shape);
+        
+        // Clone the backend for this tensor
+        let tensor_backend = backend.clone();
+        drop(backend); // Release the lock
+        
+        Ok(TensorBase::from_parts(tensor_backend, buffer, MetaTensor::new(shape, stride, 0)))
+    }
+
+
+    // Edge case: negative values
+    #[test]
+    fn test_add_negative_remote() {
+        let mut tensor = make_remote_tensor(vec![10, 20, 30], vec![3]).unwrap();
+        let mut view = tensor.view_mut();
+        view += -5;
+        let expected = Tensor::<i32>::from_buf(vec![5, 15, 25], vec![3]).unwrap();
+        assert_eq!(tensor.cpu().unwrap(), expected);
+    }
+
+    #[test]
+    fn test_mul_negative_remote() {
+        let mut tensor = make_remote_tensor(vec![1, 2, 3], vec![3]).unwrap();
+        let mut view = tensor.view_mut();
+        view *= -5;
+        let expected = Tensor::<i32>::from_buf(vec![-5, -10, -15], vec![3]).unwrap();
+        assert_eq!(tensor.cpu().unwrap(), expected);
+    }
+
+    // Edge case: non-contiguous slices
+    #[test]
+    fn test_mul_not_inplace_with_noncontiguous_slice_remote() {
+        let mut tensor = make_remote_tensor(vec![1, 2, 3, 4, 5, 6], vec![2, 3]).unwrap();
+        let mut view = tensor.view_mut();
+        let col_slice = view.slice_mut(1, 1..1).unwrap(); // Middle column: [2, 5]
+        
+        assert!(!col_slice.is_contiguous());
+        
+        let result = col_slice * 3;
+        
+        // Result should be a new contiguous tensor
+        let expected_result = Tensor::<i32>::from_buf(vec![6, 15], vec![2]).unwrap();
+        assert_eq!(result.cpu().unwrap(), expected_result);
+        assert!(result.is_contiguous());
+        
+        // Original unchanged
+        let expected_original = Tensor::<i32>::from_buf(vec![1, 2, 3, 4, 5, 6], vec![2, 3]).unwrap();
+        assert_eq!(tensor.cpu().unwrap(), expected_original);
+    }
+
+    // ==================== DATATYPE TESTS ====================
+    
+    #[test]
+    fn test_remote_f64_operations() {
+        let mut tensor = make_remote_tensor(vec![1.5, 2.5, 3.5, 4.5], vec![4]).unwrap();
+        let mut view = tensor.view_mut();
+        view += 10.25;
+        view *= 2.0;
+        view -= 3.5;
+        
+        let expected = Tensor::<f64>::from_buf(
+            vec![20.0, 22.0, 24.0, 26.0], 
+            vec![4]
+        ).unwrap();
+        
+        let result = tensor.cpu().unwrap();
+        for i in 0..4 {
+            let val = result.view().get(vec![i]).unwrap();
+            let exp = expected.view().get(vec![i]).unwrap();
+            assert!((val - exp).abs() < 1e-10, "Mismatch at {}: {} vs {}", i, val, exp);
+        }
+    }
+
+    #[test]
+    fn test_remote_i64_operations() {
+        let mut tensor = make_remote_tensor(
+            vec![100, 200, 300, 400, 500], 
+            vec![5]
+        ).unwrap();
+        let mut view = tensor.view_mut();
+        view -= 50;
+        view *= 3;
+        
+        let expected = Tensor::<i64>::from_buf(
+            vec![150, 450, 750, 1050, 1350], 
+            vec![5]
+        ).unwrap();
+        assert_eq!(tensor.cpu().unwrap(), expected);
+    }
+
+    #[test]
+    fn test_remote_u32_operations() {
+        let mut tensor = make_remote_tensor(
+            vec![10, 20, 30, 40], 
+            vec![4]
+        ).unwrap();
+        let mut view = tensor.view_mut();
+        view += 5;
+        view *= 2;
+        
+        let expected = Tensor::<u32>::from_buf(
+            vec![30, 50, 70, 90], 
+            vec![4]
+        ).unwrap();
+        assert_eq!(tensor.cpu().unwrap(), expected);
+    }
+
+    #[test]
+    fn test_remote_i16_operations() {
+        let mut tensor = make_remote_tensor(
+            vec![1, 2, 3, 4, 5, 6], 
+            vec![2, 3]
+        ).unwrap();
+        let mut view = tensor.view_mut();
+        view *= 10;
+        view += 5;
+        
+        let expected = Tensor::<i16>::from_buf(
+            vec![15, 25, 35, 45, 55, 65], 
+            vec![2, 3]
+        ).unwrap();
+        assert_eq!(tensor.cpu().unwrap(), expected);
+    }
+
+    #[test]
+    fn test_remote_f32_precision() {
+        let mut tensor = make_remote_tensor(
+            vec![10.0, 20.0, 30.0, 40.0], 
+            vec![4]
+        ).unwrap();
+        let mut view = tensor.view_mut();
+        view *= 0.5;
+        view *= 0.25;
+        
+        let expected = Tensor::<f32>::from_buf(
+            vec![1.25, 2.5, 3.75, 5.0], 
+            vec![4]
+        ).unwrap();
+        
+        let result = tensor.cpu().unwrap();
+        for i in 0..4 {
+            let val = result.view().get(vec![i]).unwrap();
+            let exp = expected.view().get(vec![i]).unwrap();
+            assert!((val - exp).abs() < 1e-5);
+        }
+    }
+
+    // ==================== MIXED OPERATIONS TESTS ====================
+
+    #[test]
+    fn test_remote_chained_operations_complex() {
+        let mut tensor = make_remote_tensor(
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], 
+            vec![2, 2, 2]
+        ).unwrap();
+        
+        // Complex chain: multiply, add, subtract, multiply again
+        let mut view = tensor.view_mut();
+        view *= 2.0;
+        view += 10.0;
+        view -= 5.0;
+        view *= 0.5;
+        
+        // Expected: ((x * 2 + 10) - 5) * 0.5 = (x * 2 + 5) * 0.5 = x + 2.5
+        let expected = Tensor::<f32>::from_buf(
+            vec![3.5, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 10.5], 
+            vec![2, 2, 2]
+        ).unwrap();
+        
+        let result = tensor.cpu().unwrap();
+        for i in 0..8 {
+            let idx = vec![i / 4, (i / 2) % 2, i % 2];
+            let val = result.view().get(idx.clone()).unwrap();
+            let exp = expected.view().get(idx.clone()).unwrap();
+            assert!((val - exp).abs() < 1e-5, "Mismatch at {:?}: {} vs {}", idx, val, exp);
+        }
+    }
+
+    #[test]
+    fn test_remote_alternating_operations() {
+        let mut tensor = make_remote_tensor(vec![10, 20, 30, 40], vec![4]).unwrap();
+        let mut view = tensor.view_mut();
+        
+        // Alternating pattern
+        view += 5;   // [15, 25, 35, 45]
+        view *= 2;   // [30, 50, 70, 90]
+        view -= 10;  // [20, 40, 60, 80]
+        view *= 3;   // [60, 120, 180, 240]
+        view += 10;  // [70, 130, 190, 250]
+        
+        let expected = Tensor::<i32>::from_buf(
+            vec![70, 130, 190, 250], 
+            vec![4]
+        ).unwrap();
+        assert_eq!(tensor.cpu().unwrap(), expected);
+    }
+
+    #[test]
+    fn test_remote_mixed_operations_on_slice() {
+        let mut tensor = make_remote_tensor(
+            vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0], 
+            vec![3, 3]
+        ).unwrap();
+        
+        let mut view = tensor.view_mut();
+        let mut middle_row = view.slice_mut(0, 1..1).unwrap(); // [4, 5, 6]
+        middle_row *= 10.0;
+        middle_row += 5.0;
+        
+        let expected = Tensor::<f32>::from_buf(
+            vec![1.0, 2.0, 3.0, 45.0, 55.0, 65.0, 7.0, 8.0, 9.0], 
+            vec![3, 3]
+        ).unwrap();
+        assert_eq!(tensor.cpu().unwrap(), expected);
+    }
+
+    // ==================== EDGE CASE TESTS ====================
+
+    #[test]
+    fn test_remote_zero_operations() {
+        let mut tensor = make_remote_tensor(vec![5, 10, 15, 20], vec![4]).unwrap();
+        let mut view = tensor.view_mut();
+        view += 0;
+        view *= 1;
+        view -= 0;
+        
+        let expected = Tensor::<i32>::from_buf(vec![5, 10, 15, 20], vec![4]).unwrap();
+        assert_eq!(tensor.cpu().unwrap(), expected);
+    }
+
+    #[test]
+    fn test_remote_multiply_by_zero() {
+        let mut tensor = make_remote_tensor(
+            vec![100, 200, 300, 400], 
+            vec![4]
+        ).unwrap();
+        let mut view = tensor.view_mut();
+        view *= 0;
+        
+        let expected = Tensor::<i32>::from_buf(vec![0, 0, 0, 0], vec![4]).unwrap();
+        assert_eq!(tensor.cpu().unwrap(), expected);
+    }
+
+    #[test]
+    fn test_remote_scalar_edge_cases() {
+        // Test with actual scalar (0-dimensional tensor)
+        let mut tensor = make_remote_tensor(vec![3.14159], vec![]).unwrap();
+        assert!(tensor.is_scalar());
+        
+        let mut view = tensor.view_mut();
+        view *= 2.0;
+        view += 1.0;
+        
+        let result = tensor.cpu().unwrap();
+        let value = result.view().get(vec![]).unwrap();
+        assert!((value - 7.28318) < 1e-5);
+    }
+
+    #[test]
+    fn test_remote_negative_to_positive() {
+        let mut tensor = make_remote_tensor(
+            vec![-10, -20, -30, -40], 
+            vec![4]
+        ).unwrap();
+        let mut view = tensor.view_mut();
+        view *= -1;
+        view += 5;
+        
+        let expected = Tensor::<i32>::from_buf(vec![15, 25, 35, 45], vec![4]).unwrap();
+        assert_eq!(tensor.cpu().unwrap(), expected);
+    }
+
+    #[test]
+    fn test_remote_non_inplace_multiple_results() {
+        let mut tensor = make_remote_tensor(vec![1, 2, 3, 4], vec![4]).unwrap();
+        let view = tensor.view_mut();
+        
+        // Create multiple independent results
+        let result1 = view + 10;
+        let view2 = tensor.view_mut();
+        let result2 = view2 * 5;
+        let view3 = tensor.view_mut();
+        let result3 = view3 - 1;
+        
+        let expected1 = Tensor::<i32>::from_buf(vec![11, 12, 13, 14], vec![4]).unwrap();
+        let expected2 = Tensor::<i32>::from_buf(vec![5, 10, 15, 20], vec![4]).unwrap();
+        let expected3 = Tensor::<i32>::from_buf(vec![0, 1, 2, 3], vec![4]).unwrap();
+        
+        assert_eq!(result1.cpu().unwrap(), expected1);
+        assert_eq!(result2.cpu().unwrap(), expected2);
+        assert_eq!(result3.cpu().unwrap(), expected3);
+        
+        // Original unchanged
+        let expected_original = Tensor::<i32>::from_buf(vec![1, 2, 3, 4], vec![4]).unwrap();
+        assert_eq!(tensor.cpu().unwrap(), expected_original);
+    }
+
+    // ==================== BROADCASTING TESTS ====================
+
+    #[test]
+    fn test_broadcast_vector_to_matrix_remote() {
+        // (2, 3) + (3,) -> (2, 3)
+        let veca = make_remote_tensor(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]).unwrap();
+        let vecb = make_remote_tensor(vec![10.0, 20.0, 30.0], vec![3]).unwrap();
+        
+        let vecc = veca + vecb.view();
+        
+        assert_eq!(*vecc.shape(), vec![2, 3]);
+        assert_eq!(vecc.cpu().unwrap(), Tensor::<f32>::from_buf(vec![11.0, 22.0, 33.0, 14.0, 25.0, 36.0], vec![2, 3]).unwrap());
+    }
+
+    #[test]
+    fn test_broadcast_sub_column_to_matrix_remote() {
+        // (2, 3) - (2, 1) -> (2, 3)
+        let veca = make_remote_tensor(vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0], vec![2, 3]).unwrap();
+        let vecb = make_remote_tensor(vec![5.0, 10.0], vec![2, 1]).unwrap();
+        
+        let vecc = veca - vecb.view();
+        
+        assert_eq!(*vecc.shape(), vec![2, 3]);
+        assert_eq!(vecc.cpu().unwrap(), Tensor::<f32>::from_buf(vec![5.0, 15.0, 25.0, 30.0, 40.0, 50.0], vec![2, 3]).unwrap());
+    }
+
+    #[test]
+    fn test_broadcast_mul_different_ranks_remote() {
+        // (3, 4) * (4,) -> (3, 4)
+        let data_a: Vec<f32> = (1..=12).map(|i| i as f32).collect();
+        let veca = make_remote_tensor(data_a, vec![3, 4]).unwrap();
+        let vecb = make_remote_tensor(vec![2.0, 3.0, 4.0, 5.0], vec![4]).unwrap();
+        
+        let vecc = veca * vecb.view();
+        
+        assert_eq!(*vecc.shape(), vec![3, 4]);
+        // First row: [1, 2, 3, 4] * [2, 3, 4, 5] = [2, 6, 12, 20]
+        assert_eq!(vecc.view().get(vec![0, 0]).unwrap(), 2.0);
+        assert_eq!(vecc.view().get(vec![0, 1]).unwrap(), 6.0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_broadcast_incompatible_shapes_remote() {
+        // (3, 4) and (5,) are incompatible (4 != 5)
+        let veca = make_remote_tensor(vec![1.0; 12], vec![3, 4]).unwrap();
+        let vecb = make_remote_tensor(vec![1.0; 5], vec![5]).unwrap();
+        
+        let _vecc = veca + vecb.view();
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_broadcast_both_singletons_incompatible_remote() {
+        // (3, 4) and (5, 1) won't work - 3 != 5
+        let veca = make_remote_tensor(vec![1.0; 12], vec![3, 4]).unwrap();
+        let vecb = make_remote_tensor(vec![1.0; 5], vec![5, 1]).unwrap();
+        
+        let _vecc = veca.add(vecb.view());
+    }
+
+    // ==================== TENSOR VIEW TESTS ====================
+
+    #[test]
+    fn test_tensorviewmut_add_assign_tensorbase_remote() {
+        let mut a = make_remote_tensor(vec![1.0; 6], vec![2, 3]).unwrap();
+        let b = make_remote_tensor(vec![1.0; 6], vec![2, 3]).unwrap();
+        {
+            let mut view = a.view_mut();
+            view += b;
+        }
+        assert_eq!(a.view().get(vec![0, 0]).unwrap(), 2.0);
+    }
+
+    #[test]
+    fn test_tensorviewmut_sub_assign_tensorview_remote() {
+        let mut a = make_remote_tensor(vec![10.0, 20.0], vec![2]).unwrap();
+        let b = make_remote_tensor(vec![3.0, 7.0], vec![2]).unwrap();
+        {
+            let mut view = a.view_mut();
+            view -= b.view();
+        }
+        assert_eq!(a.view().get(vec![0]).unwrap(), 7.0);
+        assert_eq!(a.view().get(vec![1]).unwrap(), 13.0);
+    }
+
+    #[test]
+    fn test_tensorviewmut_mul_assign_tensorviewmut_remote() {
+        let mut a = make_remote_tensor(vec![5.0, 6.0], vec![2]).unwrap();
+        let mut b = make_remote_tensor(vec![2.0, 3.0], vec![2]).unwrap();
+        {
+            let mut view_a = a.view_mut();
+            let view_b = b.view_mut();
+            view_a *= view_b;
+        }
+        assert_eq!(a.view().get(vec![0]).unwrap(), 10.0);
+        assert_eq!(a.view().get(vec![1]).unwrap(), 18.0);
+    }
+}

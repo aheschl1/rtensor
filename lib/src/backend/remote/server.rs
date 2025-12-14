@@ -992,50 +992,122 @@ fn handle_request(
             Ok(())
         }
         Messages::ApplyElementwiseContiguous { buf, op, start, len } => {
-            let (op_type, value) = op;
-            let result = handle_apply_elementwise_contiguous(buf, op_type, value, start, len, connection);
-            let response = Response {
-                asynchronous: false,
-                complete: true,
+            // Send initial acknowledgment
+            let ack_response = Response {
+                asynchronous: true,
+                complete: false,
                 task_id,
-                message: Messages::ApplyElementwiseContiguousResponse { result },
+                message: Messages::ApplyElementwiseContiguousResponse { result: Ok(()) },
             };
-            send_response(stream, &response)?;
+            send_response(stream, &ack_response)?;
+            
+            // Clone what we need for the background thread
+            let (op_type, value) = op;
+            let connection_clone = connection.clone();
+            let stream_clone = stream.try_clone()
+                .map_err(|e| TensorError::RemoteError(format!("Failed to clone stream: {}", e)))?;
+            
+            // Spawn background task
+            thread::spawn(move || {
+                let result = handle_apply_elementwise_contiguous(buf, op_type, value, start, len, &connection_clone);
+                let completion_response = Response {
+                    asynchronous: true,
+                    complete: true,
+                    task_id,
+                    message: Messages::ApplyElementwiseContiguousResponse { result },
+                };
+                let _ = send_response(&mut stream_clone.try_clone().unwrap(), &completion_response);
+            });
+            
             Ok(())
         }
         Messages::ApplyElementwise1DStrided { buf, op, offset, stride, len } => {
-            let (op_type, value) = op;
-            let result = handle_apply_elementwise_1d_strided(buf, op_type, value, offset, stride, len, connection);
-            let response = Response {
-                asynchronous: false,
-                complete: true,
+            // Send initial acknowledgment
+            let ack_response = Response {
+                asynchronous: true,
+                complete: false,
                 task_id,
-                message: Messages::ApplyElementwise1DStridedResponse { result },
+                message: Messages::ApplyElementwise1DStridedResponse { result: Ok(()) },
             };
-            send_response(stream, &response)?;
+            send_response(stream, &ack_response)?;
+            
+            // Clone what we need for the background thread
+            let (op_type, value) = op;
+            let connection_clone = connection.clone();
+            let stream_clone = stream.try_clone()
+                .map_err(|e| TensorError::RemoteError(format!("Failed to clone stream: {}", e)))?;
+            
+            // Spawn background task
+            thread::spawn(move || {
+                let result = handle_apply_elementwise_1d_strided(buf, op_type, value, offset, stride, len, &connection_clone);
+                let completion_response = Response {
+                    asynchronous: true,
+                    complete: true,
+                    task_id,
+                    message: Messages::ApplyElementwise1DStridedResponse { result },
+                };
+                let _ = send_response(&mut stream_clone.try_clone().unwrap(), &completion_response);
+            });
+            
             Ok(())
         }
         Messages::ApplyElementwiseND { buf, op, offset, shape, stride } => {
-            let (op_type, value) = op;
-            let result = handle_apply_elementwise_nd(buf, op_type, value, offset, &shape, &stride, connection);
-            let response = Response {
-                asynchronous: false,
-                complete: true,
+            // Send initial acknowledgment
+            let ack_response = Response {
+                asynchronous: true,
+                complete: false,
                 task_id,
-                message: Messages::ApplyElementwiseNDResponse { result },
+                message: Messages::ApplyElementwiseNDResponse { result: Ok(()) },
             };
-            send_response(stream, &response)?;
+            send_response(stream, &ack_response)?;
+            
+            // Clone what we need for the background thread
+            let (op_type, value) = op;
+            let connection_clone = connection.clone();
+            let stream_clone = stream.try_clone()
+                .map_err(|e| TensorError::RemoteError(format!("Failed to clone stream: {}", e)))?;
+            
+            // Spawn background task
+            thread::spawn(move || {
+                let result = handle_apply_elementwise_nd(buf, op_type, value, offset, &shape, &stride, &connection_clone);
+                let completion_response = Response {
+                    asynchronous: true,
+                    complete: true,
+                    task_id,
+                    message: Messages::ApplyElementwiseNDResponse { result },
+                };
+                let _ = send_response(&mut stream_clone.try_clone().unwrap(), &completion_response);
+            });
+            
             Ok(())
         }
         Messages::Broadcast { left, right, dst, op } => {
-            let result = handle_broadcast(left, right, dst, op, connection);
-            let response = Response {
-                asynchronous: false,
-                complete: true,
+            // Send initial acknowledgment
+            let ack_response = Response {
+                asynchronous: true,
+                complete: false,
                 task_id,
-                message: Messages::BroadcastResponse { result },
+                message: Messages::BroadcastResponse { result: Ok(()) },
             };
-            send_response(stream, &response)?;
+            send_response(stream, &ack_response)?;
+            
+            // Clone what we need for the background thread
+            let connection_clone = connection.clone();
+            let stream_clone = stream.try_clone()
+                .map_err(|e| TensorError::RemoteError(format!("Failed to clone stream: {}", e)))?;
+            
+            // Spawn background task
+            thread::spawn(move || {
+                let result = handle_broadcast(left, right, dst, op, &connection_clone);
+                let completion_response = Response {
+                    asynchronous: true,
+                    complete: true,
+                    task_id,
+                    message: Messages::BroadcastResponse { result },
+                };
+                let _ = send_response(&mut stream_clone.try_clone().unwrap(), &completion_response);
+            });
+            
             Ok(())
         }
         Messages::Matmul { lhs, rhs, b, m, k, n, contiguity } => {

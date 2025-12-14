@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::{Debug, Display}, io::{Read, Write}, net::IpAddr, sync::{atomic::{AtomicU32, Ordering}, mpsc, Arc, Condvar, Mutex, RwLock}};
 
-use crate::{backend::{remote::protocol::{Messages, Request, Response, Slice, TypelessBuf, Value}, Backend, BackendMatMul}, core::{primitives::DeviceType, tensor::TensorError, value::{DType, TensorValue}}};
+use crate::{backend::{remote::{get_backend_default, protocol::{Messages, Request, Response, Slice, TypelessBuf, Value}}, Backend, BackendMatMul}, core::{primitives::DeviceType, tensor::TensorError, value::{DType, TensorValue}}};
 
 
 #[derive(Debug, Clone)]
@@ -162,7 +162,7 @@ impl Backend for RemoteBackend {
     type Buf<T: TensorValue> = RemoteBuf<T>;
 
     fn new() -> Self {
-        panic!("To build a remote tensor, you must use...");
+        get_backend_default().expect("No default remote backend available")
     }
     
     fn device_type() -> crate::core::primitives::DeviceType {
@@ -220,7 +220,6 @@ impl Backend for RemoteBackend {
     }
 
     fn write<T: TensorValue>(&self, buf: &mut Self::Buf<T>, offset: usize, value: T) -> Result<(), crate::core::tensor::TensorError> {
-        self.pending.sync();
         let message = Messages::Write {
             buf: buf.to_typeless(),
             offset,
