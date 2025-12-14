@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io::{Read, Write}, net::IpAddr, sync::{atomic::AtomicU32, Arc, RwLock}, thread};
+use std::{collections::HashMap, io::{Read, Write}, net::IpAddr, sync::{atomic::AtomicU32, Arc, RwLock}, thread::{self, JoinHandle}};
 
 use crate::{backend::{cpu::Cpu, remote::{client::RemoteBuf, protocol::{Messages, Request, Response, Slice, TypelessBuf}}, Backend, BackendMatMul, ContiguityTypes}, core::{primitives::DeviceType, tensor::TensorError, value::DType, MetaTensor}};
 #[cfg(feature = "cuda")]
@@ -669,6 +669,7 @@ fn handle_len(
 ) -> Result<usize, TensorError> {
     let len = match buf.dtype {
         DType::U8 => len_for_dtype!(buf.id, connection, u8, u8_buffers),
+        DType::U8 => len_for_dtype!(buf.id, connection, u8, u8_buffers),
         DType::U16 => len_for_dtype!(buf.id, connection, u16, u16_buffers),
         DType::U32 => len_for_dtype!(buf.id, connection, u32, u32_buffers),
         DType::U64 => len_for_dtype!(buf.id, connection, u64, u64_buffers),
@@ -936,12 +937,12 @@ fn handle_request(
             Ok(())
         },
         Messages::Read { buf, offset } => {
-            let value = handle_read(buf, offset, connection)?;
+            let value = handle_read(buf, offset, connection);
             let response = Response {
                 asynchronous: false,
                 complete: true,
                 task_id,
-                message: Messages::ReadResponse { value: Ok(value) },
+                message: Messages::ReadResponse { value: value },
             };
             send_response(stream, &response)?;
             Ok(())
@@ -1079,7 +1080,6 @@ fn handle_connection(connection: ClientConnection, mut stream: std::net::TcpStre
                         let request = Request::deserialize(&data_buffer).expect("Failed to deserialize request");
                         if let Err(e) = handle_request(request, &connection, &mut stream) {
                             eprintln!("Failed to handle request: {}", e);
-                            // TODO: Send error response back to client
                         }
                     }
                     Err(e) => {
@@ -1094,4 +1094,13 @@ fn handle_connection(connection: ClientConnection, mut stream: std::net::TcpStre
             }
         }
     }
+}
+
+/// launch a new server in a background thread listening on the given IP and port
+pub fn launch_server(ip: IpAddr, port: u16) -> Result<JoinHandle<()>, TensorError> {
+    let mut server = RemoteServer::new(ip, port);
+    let handle = thread::spawn(move || {
+        server.serve().unwrap();
+    });
+    Ok(handle)
 }

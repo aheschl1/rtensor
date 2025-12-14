@@ -162,7 +162,7 @@ impl Backend for RemoteBackend {
     type Buf<T: TensorValue> = RemoteBuf<T>;
 
     fn new() -> Self {
-        todo!("Fix this design, for now, use new_with_address on the Remote type, not the Backend trait")
+        panic!("To build a remote tensor, you must use...");
     }
     
     fn device_type() -> crate::core::primitives::DeviceType {
@@ -358,13 +358,11 @@ fn drain_outgoing(remote: RemoteBackend, mut stream: std::net::TcpStream) {
     let queue_handle = remote.outgoing.clone();
     loop {
         if let Some(req) = queue_handle.dequeue() {
-            println!("serializing request");
             let serialized = req.serialize().unwrap();
             let n = serialized.len();
             let n_bytes = (n as u32).to_le_bytes();
             stream.write_all(&n_bytes).unwrap();
             stream.write_all(&serialized).unwrap();
-            println!("sent request of length {}", n);
         }
     }
 }
@@ -390,10 +388,8 @@ fn read_incoming(remote: RemoteBackend, mut stream: std::net::TcpStream) {
             remote.pending.dec();
         }else{
             if msg.complete {
-                println!("request complete");
                 remote.pending.dec();
             }else{
-                println!("got initial response");
                 //send initial follow up to receiver, do not decrement pending yet
                 let sender = {
                     let mut pending = remote.pending_response.write().unwrap();

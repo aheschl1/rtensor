@@ -1,6 +1,8 @@
 pub mod server;
 pub mod client;
 pub mod protocol;
+#[cfg(test)]
+mod remote_tests;
 
 #[cfg(test)]
 mod tests {
@@ -9,7 +11,7 @@ mod tests {
     use crate::{backend::{remote::{client::RemoteBackend, server::RemoteServer}, Backend}, core::{primitives::TensorBase, tensor::TensorAccess, MetaTensor}};
 
     #[test]
-    fn testing_sandbox() {
+    fn remote_basic() {
         let server_ip = "127.0.0.1";
         let server_port = 7878;
         let server_addr = format!("{}:{}", server_ip, server_port);
@@ -26,9 +28,8 @@ mod tests {
         backend.connect().unwrap();
         let mut buffer = backend.alloc::<f32>(100).unwrap();
         println!("Allocated remote buffer: {:?}", buffer);
-        let res = backend.copy_from_slice(&mut buffer, vec![1.0f32; 100].as_slice()).unwrap();
+        backend.copy_from_slice(&mut buffer, vec![1.0f32; 100].as_slice()).unwrap();
         println!("Copied data to remote buffer");
-        println!("{:?}", backend);
 
         println!("Reading data back from remote buffer...");
         let res = backend.read(&buffer, 0).unwrap();
@@ -46,10 +47,10 @@ mod tests {
         tensor += 1.0;
 
         let x = tensor.get((0, 0)).unwrap();
-        println!("Tensor after addition: {:?}", x);
+        assert_eq!(x, 2.0);
 
         tensor *= 2.0;
-        println!("Tensor after multiplication: {:?}", tensor.get((0, 0)).unwrap());
+        assert_eq!(tensor.get((0, 0)).unwrap(), 4.0);
         
     }
 }

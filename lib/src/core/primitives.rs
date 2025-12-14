@@ -1,9 +1,10 @@
 use std::marker::PhantomData;
 use std::net::IpAddr;
 
+
 use crate::backend::Backend;
 use crate::backend::cpu::Cpu;
-use crate::core::value::{DType, TensorValue};
+use crate::core::value::TensorValue;
 use crate::core::{shape_to_stride, Shape, MetaTensor};
 use crate::core::tensor::TensorError;
 
@@ -42,6 +43,12 @@ impl<B: Backend, T: TensorValue> Clone for TensorBase<T, B> {
 /// ```
 pub type Tensor<T> = TensorBase<T, Cpu>;
 
+#[cfg(feature = "remote")]
+use crate::backend::remote::client::RemoteBackend;
+
+#[cfg(feature = "remote")]
+pub type RemoteTensor<T> = TensorBase<T, RemoteBackend>;
+
 #[cfg(feature = "cuda")]
 /// An owned GPU tensor stored on CUDA device.
 pub type CudaTensor<T> = TensorBase<T, crate::backend::cuda::Cuda>;
@@ -65,6 +72,29 @@ impl<T: TensorValue> Tensor<T> {
         let cuda_buffer = cuda_backend.alloc_from_slice(self.backend.dump(&self.buf)?)?;
         let cuda = CudaTensor::from_parts(cuda_backend, cuda_buffer, self.meta.clone());
         Ok(cuda)
+    }
+}
+
+#[cfg(feature = "remote")]
+impl<T: TensorValue> RemoteTensor<T> {
+    /// Transfers this tensor from remote backend to CPU memory.
+    pub fn cpu(&self) -> Result<Tensor<T>, TensorError> {
+        let cpu_backend = Cpu;
+        let cpu_buffer = self.backend.dump(&self.buf)?;
+        let cpu = Tensor::from_parts(cpu_backend, cpu_buffer, self.meta.clone());
+        Ok(cpu)
+    }
+
+    pub fn with_remote(ip: IpAddr, port: u16) -> Result<Self, TensorError> {
+        let remote_backend = RemoteBackend::new_with_address(ip, port)
+            .map_err(|e| TensorError::RemoteError(format!("Failed to create remote backend: {}", e)))?;
+        let buf = remote_backend.alloc::<T>(0)?;
+        Ok(Self {
+            backend: remote_backend,
+            buf: buf,
+            meta: MetaTensor::new(vec![], vec![], 0),
+            _t: PhantomData,
+        })
     }
 }
 
@@ -141,6 +171,11 @@ pub type CpuTensorViewMut<'a, T> = TensorViewMut<'a, T, Cpu>;
 pub type CudaTensorView<'a, T> = TensorView<'a, T, crate::backend::cuda::Cuda>;
 #[cfg(feature = "cuda")]
 pub type CudaTensorViewMut<'a, T> = TensorViewMut<'a, T, crate::backend::cuda::Cuda>;
+
+#[cfg(feature = "remote")]
+pub type RemoteTensorView<'a, T> = TensorView<'a, T, RemoteBackend>;
+#[cfg(feature = "remote")]
+pub type RemoteTensorViewMut<'a, T> = TensorViewMut<'a, T, RemoteBackend>;
 
 impl<B, T: TensorValue> TensorBase<T, B> 
 where 
