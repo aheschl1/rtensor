@@ -243,6 +243,7 @@ impl Backend for RemoteBackend {
     }
 
     fn write<T: TensorValue>(&self, buf: &mut Self::Buf<T>, offset: usize, value: T) -> Result<(), crate::core::tensor::TensorError> {
+        self.pending.sync();
         let message = Messages::Write {
             buf: buf.to_typeless(),
             offset,
