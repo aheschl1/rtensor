@@ -1,6 +1,6 @@
 # tensors and such
 
-Tensor primitives with CUDA and CPU backends.
+Tensor primitives with CUDA and CPU backends. RPC built in at backend level.
 Uses BLAS, cuBLAS, and custom kernels.
 
 Goal is high performance ML stack with minimal dependencies, and the flexibility of numpy.
@@ -177,4 +177,37 @@ let result = a_gpu.matmul(&b_gpu).unwrap();
 let a = Tensor::<f32>::ones((3,));
 let b = Tensor::<f32>::from_buf(vec![4.0, 5.0, 6.0], (3,)).unwrap();
 let result = a.dot(&b).unwrap();  // scalar: 15.0
+```
+
+## Remote Backend
+
+Still early stage in terms of ergonomics of use.
+
+The protocol includes asynchronous operations, which are transparently handled.
+When a long running operation which acts in place of its operations only, an Ack is returned immediately,
+and the user process can continue. When a read is needed, there is a sync point.
+
+For example:
+
+```rust
+let remote_tensor = RemoteTensor::<f32>::ones((1000, 1000));
+remote_tensor += 1; // async, will continue immediately, though the computation is long
+let value = remote_tensor.get((0, 0)).unwrap(); // sync point, waits for prior ops to finish
+```
+
+### Start a server
+
+```rust
+use crate::backend::remote::server::launch_server;
+launch_server("127.0.0.1", 7878);
+```
+
+```rust
+// Initialize remote backend
+remote_backend_init("127.0.0.1", 7878);
+let remote_tensor = RemoteTensor::<f32>::ones((3, 4));
+// Or, specify a backend directly
+let backend = RemoteBackend::new("127.0.0.1", 7878);
+backend.connect().unwrap();
+let remote_tensor = RemoteTensor::from_parts(backend, vec![1, 2, 3, 4, 5, 6], Shape::from((2, 2))).unwrap();
 ```
