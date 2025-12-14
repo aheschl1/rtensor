@@ -94,7 +94,6 @@ impl RemoteServer {
 
 #[inline(always)]
 fn select_buffer(_connection: &ClientConnection) -> DeviceType {
-    // For simplicity, we always use CPU buffers in this example.
     DeviceType::Cpu
 }
 

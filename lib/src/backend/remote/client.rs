@@ -1,6 +1,7 @@
-use std::{collections::HashMap, fmt::{Debug, Display}, io::{Read, Write}, net::IpAddr, sync::{atomic::{AtomicU32, Ordering}, mpsc, Arc, Condvar, Mutex, RwLock}};
+use std::{collections::HashMap, fmt::{Debug, Display}, io::{Read, Write}, net::IpAddr, sync::{atomic::{AtomicU32, Ordering}, Arc, Condvar, Mutex, RwLock}};
 
 use crate::{backend::{remote::{get_backend_default, protocol::{Messages, Request, Response, Slice, TypelessBuf, Value}}, Backend, BackendMatMul}, core::{primitives::DeviceType, tensor::TensorError, value::{DType, TensorValue}}};
+use flume;
 
 
 #[derive(Debug, Clone)]
@@ -53,8 +54,9 @@ pub struct RemoteBackend {
     remote_port: u16,
     message_id: Arc<AtomicU32>,
     pending: Arc<Pending>,
-    outgoing: Arc<lfqueue::UnboundedQueue<Request>>,
-    pending_response: Arc<RwLock<HashMap<u32, mpsc::Sender<Messages>>>>,
+    outgoing: flume::Sender<Request>,
+    outgoing_receiver: flume::Receiver<Request>,
+    pending_response: Arc<RwLock<HashMap<u32, flume::Sender<Messages>>>>,
 }
     
 impl Debug for RemoteBackend {
@@ -71,29 +73,25 @@ impl Debug for RemoteBackend {
 
 #[derive(Debug)]
 pub struct Pending {
-    count: AtomicU32,
-    lock: Mutex<()>,
+    count: Mutex<u32>,
     cv: Condvar,
 }
 
 impl Pending {
-    #[inline(always)]
     pub fn inc(&self) {
-        self.count.fetch_add(1, Ordering::AcqRel);
+        *self.count.lock().unwrap() += 1;
     }
-
-    #[inline(always)]
     pub fn dec(&self) {
-        if self.count.fetch_sub(1, Ordering::AcqRel) == 1 {
+        let mut c = self.count.lock().unwrap();
+        *c -= 1;
+        if *c == 0 {
             self.cv.notify_all();
         }
     }
-
-    #[inline(always)]
     pub fn sync(&self) {
-        let mut guard = self.lock.lock().unwrap();
-        while self.count.load(Ordering::Acquire) != 0 {
-            guard = self.cv.wait(guard).unwrap();
+        let mut c = self.count.lock().unwrap();
+        while *c > 0 {
+            c = self.cv.wait(c).unwrap();
         }
     }
 }
@@ -102,23 +100,24 @@ impl Pending {
 impl RemoteBackend {
     pub fn new_with_address(remote_addr: IpAddr, remote_port: u16) -> Result<Self, std::io::Error> {
         let pending = Pending {
-            count: AtomicU32::new(0),
-            lock: Mutex::new(()),
+            count: Mutex::new(0),
             cv: Condvar::new(),
         };
+        let (sender, receiver) = flume::unbounded();
         let res = Self {
             remote_addr,
             remote_port,
             pending: Arc::new(pending),
             message_id: Arc::new(AtomicU32::new(0)),
-            outgoing: lfqueue::UnboundedQueue::new().into(),
+            outgoing: sender,
+            outgoing_receiver: receiver,
             pending_response: Arc::new(RwLock::new(HashMap::new())),
         };
         Ok(res)
     }
 
-    fn send_message(&self, msg: Messages) -> mpsc::Receiver<Messages>{
-        let (sender, receiver) = mpsc::channel();
+    fn send_message(&self, msg: Messages) -> flume::Receiver<Messages>{
+        let (sender, receiver) = flume::bounded(1);
         let mid = self.next_message_id();
         {
             let mut pending = self.pending_response.write().unwrap();
@@ -129,7 +128,7 @@ impl RemoteBackend {
             task_id: mid,
             message: msg,
         };
-        self.outgoing.enqueue(req);
+        self.outgoing.send(req).expect("Failed to send message to outgoing channel");
         receiver
     }
 
@@ -354,14 +353,19 @@ impl<T: TensorValue> BackendMatMul<T> for RemoteBackend {
 
 // todo, make this async
 fn drain_outgoing(remote: RemoteBackend, mut stream: std::net::TcpStream) {
-    let queue_handle = remote.outgoing.clone();
+    let receiver = remote.outgoing_receiver.clone();
     loop {
-        if let Some(req) = queue_handle.dequeue() {
+        let req = receiver.recv();
+        
+        if let Ok(req) = req {
             let serialized = req.serialize().unwrap();
             let n = serialized.len();
             let n_bytes = (n as u32).to_le_bytes();
             stream.write_all(&n_bytes).unwrap();
             stream.write_all(&serialized).unwrap();
+        } else {
+            // Channel closed, exit thread
+            break;
         }
     }
 }
@@ -387,6 +391,8 @@ fn read_incoming(remote: RemoteBackend, mut stream: std::net::TcpStream) {
             remote.pending.dec();
         }else{
             if msg.complete {
+                // no need to send follow up, just decrement pending
+                // nobody waits on follow up of async
                 remote.pending.dec();
             }else{
                 //send initial follow up to receiver, do not decrement pending yet

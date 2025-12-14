@@ -16,7 +16,7 @@ mod remote_tests;
 #[cfg(feature = "remote")]
 static REMOTE_BACKENDS: OnceLock<Mutex<HashMap<String, RemoteBackend>>> = OnceLock::new();
 #[cfg(feature = "remote")]
-pub fn remote_backend(ip: IpAddr, port: u16) -> RemoteBackend {
+pub fn remote_backend_init(ip: IpAddr, port: u16) -> RemoteBackend {
     let key = format!("{ip}:{port}");
 
     let map = REMOTE_BACKENDS

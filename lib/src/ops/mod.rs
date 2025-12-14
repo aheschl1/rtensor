@@ -5091,7 +5091,7 @@ mod cuda_tests {
 mod remote_tests {
     use std::{ops::Add, sync::{Arc, Mutex, OnceLock}, thread};
 
-    use crate::{backend::{remote::{client::RemoteBackend, remote_backend, server::RemoteServer}, Backend}, core::{primitives::{RemoteTensor, TensorBase}, tensor::{AsView, AsViewMut, TensorAccess, TensorAccessMut, TensorError}, value::TensorValue, MetaTensor, MetaTensorView, Shape, Tensor}};
+    use crate::{backend::{remote::{client::RemoteBackend, remote_backend_init, server::RemoteServer}, Backend}, core::{primitives::{RemoteTensor, TensorBase}, tensor::{AsView, AsViewMut, TensorAccess, TensorAccessMut, TensorError}, value::TensorValue, MetaTensor, MetaTensorView, Shape, Tensor}};
 
 
     const SERVER_IP: &str = "127.0.0.1";
@@ -5117,7 +5117,7 @@ mod remote_tests {
             });
 
             // Create and connect the backend
-            let backend = remote_backend(SERVER_IP.parse().unwrap(), SERVER_PORT);
+            let backend = remote_backend_init(SERVER_IP.parse().unwrap(), SERVER_PORT);
             
             Arc::new(Mutex::new(backend))
         }).clone()
@@ -5256,7 +5256,7 @@ mod remote_tests {
         view *= 10;
         view += 5;
         
-        let expected = Tensor::<i16>::from_buf(
+        let expected: TensorBase<i16, crate::backend::cpu::Cpu> = Tensor::<i16>::from_buf(
             vec![15, 25, 35, 45, 55, 65], 
             vec![2, 3]
         ).unwrap();

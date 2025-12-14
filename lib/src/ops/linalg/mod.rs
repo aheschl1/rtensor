@@ -3181,7 +3181,7 @@ mod remote_tests {
     use super::*;
     use std::sync::{Arc, Mutex, OnceLock};
     use std::thread;
-    use crate::backend::remote::remote_backend;
+    use crate::backend::remote::remote_backend_init;
     use crate::{
         backend::{remote::{client::RemoteBackend, server::RemoteServer}, Backend},
         core::{
@@ -3211,7 +3211,7 @@ mod remote_tests {
             thread::sleep(std::time::Duration::from_millis(10));
             
             // Create and connect the backend
-            let backend = remote_backend(SERVER_IP.parse().unwrap(), SERVER_PORT);
+            let backend = remote_backend_init(SERVER_IP.parse().unwrap(), SERVER_PORT);
             
             Arc::new(Mutex::new(backend))
         }).clone()
