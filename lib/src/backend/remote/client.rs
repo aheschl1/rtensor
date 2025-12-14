@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::{Debug, Display}, io::{Read, Write}, net::IpAddr, sync::{atomic::{AtomicU32, Ordering}, Arc, Condvar, Mutex, RwLock}};
+use std::{collections::HashMap, fmt::{Debug, Display}, io::{Read, Write}, net::IpAddr, sync::{atomic::{AtomicBool, AtomicU32, Ordering}, Arc, Condvar, Mutex, RwLock}};
 
 use crate::{backend::{remote::{get_backend_default, protocol::{Messages, Request, Response, Slice, TypelessBuf, Value}}, Backend, BackendMatMul}, core::{primitives::DeviceType, tensor::TensorError, value::{DType, TensorValue}}};
 use flume;
@@ -54,9 +54,10 @@ pub struct RemoteBackend {
     remote_port: u16,
     message_id: Arc<AtomicU32>,
     pending: Arc<Pending>,
-    outgoing: flume::Sender<Request>,
-    outgoing_receiver: flume::Receiver<Request>,
+    messages_outgoing_sender: flume::Sender<Request>,
+    messages_outgoing_receiver: flume::Receiver<Request>,
     pending_response: Arc<RwLock<HashMap<u32, flume::Sender<Messages>>>>,
+    poisoned: Arc<AtomicBool>,
 }
     
 impl Debug for RemoteBackend {
@@ -109,26 +110,41 @@ impl RemoteBackend {
             remote_port,
             pending: Arc::new(pending),
             message_id: Arc::new(AtomicU32::new(0)),
-            outgoing: sender,
-            outgoing_receiver: receiver,
+            messages_outgoing_sender: sender,
+            messages_outgoing_receiver: receiver,
             pending_response: Arc::new(RwLock::new(HashMap::new())),
+            poisoned: Arc::new(AtomicBool::new(false)),
         };
         Ok(res)
     }
 
+    fn poison(&self) {
+        self.poisoned.store(true, Ordering::SeqCst);
+    }
+
+    #[inline(always)]
+    fn is_poisoned(&self) -> bool {
+        self.poisoned.load(Ordering::SeqCst)
+    }
+
     fn send_message(&self, msg: Messages) -> flume::Receiver<Messages>{
+        if self.is_poisoned() {
+            panic!("Attempted to send message on poisoned RemoteBackend. Reasons for poison:
+            1. An asynchronous operation reported an error from the remote backend.
+            2. The RemoteBackend is in an inconsistent state and can no longer process messages safely.");
+        }
+        self.pending.inc();
         let (sender, receiver) = flume::bounded(1);
         let mid = self.next_message_id();
         {
             let mut pending = self.pending_response.write().unwrap();
             pending.insert(mid, sender);
         }
-        self.pending.inc();
         let req = Request {
             task_id: mid,
             message: msg,
         };
-        self.outgoing.send(req).expect("Failed to send message to outgoing channel");
+        self.messages_outgoing_sender.send(req).expect("Failed to send message to outgoing channel");
         receiver
     }
 
@@ -148,6 +164,10 @@ impl RemoteBackend {
             read_incoming(remote, read_stream);
         });
         Ok(())
+    }
+
+    pub fn address(&self) -> (IpAddr, u16) {
+        (self.remote_addr, self.remote_port)
     }
 
     #[inline(always)]
@@ -309,7 +329,7 @@ impl Backend for RemoteBackend {
     }
 
     unsafe fn broadcast<T: TensorValue>(
-        &self, 
+        &self,
         left: (*const Self::Buf<T>, &crate::core::MetaTensor), 
         right: (*const Self::Buf<T>, &crate::core::MetaTensor),
         dst: (*mut Self::Buf<T>, &crate::core::MetaTensor),
@@ -353,16 +373,17 @@ impl<T: TensorValue> BackendMatMul<T> for RemoteBackend {
 
 // todo, make this async
 fn drain_outgoing(remote: RemoteBackend, mut stream: std::net::TcpStream) {
-    let receiver = remote.outgoing_receiver.clone();
-    loop {
-        let req = receiver.recv();
-        
-        if let Ok(req) = req {
+    let receiver = remote.messages_outgoing_receiver.clone();
+    loop {        
+        if let Ok(req) = receiver.recv() {
             let serialized = req.serialize().unwrap();
             let n = serialized.len();
             let n_bytes = (n as u32).to_le_bytes();
             stream.write_all(&n_bytes).unwrap();
             stream.write_all(&serialized).unwrap();
+            if let Messages::Broadcast { left, right, dst, op } = &req.message {
+                println!("Sending Broadcast message for ids left: {}, right: {}, dst: {}", left.0.id, right.0.id, dst.0.id);
+            }
         } else {
             // Channel closed, exit thread
             break;
@@ -370,39 +391,51 @@ fn drain_outgoing(remote: RemoteBackend, mut stream: std::net::TcpStream) {
     }
 }
 
+#[inline]
+fn read_response(stream: &mut std::net::TcpStream, len_buf: &mut  [u8; 4]) -> Result<Response, Box<bincode::ErrorKind>> {
+    stream.read_exact(len_buf).unwrap();
+    let msg_len = u32::from_le_bytes(*len_buf) as usize;
+    let mut msg_buf = vec![0u8; msg_len];
+    stream.read_exact(&mut msg_buf).unwrap();
+    Response::deserialize(&msg_buf)
+}
+
+#[inline]
+fn send_message_to_channel(remote: &RemoteBackend, msg: Response) {
+    let task_id = msg.task_id;
+    if let Messages::BroadcastResponse { result } = &msg.message {
+        println!("Received BroadcastResponse for task_id={}", task_id);
+    }
+    let sender = {
+        let mut pending = remote.pending_response.write().unwrap();
+        pending.remove(&task_id)
+    };
+    if let Some(sender) = sender {
+        sender.send(msg.message).unwrap();
+    }
+}
+
 fn read_incoming(remote: RemoteBackend, mut stream: std::net::TcpStream) {
     let mut len_buf = [0u8; 4];
     loop {
-        stream.read_exact(&mut len_buf).unwrap();
-        let msg_len = u32::from_le_bytes(len_buf) as usize;
-        let mut msg_buf = vec![0u8; msg_len];
-        stream.read_exact(&mut msg_buf).unwrap();
-        let msg = Response::deserialize(&msg_buf).expect("Failed to deserialize response");
-        let task_id = msg.task_id;
+        let msg = read_response(&mut stream, &mut len_buf).unwrap();
         if !msg.asynchronous {
             debug_assert!(msg.complete);
-            let sender = {
-                let mut pending = remote.pending_response.write().unwrap();
-                pending.remove(&task_id)
-            };
-            if let Some(sender) = sender {
-                sender.send(msg.message).unwrap();
-            }
+            send_message_to_channel(&remote, msg);
             remote.pending.dec();
         }else{
             if msg.complete {
-                // no need to send follow up, just decrement pending
+                // no need to send follow up, just decrement pending. because, there was an incomplete one before
+                // that sent the message. async followup is just a backend notification.
                 // nobody waits on follow up of async
+                if let Some(e) = msg.error {
+                    remote.poison();
+                    panic!("Inconsistent state detected. Received error in async message: {:?}", e);
+                } 
                 remote.pending.dec();
             }else{
                 //send initial follow up to receiver, do not decrement pending yet
-                let sender = {
-                    let mut pending = remote.pending_response.write().unwrap();
-                    pending.remove(&task_id)
-                };
-                if let Some(sender) = sender {
-                    sender.send(msg.message).unwrap();
-                }
+                send_message_to_channel(&remote, msg);
             }
         }
     }

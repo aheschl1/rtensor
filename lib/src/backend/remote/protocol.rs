@@ -90,7 +90,7 @@ impl Value {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Copy)]
 pub(crate) struct TypelessBuf {
     pub(crate) id: u32,
     pub(crate) dtype: DType,
@@ -102,6 +102,7 @@ pub(crate) struct Response {
     pub(crate) complete: bool,
     pub(crate) task_id: u32,
     pub(crate) message: Messages,
+    pub(crate) error: Option<TensorError>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -173,6 +174,9 @@ impl_typeless_buf_conversions!(
 
 #[derive(Serialize, Deserialize)]
 pub (crate) enum Messages {
+    ErrorResponse {
+        message: String,
+    },
     DeviceType,
     DeviceTypeResponse {
         device_type: DeviceType

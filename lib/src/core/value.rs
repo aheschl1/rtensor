@@ -98,18 +98,19 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "remote", derive(Serialize, Deserialize))]
+#[repr(C)]
 pub enum DType {
-    U8,
-    I8,
-    U16,
-    I16,
-    U32,
-    U128,
-    I32,
-    U64,
-    I64,
-    I128,
-    F32,
-    F64,
+    U8 = 0,
+    I8 = 1,
+    U16 = 2,
+    I16 = 3,
+    U32 = 4,
+    U128 = 5,
+    I32 = 6,
+    U64 = 7,
+    I64 = 8,
+    I128 = 9,
+    F32 = 10,
+    F64 = 11,
 }
 

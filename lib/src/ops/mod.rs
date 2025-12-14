@@ -5098,14 +5098,14 @@ mod remote_tests {
     const SERVER_PORT: u16 = 7891;  // Different port from remote_tests.rs
     
     // Lazy static backend shared across all tests
-    static BACKEND: OnceLock<Arc<Mutex<RemoteBackend>>> = OnceLock::new();
+    static BACKEND: OnceLock<RemoteBackend> = OnceLock::new();
     
-    fn get_backend() -> Arc<Mutex<RemoteBackend>> {
+    fn get_backend() -> RemoteBackend {
 
         BACKEND.get_or_init(|| {
             // Start the server
             let mut server = RemoteServer::new(SERVER_IP.parse().unwrap(), SERVER_PORT);
-            let server_handle = thread::spawn(move || {
+            thread::spawn(move || {
                 let _ = server.serve();
             });
             thread::sleep(std::time::Duration::from_millis(10));
@@ -5119,7 +5119,7 @@ mod remote_tests {
             // Create and connect the backend
             let backend = remote_backend_init(SERVER_IP.parse().unwrap(), SERVER_PORT);
             
-            Arc::new(Mutex::new(backend))
+            backend
         }).clone()
     }
     
@@ -5136,8 +5136,7 @@ mod remote_tests {
             )));
         }
         
-        let backend_arc = get_backend();
-        let backend = backend_arc.lock().unwrap();
+        let backend = get_backend();
         let buffer = backend.alloc_from_slice(buf.into())?;
         let stride = crate::core::shape_to_stride(&shape);
         
@@ -5443,8 +5442,15 @@ mod remote_tests {
         // (2, 3) + (3,) -> (2, 3)
         let veca = make_remote_tensor(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]).unwrap();
         let vecb = make_remote_tensor(vec![10.0, 20.0, 30.0], vec![3]).unwrap();
+
+        println!("vecablabla id {:?}", veca.buf.id);
+        println!("vecbblabla id {:?}", vecb.buf.id);
+        println!("penis {:?}", veca.backend);
+        println!("penis {:?}", vecb.backend);
         
         let vecc = veca + vecb.view();
+
+        println!("penis {:?}", vecc.backend);
         
         assert_eq!(*vecc.shape(), vec![2, 3]);
         assert_eq!(vecc.cpu().unwrap(), Tensor::<f32>::from_buf(vec![11.0, 22.0, 33.0, 14.0, 25.0, 36.0], vec![2, 3]).unwrap());
@@ -5455,9 +5461,12 @@ mod remote_tests {
         // (2, 3) - (2, 1) -> (2, 3)
         let veca = make_remote_tensor(vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0], vec![2, 3]).unwrap();
         let vecb = make_remote_tensor(vec![5.0, 10.0], vec![2, 1]).unwrap();
-        
+
+        println!("veca id {:?}", veca.buf.id);
         let vecc = veca - vecb.view();
-        
+        println!("vecc id {:?}", vecc.buf.id);
+        println!("vccb id {:?}", vecb.buf.id);
+
         assert_eq!(*vecc.shape(), vec![2, 3]);
         assert_eq!(vecc.cpu().unwrap(), Tensor::<f32>::from_buf(vec![5.0, 15.0, 25.0, 30.0, 40.0, 50.0], vec![2, 3]).unwrap());
     }

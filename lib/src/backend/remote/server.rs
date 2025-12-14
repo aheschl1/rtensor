@@ -1,6 +1,9 @@
+use core::panic;
 use std::{collections::HashMap, io::{Read, Write}, net::IpAddr, sync::{atomic::AtomicU32, Arc, RwLock}, thread::{self, JoinHandle}};
 
-use crate::{backend::{cpu::Cpu, remote::{client::RemoteBuf, protocol::{Messages, Request, Response, Slice, TypelessBuf}}, Backend, BackendMatMul, ContiguityTypes}, core::{primitives::DeviceType, tensor::TensorError, value::DType, MetaTensor}};
+use flume::Receiver;
+
+use crate::{backend::{cpu::Cpu, remote::{client::RemoteBuf, protocol::{Messages, Request, Response, Slice, TypelessBuf}}, Backend, BackendMatMul, ContiguityTypes}, core::{primitives::DeviceType, tensor::TensorError, value::DType, MetaTensor}, ops::base::OpType};
 #[cfg(feature = "cuda")]
 use crate::backend::cuda::Cuda;
 
@@ -10,19 +13,19 @@ pub(crate) struct RemoteServer {
 }
 
 // this is pure evil
-struct BufferCollection<B:Backend> {
-    u8_buffers: HashMap<u32, B::Buf<u8>>,
-    u16_buffers: HashMap<u32, B::Buf<u16>>,
-    u32_buffers: HashMap<u32, B::Buf<u32>>,
-    u64_buffers: HashMap<u32, B::Buf<u64>>,
-    u128_buffers: HashMap<u32, B::Buf<u128>>,
-    i8_buffers: HashMap<u32, B::Buf<i8>>,
-    i16_buffers: HashMap<u32, B::Buf<i16>>,
-    i32_buffers: HashMap<u32, B::Buf<i32>>,
-    i64_buffers: HashMap<u32, B::Buf<i64>>,
-    i128_buffers: HashMap<u32, B::Buf<i128>>,
-    f32_buffers: HashMap<u32, B::Buf<f32>>,
-    f64_buffers: HashMap<u32, B::Buf<f64>>,
+pub(crate) struct BufferCollection<B:Backend> {
+    pub(crate) u8_buffers: HashMap<u32, B::Buf<u8>>,
+    pub(crate) u16_buffers: HashMap<u32, B::Buf<u16>>,
+    pub(crate) u32_buffers: HashMap<u32, B::Buf<u32>>,
+    pub(crate) u64_buffers: HashMap<u32, B::Buf<u64>>,
+    pub(crate) u128_buffers: HashMap<u32, B::Buf<u128>>,
+    pub(crate) i8_buffers: HashMap<u32, B::Buf<i8>>,
+    pub(crate) i16_buffers: HashMap<u32, B::Buf<i16>>,
+    pub(crate) i32_buffers: HashMap<u32, B::Buf<i32>>,
+    pub(crate) i64_buffers: HashMap<u32, B::Buf<i64>>,
+    pub(crate) i128_buffers: HashMap<u32, B::Buf<i128>>,
+    pub(crate) f32_buffers: HashMap<u32, B::Buf<f32>>,
+    pub(crate) f64_buffers: HashMap<u32, B::Buf<f64>>,
 }
 
 impl<B: Backend> Default for BufferCollection<B> {
@@ -45,14 +48,46 @@ impl<B: Backend> Default for BufferCollection<B> {
 }
 
 #[derive(Clone)]
-struct ClientConnection {
+pub(crate) struct ClientConnection {
+    pub(crate) output_messages_sender: flume::Sender<Response>,
+    pub(crate) output_messages_receiver: flume::Receiver<Response>,
+    pub(crate) background_tasks_receiver: flume::Receiver<AsyncJob>,
+    pub(crate) background_tasks_sender: flume::Sender<AsyncJob>,
     #[cfg(feature = "cuda")]
-    cuda_buffers: Arc<RwLock<BufferCollection<Cuda>>>,
-    cpu_buffers: Arc<RwLock<BufferCollection<Cpu>>>,
-    cpu: Cpu,
-    next_buffer_id: Arc<AtomicU32>,
+    pub(crate) cuda_buffers: Arc<RwLock<BufferCollection<Cuda>>>,
+    pub(crate) cpu_buffers: Arc<RwLock<BufferCollection<Cpu>>>,
+    pub(crate) cpu: Cpu,
+    pub(crate) next_buffer_id: Arc<AtomicU32>,
     #[cfg(feature = "cuda")]
-    cuda: Cuda,
+    pub(crate) cuda: Cuda,
+}
+
+impl ClientConnection {
+    pub fn new() -> Self {
+        let (output_messages_sender, output_messages_receiver) = flume::unbounded();
+        let (background_tasks_sender, background_tasks_receiver) = flume::unbounded();
+        Self {
+            output_messages_sender,
+            output_messages_receiver,
+            background_tasks_receiver,
+            background_tasks_sender,
+            cpu_buffers: Arc::new(RwLock::new(BufferCollection::default())),
+            #[cfg(feature = "cuda")]
+            cuda_buffers: Arc::new(RwLock::new(BufferCollection::default())),
+            cpu: Cpu::new(),
+            next_buffer_id: Arc::new(AtomicU32::new(0)),
+            #[cfg(feature = "cuda")]
+            cuda: Cuda::new(),
+        }
+    }
+
+    pub fn queue_response(&self, response: Response) -> Result<(), TensorError> {
+        self.output_messages_sender.send(response).map_err(|e| TensorError::RemoteError(format!("Failed to send response: {}", e)))
+    }
+
+    pub fn queue_job(&self, job: AsyncJob) -> Result<(), TensorError> {
+        self.background_tasks_sender.send(job).map_err(|e| TensorError::RemoteError(format!("Failed to send job: {}", e)))
+    }
 }
 
 impl RemoteServer {
@@ -68,15 +103,8 @@ impl RemoteServer {
         for stream in listener.incoming() {
             match stream {
                 Ok(stream) => {
-                    let connection = ClientConnection { 
-                        cpu_buffers: Arc::new(RwLock::new(BufferCollection::default())),
-                        #[cfg(feature = "cuda")]
-                        cuda_buffers: Arc::new(RwLock::new(BufferCollection::default())),
-                        cpu: Cpu::new(),
-                        next_buffer_id: Arc::new(AtomicU32::new(0)),
-                        #[cfg(feature = "cuda")]
-                        cuda: Cuda::new(),
-                    };
+                    println!("New connection: {}", stream.peer_addr().unwrap());
+                    let connection = ClientConnection::new();
                     // launch a new thread 
                     std::thread::spawn(move || {
                         handle_connection(connection, stream);
@@ -106,6 +134,7 @@ macro_rules! alloc_from_slice_for_dtype {
                 let buf = $connection.cpu.alloc_from_slice(boxed_slice)?;
                 let buffer_id = $connection.next_buffer_id.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 $connection.cpu_buffers.write().unwrap().$buffer_field.insert(buffer_id, buf);
+                println!("Allocated CPU buffer with id {}", buffer_id);
                 RemoteBuf {
                     id: buffer_id,
                     dtype: DType::$dtype_variant,
@@ -433,7 +462,7 @@ macro_rules! broadcast_for_dtype {
         let device_type = select_buffer($connection);
         match device_type {
             DeviceType::Cpu => {
-                let buffers = $connection.cpu_buffers.read().unwrap();
+                let buffers = $connection.cpu_buffers.write().unwrap();
                 let left_buf = buffers.$buffer_field
                     .get(&$left_id)
                     .ok_or_else(|| TensorError::RemoteError(format!("Left buffer {} not found", $left_id)))?;
@@ -443,6 +472,10 @@ macro_rules! broadcast_for_dtype {
                 let dst_buf = buffers.$buffer_field
                     .get(&$dst_id)
                     .ok_or_else(|| TensorError::RemoteError(format!("Dst buffer {} not found", $dst_id)))?;
+                
+                println!("Broadcasting on CPU: left_buf id {}, right_buf id {}, dst_buf id {}", $left_id, $right_id, $dst_id);
+                println!("Left buf ptr: {:p}", left_buf);
+                println!("Right buf ptr: {:p}", right_buf);
                 
                 unsafe {
                     $connection.cpu.broadcast(
@@ -455,7 +488,7 @@ macro_rules! broadcast_for_dtype {
             },
             #[cfg(feature = "cuda")]
             DeviceType::Cuda(_device_id) => {
-                let buffers = $connection.cuda_buffers.read().unwrap();
+                let buffers = $connection.cuda_buffers.write().unwrap();
                 let left_buf = buffers.$buffer_field
                     .get(&$left_id)
                     .ok_or_else(|| TensorError::RemoteError(format!("Left buffer {} not found", $left_id)))?;
@@ -864,12 +897,50 @@ fn handle_matmul(
     Ok(result_buf)
 }
 
+pub(crate) enum AsyncJob {
+    CopyFromSlice {
+        task_id: u32,
+        dst: TypelessBuf,
+        src: Slice,
+    },
+    ApplyElementwiseContiguous {
+        task_id: u32,
+        buf: TypelessBuf,
+        op: (crate::ops::base::OpType, crate::backend::remote::protocol::Value),
+        start: usize,
+        len: usize,
+    },
+    ApplyElementwise1DStrided {
+        task_id: u32,
+        buf: TypelessBuf,
+        op: (crate::ops::base::OpType, crate::backend::remote::protocol::Value),
+        offset: usize,
+        stride: isize,
+        len: usize,
+    },
+    ApplyElementwiseND {
+        task_id: u32,
+        buf: TypelessBuf,
+        op: (crate::ops::base::OpType, crate::backend::remote::protocol::Value),
+        offset: usize,
+        shape: Vec<usize>,
+        stride: Vec<isize>,
+    },
+    Broadcast {
+        task_id: u32,
+        left: (TypelessBuf, MetaTensor),
+        right: (TypelessBuf, MetaTensor),
+        dst: (TypelessBuf, MetaTensor),
+        op: crate::ops::base::OpType,
+    },
+}
+
+
 #[inline(always)]
 fn handle_request(
     request: Request, 
     connection: &ClientConnection,
-    stream: &mut std::net::TcpStream,
-) -> Result<(), TensorError> {
+){
     let task_id = request.task_id;
     match request.message {
         Messages::DeviceType => {
@@ -878,32 +949,32 @@ fn handle_request(
                 asynchronous: false,
                 complete: true,
                 task_id,
+                error: None,
                 message: Messages::DeviceTypeResponse { device_type },
             };
-            send_response(stream, &response)?;
-            Ok(())
+            connection.queue_response(response).expect("Failed to send message");
         }
         Messages::AllocFromSlice { slice } => {
-            let remote_buf = handle_alloc_from_slice(slice, connection)?;
+            let remote_buf = handle_alloc_from_slice(slice, connection);
             let response = Response {
                 asynchronous: false,
                 complete: true,
-                task_id,
-                message: Messages::AllocFromSliceResponse { buf: Ok(remote_buf) },
+                task_id,                
+                error: remote_buf.as_ref().err().cloned(),
+                message: Messages::AllocFromSliceResponse { buf: remote_buf },
             };
-            send_response(stream, &response)?;
-            Ok(())
+            connection.queue_response(response).expect("Failed to send message");
         },
         Messages::Alloc { len, dtype } => {
-            let remote_buf = handle_alloc(len, dtype, connection)?;
+            let remote_buf = handle_alloc(len, dtype, connection);
             let response = Response {
                 asynchronous: false,
                 complete: true,
                 task_id,
-                message: Messages::AllocResponse { buf: Ok(remote_buf) },
+                error: remote_buf.as_ref().err().cloned(),
+                message: Messages::AllocResponse { buf: remote_buf },
             };
-            send_response(stream, &response)?;
-            Ok(())
+            connection.queue_response(response).expect("Failed to send message");
         },
         Messages::CopyFromSlice { dst, src } => {
             // Send initial acknowledgment
@@ -911,28 +982,18 @@ fn handle_request(
                 asynchronous: true,
                 complete: false,
                 task_id,
+                error: None,
                 message: Messages::CopyFromSliceResponse { result: Ok(()) },
             };
-            send_response(stream, &ack_response)?;
+            connection.queue_response(ack_response).expect("Failed to send message");
             
-            // Clone what we need for the background thread
-            let connection_clone = connection.clone();
-            let stream_clone = stream.try_clone()
-                .map_err(|e| TensorError::RemoteError(format!("Failed to clone stream: {}", e)))?;
-            
-            // Spawn background task
-            thread::spawn(move || {
-                let result = handle_copy_from_slice(dst, src, &connection_clone);
-                let completion_response = Response {
-                    asynchronous: true,
-                    complete: true,
-                    task_id,
-                    message: Messages::CopyFromSliceResponse { result },
-                };
-                let _ = send_response(&mut stream_clone.try_clone().unwrap(), &completion_response);
-            });
-            
-            Ok(())
+            // Clone what we need for the background thread            
+            let job = AsyncJob::CopyFromSlice {
+                task_id,
+                dst,
+                src,
+            };
+            connection.queue_job(job).expect("Failed to queue job");
         },
         Messages::Read { buf, offset } => {
             let value = handle_read(buf, offset, connection);
@@ -940,10 +1001,10 @@ fn handle_request(
                 asynchronous: false,
                 complete: true,
                 task_id,
+                error: value.as_ref().err().cloned(),
                 message: Messages::ReadResponse { value: value },
             };
-            send_response(stream, &response)?;
-            Ok(())
+            connection.queue_response(response).expect("Failed to send message");
         }
         Messages::Write { buf, offset, value } => {
             let result = handle_write(buf, offset, value, connection);
@@ -951,43 +1012,43 @@ fn handle_request(
                 asynchronous: false,
                 complete: true,
                 task_id,
+                error: result.as_ref().err().cloned(),
                 message: Messages::WriteResponse { result },
             };
-            send_response(stream, &response)?;
-            Ok(())
+            connection.queue_response(response).expect("Failed to send message");
         }
         Messages::Len { buf } => {
-            let len = handle_len(buf, connection)?;
+            let len = handle_len(buf, connection);
             let response = Response {
                 asynchronous: false,
                 complete: true,
                 task_id,
-                message: Messages::LenResponse { len },
+                error: len.as_ref().err().cloned(),
+                message: Messages::LenResponse { len: len.unwrap_or(0) },
             };
-            send_response(stream, &response)?;
-            Ok(())
+            connection.queue_response(response).expect("Failed to send message");
         }
         Messages::Copy { src } => {
-            let new_buf = handle_copy(src, connection)?;
+            let new_buf = handle_copy(src, connection);
             let response = Response {
                 asynchronous: false,
                 complete: true,
                 task_id,
-                message: Messages::CopyResponse { buf: Ok(new_buf) },
+                error: new_buf.as_ref().err().cloned(),
+                message: Messages::CopyResponse { buf: new_buf },
             };
-            send_response(stream, &response)?;
-            Ok(())
+            connection.queue_response(response).expect("Failed to send message");
         }
         Messages::Dump { src } => {
-            let slice = handle_dump(src, connection)?;
+            let slice = handle_dump(src, connection);
             let response = Response {
                 asynchronous: false,
                 complete: true,
                 task_id,
-                message: Messages::DumpResponse { data: Ok(slice) },
+                error: slice.as_ref().err().cloned(),
+                message: Messages::DumpResponse { data: slice },
             };
-            send_response(stream, &response)?;
-            Ok(())
+            connection.queue_response(response).expect("Failed to send message");
         }
         Messages::ApplyElementwiseContiguous { buf, op, start, len } => {
             // Send initial acknowledgment
@@ -995,29 +1056,19 @@ fn handle_request(
                 asynchronous: true,
                 complete: false,
                 task_id,
+                error: None,
                 message: Messages::ApplyElementwiseContiguousResponse { result: Ok(()) },
             };
-            send_response(stream, &ack_response)?;
+            connection.queue_response(ack_response).expect("Failed to send message");
             
-            // Clone what we need for the background thread
-            let (op_type, value) = op;
-            let connection_clone = connection.clone();
-            let stream_clone = stream.try_clone()
-                .map_err(|e| TensorError::RemoteError(format!("Failed to clone stream: {}", e)))?;
-            
-            // Spawn background task
-            thread::spawn(move || {
-                let result = handle_apply_elementwise_contiguous(buf, op_type, value, start, len, &connection_clone);
-                let completion_response = Response {
-                    asynchronous: true,
-                    complete: true,
-                    task_id,
-                    message: Messages::ApplyElementwiseContiguousResponse { result },
-                };
-                let _ = send_response(&mut stream_clone.try_clone().unwrap(), &completion_response);
-            });
-            
-            Ok(())
+            let job = AsyncJob::ApplyElementwiseContiguous {
+                task_id,
+                buf,
+                op,
+                start,
+                len,
+            };
+            connection.queue_job(job).expect("Failed to queue job");
         }
         Messages::ApplyElementwise1DStrided { buf, op, offset, stride, len } => {
             // Send initial acknowledgment
@@ -1025,29 +1076,19 @@ fn handle_request(
                 asynchronous: true,
                 complete: false,
                 task_id,
+                error: None,
                 message: Messages::ApplyElementwise1DStridedResponse { result: Ok(()) },
             };
-            send_response(stream, &ack_response)?;
-            
-            // Clone what we need for the background thread
-            let (op_type, value) = op;
-            let connection_clone = connection.clone();
-            let stream_clone = stream.try_clone()
-                .map_err(|e| TensorError::RemoteError(format!("Failed to clone stream: {}", e)))?;
-            
-            // Spawn background task
-            thread::spawn(move || {
-                let result = handle_apply_elementwise_1d_strided(buf, op_type, value, offset, stride, len, &connection_clone);
-                let completion_response = Response {
-                    asynchronous: true,
-                    complete: true,
-                    task_id,
-                    message: Messages::ApplyElementwise1DStridedResponse { result },
-                };
-                let _ = send_response(&mut stream_clone.try_clone().unwrap(), &completion_response);
-            });
-            
-            Ok(())
+            connection.queue_response(ack_response).expect("Failed to send message");
+            let job = AsyncJob::ApplyElementwise1DStrided {
+                task_id,
+                buf,
+                op,
+                offset,
+                stride,
+                len,
+            };
+            connection.queue_job(job).expect("Failed to queue job");
         }
         Messages::ApplyElementwiseND { buf, op, offset, shape, stride } => {
             // Send initial acknowledgment
@@ -1055,29 +1096,20 @@ fn handle_request(
                 asynchronous: true,
                 complete: false,
                 task_id,
+                error: None,
                 message: Messages::ApplyElementwiseNDResponse { result: Ok(()) },
             };
-            send_response(stream, &ack_response)?;
+            connection.queue_response(ack_response).expect("Failed to send message");
             
-            // Clone what we need for the background thread
-            let (op_type, value) = op;
-            let connection_clone = connection.clone();
-            let stream_clone = stream.try_clone()
-                .map_err(|e| TensorError::RemoteError(format!("Failed to clone stream: {}", e)))?;
-            
-            // Spawn background task
-            thread::spawn(move || {
-                let result = handle_apply_elementwise_nd(buf, op_type, value, offset, &shape, &stride, &connection_clone);
-                let completion_response = Response {
-                    asynchronous: true,
-                    complete: true,
-                    task_id,
-                    message: Messages::ApplyElementwiseNDResponse { result },
-                };
-                let _ = send_response(&mut stream_clone.try_clone().unwrap(), &completion_response);
-            });
-            
-            Ok(())
+            let job = AsyncJob::ApplyElementwiseND {
+                task_id,
+                buf,
+                op,
+                offset,
+                shape,
+                stride,
+            };
+            connection.queue_job(job).expect("Failed to queue job");
         }
         Messages::Broadcast { left, right, dst, op } => {
             // Send initial acknowledgment
@@ -1085,58 +1117,92 @@ fn handle_request(
                 asynchronous: true,
                 complete: false,
                 task_id,
+                error: None,
                 message: Messages::BroadcastResponse { result: Ok(()) },
             };
-            send_response(stream, &ack_response)?;
+            connection.queue_response(ack_response).expect("Failed to send message");
             
-            // Clone what we need for the background thread
-            let connection_clone = connection.clone();
-            let stream_clone = stream.try_clone()
-                .map_err(|e| TensorError::RemoteError(format!("Failed to clone stream: {}", e)))?;
-            
-            // Spawn background task
-            thread::spawn(move || {
-                let result = handle_broadcast(left, right, dst, op, &connection_clone);
-                let completion_response = Response {
-                    asynchronous: true,
-                    complete: true,
-                    task_id,
-                    message: Messages::BroadcastResponse { result },
-                };
-                let _ = send_response(&mut stream_clone.try_clone().unwrap(), &completion_response);
-            });
-            
-            Ok(())
+            let job = AsyncJob::Broadcast {
+                task_id,
+                left,
+                right,
+                dst,
+                op,
+            };
+            connection.queue_job(job).expect("Failed to queue job");            
         }
         Messages::Matmul { lhs, rhs, b, m, k, n, contiguity } => {
-            let result_buf = handle_matmul(lhs, rhs, b, m, k, n, contiguity, connection)?;
+            let result_buf = handle_matmul(lhs, rhs, b, m, k, n, contiguity, connection);
             let response = Response {
                 asynchronous: false,
                 complete: true,
                 task_id,
-                message: Messages::MatmulResponse { buf: Ok(result_buf) },
+                error: result_buf.as_ref().err().cloned(),
+                message: Messages::MatmulResponse { buf: result_buf },
             };
-            send_response(stream, &response)?;
-            Ok(())
+            connection.queue_response(response).expect("Failed to send message");
         }
         _ => {
-            Err(TensorError::RemoteError("Unsupported operation".into()))
+            let response = Response {
+                asynchronous: false,
+                complete: true,
+                task_id,
+                error: Some(TensorError::RemoteError("Unsupported request".to_string())),
+                message: Messages::ErrorResponse { message: "Unsupported request".to_string() },
+            };
+            connection.queue_response(response).expect("Failed to send message");
         }
     }
 }
 
-fn send_response(stream: &mut std::net::TcpStream, response: &Response) -> Result<(), TensorError> {
-    let serialized = response.serialize()
-        .map_err(|e| TensorError::RemoteError(format!("Failed to serialize response: {}", e)))?;
-    let n = serialized.len() as u32;
-    stream.write_all(&n.to_le_bytes())
-        .map_err(|e| TensorError::RemoteError(format!("Failed to write response length: {}", e)))?;
-    stream.write_all(&serialized)
-        .map_err(|e| TensorError::RemoteError(format!("Failed to write response: {}", e)))?;
-    Ok(())
+
+fn drain_messages(mut stream: std::net::TcpStream, receiver: Receiver<Response>) {
+    loop {
+        match receiver.recv() {
+            Ok(response) => {
+                let result: Result<(), TensorError> = || -> Result<(), TensorError> {
+                    if let Messages::BroadcastResponse { result } = &response.message {
+                        if response.asynchronous && !response.complete {
+                            match result {
+                                Ok(_) => println!("Puting BroadcastResponse on wire (task_id={}) success", response.task_id),
+                                Err(e) => println!("Putting BroadcastResponse on wire (task_id={}) failed with error: {}", response.task_id, e),
+                            }
+                        }
+                    }
+                    let serialized = response.serialize()
+                        .map_err(|e| TensorError::RemoteError(format!("Failed to serialize response: {}", e)))?;
+                    let n = serialized.len() as u32;
+                    stream.write_all(&n.to_le_bytes())
+                        .map_err(|e| TensorError::RemoteError(format!("Failed to write response length: {}", e)))?;
+                    stream.write_all(&serialized)
+                        .map_err(|e| TensorError::RemoteError(format!("Failed to write response: {}", e)))?;
+                    Ok(())
+                }();
+                if let Err(e) = result {
+                    eprintln!("{}", e);
+                    break;
+                }
+            }
+            Err(e) => {
+                eprintln!("Failed to receive response: {}", e);
+                break;
+            }
+        }
+    }
 }
 
 fn handle_connection(connection: ClientConnection, mut stream: std::net::TcpStream) {
+    // launch draining thread
+    let stream_inner = stream.try_clone()
+        .expect("Failed to clone stream for draining thread");
+    let receiver = connection.output_messages_receiver.clone();
+    thread::spawn(move || {
+        drain_messages(stream_inner, receiver);
+    });
+    let connection_clone = connection.clone();
+    thread::spawn(move || {
+        drain_background_jobs(connection_clone);
+    });
     // Handle communication with the client
     let mut n_buffer = [0u8; 4];
     loop {
@@ -1148,21 +1214,76 @@ fn handle_connection(connection: ClientConnection, mut stream: std::net::TcpStre
                 match stream.read_exact(&mut data_buffer) {
                     Ok(_) => {
                         let request = Request::deserialize(&data_buffer).expect("Failed to deserialize request");
-                        if let Err(e) = handle_request(request, &connection, &mut stream) {
-                            eprintln!("Failed to handle request: {}", e);
-                        }
+                        handle_request(request, &connection);
                     }
                     Err(e) => {
-                        eprintln!("Failed to read data: {}", e);
+                        println!("Failed to read data: {}", e);
                         break;
                     }
                 }
             }
             Err(e) => {
-                eprintln!("Failed to read size: {}", e);
+                println!("Failed to read size: {}", e);
                 break;
             }
         }
+    }
+}
+
+fn drain_background_jobs(connection: ClientConnection) {
+    loop {
+        let job = match connection.background_tasks_receiver.recv() {
+            Ok(job) => job,
+            Err(e) => {
+                eprintln!("Failed to receive background job: {}", e);
+                break;
+            }
+        };
+        let task_id = match &job {
+            AsyncJob::CopyFromSlice { task_id, .. } => *task_id,
+            AsyncJob::ApplyElementwiseContiguous { task_id, .. } => *task_id,
+            AsyncJob::ApplyElementwise1DStrided { task_id, .. } => *task_id,
+            AsyncJob::ApplyElementwiseND { task_id, .. } => *task_id,
+            AsyncJob::Broadcast { task_id, .. } => *task_id,
+        };
+        let (message, error) = match job {
+            AsyncJob::CopyFromSlice { dst, src, .. } => {
+                let result = handle_copy_from_slice(dst, src, &connection);
+                let err = result.as_ref().err().cloned();
+                (Messages::CopyFromSliceResponse { result }, err)
+            },
+            AsyncJob::ApplyElementwiseContiguous { buf, op, start, len, .. } => {
+                let (op_type, value) = op;
+                let result = handle_apply_elementwise_contiguous(buf, op_type, value, start, len, &connection);
+                let err = result.as_ref().err().cloned();
+                (Messages::ApplyElementwiseContiguousResponse { result }, err)
+            },
+            AsyncJob::ApplyElementwise1DStrided { buf, op, offset, stride, len, .. } => {
+                let (op_type, value) = op;
+                let result = handle_apply_elementwise_1d_strided(buf, op_type, value, offset, stride, len, &connection);
+                let err = result.as_ref().err().cloned();
+                (Messages::ApplyElementwise1DStridedResponse { result }, err)
+            },
+            AsyncJob::ApplyElementwiseND { buf, op, offset, shape, stride, .. } => {
+                let (op_type, value) = op;
+                let result = handle_apply_elementwise_nd(buf, op_type, value, offset, &shape, &stride, &connection);
+                let err = result.as_ref().err().cloned();
+                (Messages::ApplyElementwiseNDResponse { result }, err)
+            },
+            AsyncJob::Broadcast { left, right, dst, op, .. } => {
+                let result = handle_broadcast(left, right, dst, op, &connection);
+                let err = result.as_ref().err().cloned();
+                (Messages::BroadcastResponse { result }, err)
+            },
+        };
+        let completion_response = Response {
+            asynchronous: true,
+            complete: true,
+            task_id,
+            error,
+            message
+        };
+        let _ = connection.queue_response(completion_response);
     }
 }
 
