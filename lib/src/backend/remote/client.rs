@@ -1,5 +1,4 @@
 use std::{collections::HashMap, fmt::Debug, io::{Read, Write}, net::IpAddr, sync::{atomic::{AtomicBool, AtomicU32, Ordering}, Arc, Condvar, Mutex, RwLock}};
-use std::{collections::HashMap, fmt::Debug, io::{Read, Write}, net::IpAddr, sync::{atomic::{AtomicBool, AtomicU32, Ordering}, Arc, Condvar, Mutex, RwLock}};
 
 use crate::{backend::{remote::{get_backend_default, protocol::{Messages, Request, Response, Slice, TypelessBuf, Value}}, Backend, BackendMatMul}, core::{primitives::DeviceType, tensor::TensorError, value::{DType, TensorValue}}};
 use flume;
@@ -231,53 +230,8 @@ impl Backend for RemoteBackend {
             src: Slice::from_slice(src),
         };
         send_recv!(self, message, Messages::CopyFromSliceResponse { result } => result)
-    fn alloc_from_slice<T: TensorValue>(&self, src: Box<[T]>) -> Result<Self::Buf<T>, crate::core::tensor::TensorError> {
-        let message = Messages::AllocFromSlice {
-            slice: Slice::from_boxed_slice(src),
-        };
-        send_recv!(self, message, Messages::AllocFromSliceResponse { buf } => {
-            Ok(RemoteBuf::from_typeless(buf?))
-        })
     }
 
-    fn alloc<T: TensorValue>(&self, len: usize) -> Result<Self::Buf<T>, crate::core::tensor::TensorError> {
-        let message = Messages::Alloc {
-            len,
-            dtype: T::DTYPE,
-        };
-        send_recv!(self, message, Messages::AllocResponse { buf } => {
-            Ok(RemoteBuf::from_typeless(buf?))
-        })
-    }
-
-    fn copy_from_slice<T: TensorValue>(&self, dst: &mut Self::Buf<T>, src: &[T]) -> Result<(), crate::core::tensor::TensorError> {
-        self.pending.sync();
-        let message = Messages::CopyFromSlice {
-            dst: dst.to_typeless(),
-            src: Slice::from_slice(src),
-        };
-        send_recv!(self, message, Messages::CopyFromSliceResponse { result } => result)
-    }
-
-    fn read<T: TensorValue>(&self, buf: &Self::Buf<T>, offset: usize) -> Result<T, crate::core::tensor::TensorError> {
-        self.pending.sync();
-        let message = Messages::Read {
-            buf: buf.to_typeless(),
-            offset,
-        };
-        send_recv!(self, message, Messages::ReadResponse { value } => {
-            value?.to_value::<T>()
-        })
-    }
-
-    fn write<T: TensorValue>(&self, buf: &mut Self::Buf<T>, offset: usize, value: T) -> Result<(), crate::core::tensor::TensorError> {
-        self.pending.sync();
-        let message = Messages::Write {
-            buf: buf.to_typeless(),
-            offset,
-            value: Value::from_value(value),
-        };
-        send_recv!(self, message, Messages::WriteResponse { result } => result)
     fn read<T: TensorValue>(&self, buf: &Self::Buf<T>, offset: usize) -> Result<T, crate::core::tensor::TensorError> {
         self.pending.sync();
         let message = Messages::Read {
@@ -308,15 +262,6 @@ impl Backend for RemoteBackend {
             Ok(Messages::LenResponse { len }) => len,
             _ => panic!("Failed to get buffer length or unexpected response"),
         }
-    fn len<T: TensorValue>(&self, buf: &Self::Buf<T>) -> usize {
-        let message = Messages::Len {
-            buf: buf.to_typeless(),
-        };
-        let receiver = self.send_message(message);
-        match receiver.recv() {
-            Ok(Messages::LenResponse { len }) => len,
-            _ => panic!("Failed to get buffer length or unexpected response"),
-        }
     }
 
     fn copy<T: TensorValue>(&self, src: &Self::Buf<T>) -> Result<Self::Buf<T>, crate::core::tensor::TensorError> {
@@ -338,28 +283,7 @@ impl Backend for RemoteBackend {
             data?.to_boxed_slice::<T>()
         })
     }
-    fn copy<T: TensorValue>(&self, src: &Self::Buf<T>) -> Result<Self::Buf<T>, crate::core::tensor::TensorError> {
-        self.pending.sync();
-        let message = Messages::Copy {
-            src: src.to_typeless(),
-        };
-        send_recv!(self, message, Messages::CopyResponse { buf } => {
-            Ok(RemoteBuf::from_typeless(buf?))
-        })
-    }
 
-    fn dump<T: TensorValue>(&self, src: &Self::Buf<T>) -> Result<Box<[T]>, crate::core::tensor::TensorError> {
-        self.pending.sync();
-        let message = Messages::Dump {
-            src: src.to_typeless(),
-        };
-        send_recv!(self, message, Messages::DumpResponse { data } => {
-            data?.to_boxed_slice::<T>()
-        })
-    }
-
-    fn apply_elementwise_contiguous<T: TensorValue>(
-        &self, buf: &mut Self::Buf<T>, 
     fn apply_elementwise_contiguous<T: TensorValue>(
         &self, buf: &mut Self::Buf<T>, 
         op: (crate::ops::base::OpType, T), 
@@ -373,17 +297,8 @@ impl Backend for RemoteBackend {
             len,
         };
         send_recv!(self, message, Messages::ApplyElementwiseContiguousResponse { result } => result)
-        let message = Messages::ApplyElementwiseContiguous {
-            buf: buf.to_typeless(),
-            op: make_op!(op.0, op.1),
-            start,
-            len,
-        };
-        send_recv!(self, message, Messages::ApplyElementwiseContiguousResponse { result } => result)
     }
 
-    fn apply_elementwise_1d_strided<T: TensorValue>(
-        &self, buf: &mut Self::Buf<T>, 
     fn apply_elementwise_1d_strided<T: TensorValue>(
         &self, buf: &mut Self::Buf<T>, 
         op: (crate::ops::base::OpType, T), 
@@ -399,49 +314,8 @@ impl Backend for RemoteBackend {
             len,
         };
         send_recv!(self, message, Messages::ApplyElementwise1DStridedResponse { result } => result)
-        let message = Messages::ApplyElementwise1DStrided {
-            buf: buf.to_typeless(),
-            op: make_op!(op.0, op.1),
-            offset,
-            stride,
-            len,
-        };
-        send_recv!(self, message, Messages::ApplyElementwise1DStridedResponse { result } => result)
     }
 
-    fn apply_elementwise_nd<T: TensorValue>(
-    fn apply_elementwise_nd<T: TensorValue>(
-        &self,
-        buf: &mut Self::Buf<T>,
-        buf: &mut Self::Buf<T>,
-        op: (crate::ops::base::OpType, T),
-        offset: usize,
-        shape: &[usize],
-        stride: &[isize],
-    ) -> Result<(), crate::core::tensor::TensorError> {
-        let message = Messages::ApplyElementwiseND {
-            buf: buf.to_typeless(),
-            op: make_op!(op.0, op.1),
-            offset,
-            shape: shape.to_vec(),
-            stride: stride.to_vec(),
-        };
-        send_recv!(self, message, Messages::ApplyElementwiseNDResponse { result } => result)
-        let message = Messages::ApplyElementwiseND {
-            buf: buf.to_typeless(),
-            op: make_op!(op.0, op.1),
-            offset,
-            shape: shape.to_vec(),
-            stride: stride.to_vec(),
-        };
-        send_recv!(self, message, Messages::ApplyElementwiseNDResponse { result } => result)
-    }
-
-    unsafe fn broadcast<T: TensorValue>(
-        &self,
-        left: (*const Self::Buf<T>, &crate::core::MetaTensor), 
-        right: (*const Self::Buf<T>, &crate::core::MetaTensor),
-        dst: (*mut Self::Buf<T>, &crate::core::MetaTensor),
     unsafe fn broadcast<T: TensorValue>(
         &self,
         left: (*const Self::Buf<T>, &crate::core::MetaTensor), 
@@ -456,13 +330,24 @@ impl Backend for RemoteBackend {
             op,
         };
         send_recv!(self, message, Messages::BroadcastResponse { result } => result)
-        let message = Messages::Broadcast {
-            left: ((&*left.0).to_typeless(), left.1.clone()),
-            right: ((&*right.0).to_typeless(), right.1.clone()),
-            dst: ((&*dst.0).to_typeless(), dst.1.clone()),
-            op,
+    }
+    
+    fn apply_elementwise_nd<T: TensorValue>(
+        &self,
+        buf: &mut Self::Buf<T>,
+        op: (crate::ops::base::OpType, T),
+        offset: usize,
+        shape: &[usize],
+        stride: &[isize],
+    ) -> Result<(), TensorError> {
+        let message = Messages::ApplyElementwiseND {
+            buf: buf.to_typeless(),
+            op: make_op!(op.0, op.1),
+            offset,
+            shape: shape.to_vec(),
+            stride: stride.to_vec(),
         };
-        send_recv!(self, message, Messages::BroadcastResponse { result } => result)
+        send_recv!(self, message, Messages::ApplyElementwiseNDResponse { result } => result)
     }
 }
 
