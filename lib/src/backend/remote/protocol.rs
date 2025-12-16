@@ -297,6 +297,7 @@ pub (crate) enum Messages {
     Matmul {
         lhs: (TypelessBuf, MetaTensor),
         rhs: (TypelessBuf, MetaTensor),
+        dst: TypelessBuf,
         b: usize,
         m: usize,
         k: usize,
@@ -304,7 +305,7 @@ pub (crate) enum Messages {
         contiguity: ContiguityTypes
     },
     MatmulResponse {
-        buf: Result<TypelessBuf, TensorError>,
+        result: Result<(), TensorError>,
     },
 
     ActionCompleted {

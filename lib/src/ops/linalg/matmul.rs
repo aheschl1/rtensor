@@ -122,9 +122,12 @@ where
         let out_shape: Shape = out_shape_vec.into();
         let out_strides = shape_to_stride(&out_shape);
 
-        let buf = lhs_view.backend.matmul(
+        let mut buf = lhs_view.backend.alloc(b*n*m)?;
+
+        lhs_view.backend.matmul(
             (lhs_view.buf, lhs_meta),
             (rhs_view.buf, rhs_meta),
+            &mut buf,
             b,
             m,
             k_l,

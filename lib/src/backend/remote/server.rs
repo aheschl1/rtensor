@@ -2,7 +2,7 @@ use std::{collections::HashMap, io::{Read, Write}, net::IpAddr, sync::{atomic::A
 
 use flume::Receiver;
 
-use crate::{backend::{cpu::Cpu, remote::{enumdispatch::{dispatch_alloc, dispatch_alloc_from_slice, dispatch_apply_elementwise_1d_strided, dispatch_apply_elementwise_contiguous, dispatch_apply_elementwise_nd, dispatch_broadcast, dispatch_copy, dispatch_copy_from_slice, dispatch_dump, dispatch_len, dispatch_matmul, dispatch_read, dispatch_write}, protocol::{Messages, Request, Response, Slice, TypelessBuf}}, Backend}, core::{primitives::DeviceType, tensor::TensorError, value::types, MetaTensor}};
+use crate::{backend::{cpu::Cpu, remote::{enumdispatch::{dispatch_alloc, dispatch_alloc_from_slice, dispatch_apply_elementwise_1d_strided, dispatch_apply_elementwise_contiguous, dispatch_apply_elementwise_nd, dispatch_broadcast, dispatch_copy, dispatch_copy_from_slice, dispatch_dump, dispatch_len, dispatch_matmul, dispatch_read, dispatch_write}, protocol::{Messages, Request, Response, Slice, TypelessBuf}}, Backend}, core::{meta::ContiguityTypes, primitives::DeviceType, tensor::TensorError, value::types, MetaTensor}};
 #[cfg(feature = "cuda")]
 use crate::backend::cuda::Cuda;
 
@@ -512,67 +512,58 @@ macro_rules! broadcast_for_dtype {
 }
 
 macro_rules! matmul_for_dtype {
-    ($lhs_id:expr, $lhs_meta:expr, $rhs_id:expr, $rhs_meta:expr, $b:expr, $m:expr, $k:expr, $n:expr, $contiguity:expr, $connection:expr, $dtype_variant:ident, $rust_type:ty, $buffer_field:ident) => {{
+    ($lhs_id:expr, $lhs_meta:expr, $rhs_id:expr, $rhs_meta:expr, $dst_id:expr, $b:expr, $m:expr, $k:expr, $n:expr, $contiguity:expr, $connection:expr, $dtype_variant:ident, $rust_type:ty, $buffer_field:ident) => {{
         let device_type = select_buffer($connection);
-        let buffer = match device_type {
+        match device_type {
             DeviceType::Cpu => {
-                let buffers = $connection.cpu_buffers.read().unwrap();
-                let lhs_buf = buffers.$buffer_field
-                    .get(&$lhs_id)
-                    .ok_or_else(|| TensorError::RemoteError(format!("LHS buffer {} not found", $lhs_id)))?;
-                let rhs_buf = buffers.$buffer_field
-                    .get(&$rhs_id)
-                    .ok_or_else(|| TensorError::RemoteError(format!("RHS buffer {} not found", $rhs_id)))?;
-                
-                let result_buf = $connection.cpu.matmul(
+                let mut buffers = $connection.cpu_buffers.write().unwrap();
+                // let lhs_buf = buffers.$buffer_field
+                //     .get(&$lhs_id)
+                //     .ok_or_else(|| TensorError::RemoteError(format!("LHS buffer {} not found", $lhs_id)))?;
+                // let rhs_buf = buffers.$buffer_field
+                //     .get(&$rhs_id)
+                //     .ok_or_else(|| TensorError::RemoteError(format!("RHS buffer {} not found", $rhs_id)))?;
+                // let dst_buf = buffers.$buffer_field
+                //     .get_mut(&$dst_id)
+                //     .ok_or_else(|| TensorError::RemoteError(format!("DST buffer {} not found", $dst_id)))?;
+                let [Some(lhs_buf), Some(rhs_buf), Some(mut dst_buf)] = buffers.$buffer_field.get_disjoint_mut([&$lhs_id, &$rhs_id, &$dst_id]) else {
+                    return Err(TensorError::RemoteError("Buffers missing.".into()));
+                };
+                $connection.cpu.matmul(
                     (lhs_buf, $lhs_meta),
                     (rhs_buf, $rhs_meta),
+                    &mut dst_buf,
                     $b, $m, $k, $n,
                     $contiguity
                 )?;
-                
-                let buffer_id = $connection.next_buffer_id.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                drop(buffers);
-                $connection.cpu_buffers.write().unwrap().$buffer_field.insert(buffer_id, result_buf);
-                
-                RemoteBuf {
-                    id: buffer_id,
-                    dtype: DType::$dtype_variant,
-                    _marker: std::marker::PhantomData::<$rust_type>,
-                }
             },
             #[cfg(feature = "cuda")]
             DeviceType::Cuda(_device_id) => {
-                let buffers = $connection.cuda_buffers.read().unwrap();
-                let lhs_buf = buffers.$buffer_field
-                    .get(&$lhs_id)
-                    .ok_or_else(|| TensorError::RemoteError(format!("LHS buffer {} not found", $lhs_id)))?;
-                let rhs_buf = buffers.$buffer_field
-                    .get(&$rhs_id)
-                    .ok_or_else(|| TensorError::RemoteError(format!("RHS buffer {} not found", $rhs_id)))?;
-                
-                let result_buf = $connection.cuda.matmul(
+                let mut buffers = $connection.cuda_buffers.write().unwrap();
+                // let lhs_buf = buffers.$buffer_field
+                //     .get(&$lhs_id)
+                //     .ok_or_else(|| TensorError::RemoteError(format!("LHS buffer {} not found", $lhs_id)))?;
+                // let rhs_buf = buffers.$buffer_field
+                //     .get(&$rhs_id)
+                //     .ok_or_else(|| TensorError::RemoteError(format!("RHS buffer {} not found", $rhs_id)))?;
+                // let mut dst_buf = buffers.$buffer_field
+                //     .get(&$dst_id)
+                //     .ok_or_else(|| TensorError::RemoteError(format!("DST buffer {} not found", $dst_id)))?;
+                let [Some(lhs_buf), Some(rhs_buf), Some(mut dst_buf)] = buffers.$buffer_field.get_disjoint_mut([&$lhs_id, &$rhs_id, &$dst_id]) else {
+                    return Err(TensorError::RemoteError("Buffers missing.".into()));
+                };
+                $connection.cuda.matmul(
                     (lhs_buf, $lhs_meta),
                     (rhs_buf, $rhs_meta),
+                    &mut dst_buf,
                     $b, $m, $k, $n,
                     $contiguity
                 )?;
-                
-                let buffer_id = $connection.next_buffer_id.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                drop(buffers);
-                $connection.cuda_buffers.write().unwrap().$buffer_field.insert(buffer_id, result_buf);
-                
-                RemoteBuf {
-                    id: buffer_id,
-                    dtype: DType::$dtype_variant,
-                    _marker: std::marker::PhantomData::<$rust_type>,
-                }
             },
             _ => {
                 return Err(TensorError::RemoteError("Unsupported device type".into()));
             }
         };
-        TypelessBuf::from(buffer)
     }};
 }
 
@@ -611,6 +602,17 @@ pub(crate) enum AsyncJob {
         right: (TypelessBuf, MetaTensor),
         dst: (TypelessBuf, MetaTensor),
         op: crate::ops::base::OpType,
+    },
+    MatMul {
+        task_id: u32,
+        lhs: (TypelessBuf, MetaTensor),
+        rhs: (TypelessBuf, MetaTensor),
+        dst: TypelessBuf,
+        b: usize,
+        m: usize,
+        k: usize,
+        n: usize,
+        contiguity: ContiguityTypes
     },
 }
 
@@ -810,16 +812,37 @@ fn handle_request(
             };
             connection.queue_job(job).expect("Failed to queue job");            
         }
-        Messages::Matmul { lhs, rhs, b, m, k, n, contiguity } => {
-            let result_buf = dispatch_matmul(lhs, rhs, b, m, k, n, contiguity, connection);
-            let response = Response {
-                asynchronous: false,
-                complete: true,
+        Messages::Matmul { lhs, rhs, dst, b, m, k, n, contiguity } => {
+            // let result = dispatch_matmul(lhs, rhs, dst, b, m, k, n, contiguity, connection);
+            // let response = Response {
+            //     asynchronous: false,
+            //     complete: true,
+            //     task_id,
+            //     error: result.as_ref().err().cloned(),
+            //     message: Messages::MatmulResponse { result: result },
+            // };
+            // connection.queue_response(response).expect("Failed to send message");
+            let ack_response = Response {
+                asynchronous: true,
+                complete: false,
                 task_id,
-                error: result_buf.as_ref().err().cloned(),
-                message: Messages::MatmulResponse { buf: result_buf },
+                error: None,
+                message: Messages::MatmulResponse { result: Ok(()) },
             };
-            connection.queue_response(response).expect("Failed to send message");
+            connection.queue_response(ack_response).expect("Failed to send message");
+            let job = AsyncJob::MatMul {
+                task_id,
+                lhs,
+                rhs,
+                dst,
+                b,
+                m,
+                k,
+                n,
+                contiguity,
+            };
+            connection.queue_job(job).expect("Failed to queue job");
+            // let result = dispatch_matmul(lhs, rhs, dst, b, m, k, n, contiguity, connection);
         }
         _ => {
             let response = Response {
@@ -916,6 +939,7 @@ fn drain_background_jobs(connection: ClientConnection) {
             AsyncJob::ApplyElementwise1DStrided { task_id, .. } => *task_id,
             AsyncJob::ApplyElementwiseND { task_id, .. } => *task_id,
             AsyncJob::Broadcast { task_id, .. } => *task_id,
+            AsyncJob::MatMul { task_id, .. } => *task_id,
         };
         let (message, error) = match job {
             AsyncJob::CopyFromSlice { dst, src, .. } => {
@@ -945,6 +969,11 @@ fn drain_background_jobs(connection: ClientConnection) {
                 let result = dispatch_broadcast(left, right, dst, op, &connection);
                 let err = result.as_ref().err().cloned();
                 (Messages::BroadcastResponse { result }, err)
+            },
+            AsyncJob::MatMul { lhs, rhs, dst, b, m, k, n, contiguity, .. } => {
+                let result = dispatch_matmul(lhs, rhs, dst, b, m, k, n, contiguity, &connection);
+                let err = result.as_ref().err().cloned();
+                (Messages::MatmulResponse { result }, err)
             },
         };
         let completion_response = Response {

@@ -465,21 +465,22 @@ macro_rules! generic_matmul_impl {
                 &self,
                 lhs: (&Self::Buf<$t>, &MetaTensor),
                 rhs: (&Self::Buf<$t>, &MetaTensor),
+                dst: &mut Self::Buf<$t>,
                 b: usize,
                 m: usize,
                 k: usize,
                 n: usize,
                 contiguity: ContiguityTypes
-            ) -> Result<Self::Buf<$t>, TensorError> {
+            ) -> Result<(), TensorError> {
                 let stream = self.stream();
-                let res = self.alloc(b * m * n)?;
+                // let res = self.alloc(b * m * n)?;
                 
                 let (lhs_buf, lhs_meta) = lhs;
                 let (rhs_buf, rhs_meta) = rhs;
 
                 let (lhs_ptr, _) = lhs_buf.ptr.device_ptr(&stream);
                 let (rhs_ptr, _) = rhs_buf.ptr.device_ptr(&stream);
-                let (res_ptr, _) = res.ptr.device_ptr(&stream);
+                let (dst_ptr, _) = dst.ptr.device_ptr(&stream);
                 
                 let bstride_lhs = if lhs_meta.rank() > 2 {
                     lhs_meta.strides()[lhs_meta.rank() - 3] as usize
@@ -523,7 +524,7 @@ macro_rules! generic_matmul_impl {
                     
                     let a_ptr = unsafe { (lhs_ptr as *const $ptr_t).add(a_offset) };
                     let b_ptr = unsafe { (rhs_ptr as *const $ptr_t).add(b_offset) };
-                    let c_ptr = unsafe { (res_ptr as *mut $ptr_t).add(c_offset) };
+                    let c_ptr = unsafe { (dst_ptr as *mut $ptr_t).add(c_offset) };
                     
                     unsafe {
                         $launch_fn(
@@ -543,7 +544,7 @@ macro_rules! generic_matmul_impl {
                 }
                 
                 self.dirty();
-                Ok(res)
+                Ok(())
             }
         }
     };
@@ -556,12 +557,13 @@ macro_rules! cublas_impl {
                 &self,
                 lhs: (&Self::Buf<$t>, &MetaTensor),
                 rhs: (&Self::Buf<$t>, &MetaTensor),
+                dst: &mut Self::Buf<$t>,
                 b: usize,
                 m: usize,
                 k: usize,
                 n: usize,
                 contiguity: ContiguityTypes
-            ) -> Result<Self::Buf<$t>, TensorError> {
+            ) -> Result<(), TensorError> {
                 // cuBLAS uses column-major order, but our tensors are row-major
                 // To compute C = A * B in row-major, we compute C^T = B^T * A^T in column-major
                 // This means we swap A and B, and swap m and n
@@ -633,7 +635,7 @@ macro_rules! cublas_impl {
                     stride_b: bstride_rhs,
                     stride_c: stride_c,
                 };
-                let mut res = self.alloc(b*n*m)?;
+                // let mut res = self.alloc(b*n*m)?;
 
                 unsafe{
                     // Note: operands are swapped (B, A instead of A, B)
@@ -641,11 +643,11 @@ macro_rules! cublas_impl {
                         cfg, 
                         &lhs_ptr,  // B comes first
                         &rhs_ptr,  // A comes second
-                        &mut res.ptr,
+                        &mut dst.ptr,
                     ).map_err(|e| TensorError::CudaError(e.to_string()))?;
                 }
                 self.dirty();
-                Ok(res)
+                Ok(())
             }
         }
     };

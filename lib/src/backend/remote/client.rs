@@ -356,24 +356,24 @@ impl<T: TensorValue> BackendMatMul<T> for RemoteBackend {
         &self,
         lhs: (&Self::Buf<T>, &crate::core::MetaTensor),
         rhs: (&Self::Buf<T>, &crate::core::MetaTensor),
+        dst: &mut Self::Buf<T>,
         b: usize,
         m: usize,
         k: usize,
         n: usize,
         contiguity: crate::core::meta::ContiguityTypes,
-    ) -> Result<Self::Buf<T>, TensorError> {
-        let message = Messages::Matmul {
+    ) -> Result<(), TensorError> {
+        let message: Messages = Messages::Matmul {
             lhs: (lhs.0.to_typeless(), lhs.1.clone()),
             rhs: (rhs.0.to_typeless(), rhs.1.clone()),
+            dst: dst.to_typeless(),
             b,
             m,
             k,
             n,
             contiguity,
         };
-        send_recv!(self, message, Messages::MatmulResponse { buf } => {
-            Ok(RemoteBuf::from_typeless(buf?))
-        })
+        send_recv!(self, message, Messages::MatmulResponse { result } => result)
     }
 }
 

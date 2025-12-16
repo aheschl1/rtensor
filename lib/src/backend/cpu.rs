@@ -196,14 +196,14 @@ macro_rules! blas_impl {
                 &self,
                 lhs: (&Self::Buf<$t>, &MetaTensor),
                 rhs: (&Self::Buf<$t>, &MetaTensor),
+                dst: &mut Self::Buf<$t>,
                 b: usize,
                 m: usize,
                 k: usize,
                 n: usize,
                 contiguity: ContiguityTypes
-            ) -> Result<Self::Buf<$t>, TensorError> {
+            ) -> Result<(), TensorError> {
 
-                let mut out_buf: Box<[$t]> = self.alloc(b * m * n)?;
                 let (lhs_buf, lhs_meta): (&Self::Buf<$t>, &MetaTensor) = lhs;
                 let (rhs_buf, rhs_meta): (&Self::Buf<$t>, &MetaTensor) = rhs;
                 let lda = match &contiguity {
@@ -278,13 +278,13 @@ macro_rules! blas_impl {
                             rhs.add(rhs_batch) as *const $t,
                             ldb,
                             0.0,
-                            out_buf.as_mut_ptr().add(out_batch) as *mut $t,
+                            dst.as_mut_ptr().add(out_batch) as *mut $t,
                             ldc,
                         );
                     }
                 }
 
-                Ok(out_buf)
+                Ok(())
             }
         }
     };
@@ -297,13 +297,14 @@ macro_rules! generic_backend_matmul {
                 &self,
                 lhs: (&Self::Buf<$t>, &MetaTensor),
                 rhs: (&Self::Buf<$t>, &MetaTensor),
+                dst: &mut Self::Buf<$t>,
                 b: usize,
                 m: usize,
                 k: usize,
                 n: usize,
                 contiguity: ContiguityTypes
-            ) -> Result<Self::Buf<$t>, TensorError> {
-                let mut out_buf = self.alloc(b * m * n)?;
+            ) -> Result<(), TensorError> {
+                // let mut out_buf = self.alloc(b * m * n)?;
                 let (lhs_buf, lhs_meta): (&Self::Buf<$t>, &MetaTensor) = lhs;
                 let (rhs_buf, rhs_meta): (&Self::Buf<$t>, &MetaTensor) = rhs;
                 let lda = match contiguity {
@@ -344,7 +345,7 @@ macro_rules! generic_backend_matmul {
                                     let rhs_idx = rhs_batch + inner * ldb + col;
                                     sum += lhs_buf[lhs_idx] * rhs_buf[rhs_idx];
                                 }
-                                out_buf[out_batch + row * n + col] = sum;
+                                dst[out_batch + row * n + col] = sum;
                             }
                         }
                     }else {
@@ -356,12 +357,12 @@ macro_rules! generic_backend_matmul {
                                     let rhs_idx = rhs_batch + inner + col * ldb;
                                     sum += lhs_buf[lhs_idx] * rhs_buf[rhs_idx];
                                 }
-                                out_buf[out_batch + row * n + col] = sum;
+                                dst[out_batch + row * n + col] = sum;
                             }
                         }
                     }
                 }
-                Ok(out_buf)
+                Ok(())
             }
         }
         

@@ -31,8 +31,8 @@ fn setup_openblas() {
     } else {
         println!("cargo:warning=Building OpenBLAS from source...");
         
-        let download_url = "https://github.com/OpenMathLib/OpenBLAS/archive/refs/tags/v0.3.30.zip";
-        let zip_path = out_dir.join("openblas-v0.3.30.zip");
+        let download_url = "https://github.com/aheschl1/rtensors/releases/download/blas/OpenBLAS-0.3.30.zip";
+        let zip_path = out_dir.join("OpenBLAS-0.3.30.zip");
         let openblas_source_dir = out_dir.join("OpenBLAS-0.3.30");
         
         // Download the source archive if not already present

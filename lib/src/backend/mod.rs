@@ -100,10 +100,11 @@ pub trait BackendMatMul<T: TensorValue>: Backend {
         &self,
         lhs: (&Self::Buf<T>, &MetaTensor),
         rhs: (&Self::Buf<T>, &MetaTensor),
+        dst: &mut Self::Buf<T>,
         b: usize,
         m: usize,
         k: usize,
         n: usize,
         contiguity: ContiguityTypes,
-    ) -> Result<Self::Buf<T>, TensorError>;
+    ) -> Result<(), TensorError>;
 }
