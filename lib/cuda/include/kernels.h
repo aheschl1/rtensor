@@ -1,6 +1,6 @@
 #pragma once
 
 #include "common.h"
-#include "unary.h"
+#include "scalar.h"
 #include "binary.h"
 #include "matmul.h"

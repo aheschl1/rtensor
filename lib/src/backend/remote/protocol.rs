@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{backend::remote::client::RemoteBuf, core::{meta::ContiguityTypes, primitives::DeviceType, tensor::TensorError, value::{DType, TensorValue}, MetaTensor}, ops::base::OpType};
+use crate::{backend::remote::client::RemoteBuf, core::{meta::ContiguityTypes, primitives::DeviceType, tensor::TensorError, value::{DType, TensorValue}, MetaTensor}, ops::base::BinaryOpType};
 
 
 #[derive(Serialize, Deserialize)]
@@ -25,7 +25,7 @@ impl Slice {
     pub(crate) fn from_slice<T: TensorValue>(slice: &[T]) -> Self {
         let dtype = T::DTYPE;
         let data = unsafe {
-            let len = slice.len() * std::mem::size_of::<T>();
+            let len = std::mem::size_of_val(slice);
             let ptr = slice.as_ptr() as *const u8;
             let mut vec = Vec::with_capacity(len);
             vec.set_len(len);
@@ -47,7 +47,7 @@ impl Slice {
             let len = self.data.len() / std::mem::size_of::<T>();
             let ptr = self.data.as_ptr() as *mut T;
             std::mem::forget(self.data);
-            Box::from_raw(std::slice::from_raw_parts_mut(ptr, len))
+            Box::from_raw(std::ptr::slice_from_raw_parts_mut(ptr, len))
         };
         Ok(boxed)
     }
@@ -243,35 +243,35 @@ pub (crate) enum Messages {
         data: Result<Slice, TensorError>,
     },
 
-    ApplyElementwise1DStrided {
+    ApplyElementwiseBinary1DStrided {
         buf: TypelessBuf,
-        op: (OpType, Value),
+        op: (BinaryOpType, Value),
         offset: usize,
         stride: isize,
         len: usize,
     },
-    ApplyElementwise1DStridedResponse {
+    ApplyElementwiseBinary1DStridedResponse {
         result: Result<(), TensorError>,
     },
 
-    ApplyElementwiseContiguous {
+    ApplyElementwiseBinaryContiguous {
         buf: TypelessBuf,
-        op: (OpType, Value),
+        op: (BinaryOpType, Value),
         start: usize,
         len: usize,
     },
-    ApplyElementwiseContiguousResponse {
+    ApplyElementwiseBinaryContiguousResponse {
         result: Result<(), TensorError>,
     },
 
-    ApplyElementwiseND {
+    ApplyElementwiseBinaryND {
         buf: TypelessBuf,
-        op: (OpType, Value),
+        op: (BinaryOpType, Value),
         offset: usize,
         shape: Vec<usize>,
         stride: Vec<isize>,
     },
-    ApplyElementwiseNDResponse {
+    ApplyElementwiseBinaryNDResponse {
         result: Result<(), TensorError>,
     },
 
@@ -279,18 +279,55 @@ pub (crate) enum Messages {
         left: (TypelessBuf, MetaTensor),
         right: (TypelessBuf, MetaTensor),
         dst: (TypelessBuf, MetaTensor),
-        op: OpType,
+        op: BinaryOpType,
     },
     BroadcastResponse {
         result: Result<(), TensorError>,
     },
 
-    ApplyElementwise {
+    ApplyElementwiseBinary {
         buf: TypelessBuf,
-        op: (OpType, Value),
+        op: (BinaryOpType, Value),
         meta: MetaTensor,
     },
-    ApplyElementwiseResponse {
+    ApplyElementwiseBinaryResponse {
+        result: Result<(), TensorError>,
+    },
+
+    ApplyNegContiguous {
+        buf: TypelessBuf,
+        start: usize,
+        len: usize,
+    },
+    ApplyNegContiguousResponse {
+        result: Result<(), TensorError>,
+    },
+
+    ApplyNeg1DStrided {
+        buf: TypelessBuf,
+        offset: usize,
+        stride: isize,
+        len: usize,
+    },
+    ApplyNeg1DStridedResponse {
+        result: Result<(), TensorError>,
+    },
+
+    ApplyNegND {
+        buf: TypelessBuf,
+        offset: usize,
+        shape: Vec<usize>,
+        stride: Vec<isize>,
+    },
+    ApplyNegNDResponse {
+        result: Result<(), TensorError>,
+    },
+
+    ApplyNeg {
+        buf: TypelessBuf,
+        meta: MetaTensor,
+    },
+    ApplyNegResponse {
         result: Result<(), TensorError>,
     },
 
@@ -327,12 +364,18 @@ impl Messages {
             Messages::LenResponse { .. } |
             Messages::CopyResponse { .. } |
             Messages::DumpResponse { .. } |
-            Messages::ApplyElementwise1DStridedResponse { .. } |
-            Messages::ApplyElementwiseContiguousResponse { .. } |
-            Messages::ApplyElementwiseNDResponse { .. } |
+            Messages::ApplyElementwiseBinary1DStridedResponse { .. } |
+            Messages::ApplyElementwiseBinaryContiguousResponse { .. } |
+            Messages::ApplyElementwiseBinaryNDResponse { .. } |
             Messages::BroadcastResponse { .. } |
-            Messages::ApplyElementwiseResponse { .. } |
-            Messages::MatmulResponse { .. } => true,
+            Messages::ApplyElementwiseBinaryResponse { .. } |
+            Messages::MatmulResponse { .. } |
+            Messages::ApplyNeg1DStridedResponse { .. } |
+            Messages::ApplyNegNDResponse { .. } |
+            Messages::ErrorResponse { .. } |
+            Messages::ActionCompleted { .. } |
+            Messages::ApplyNegResponse { .. } => true,
+            
             _ => false,
         }
     }

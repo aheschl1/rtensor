@@ -1,4 +1,4 @@
-#include "../../../include/unary.h"
+#include "../../../include/scalar.h"
 
 template <typename T>
 __global__ void elementwise_strided_kernel(
@@ -58,3 +58,4 @@ DECLARE_ELEMENTWISE_STRIDED_LAUNCHER(int16_t, i16)
 DECLARE_ELEMENTWISE_STRIDED_LAUNCHER(int32_t, i32)
 DECLARE_ELEMENTWISE_STRIDED_LAUNCHER(int64_t, i64)
 DECLARE_ELEMENTWISE_STRIDED_LAUNCHER(__int128_t, i128)
+DECLARE_ELEMENTWISE_STRIDED_LAUNCHER(bool, boolean)

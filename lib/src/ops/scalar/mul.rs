@@ -1,15 +1,15 @@
 use std::{ops::{Mul, MulAssign}};
 
-use crate::{backend::Backend, core::{primitives::TensorBase, tensor::AsTensor, value::TensorValue, TensorView, TensorViewMut}, ops::base::OpType};
+use crate::{backend::Backend, core::{primitives::TensorBase, tensor::AsTensor, value::TensorValue, TensorView, TensorViewMut}, ops::base::BinaryOpType};
 
 impl<'a, T, B> MulAssign<T> for TensorViewMut<'a, T, B> 
     where T: TensorValue,
           B: Backend,
 {
     fn mul_assign(&mut self, rhs: T) {
-        self.backend.apply_elementwise(
+        self.backend.apply_elementwise_binary(
             self.buf, 
-            (OpType::Mul, rhs),
+            (BinaryOpType::Mul, rhs),
             &self.meta
         ).unwrap();
     }
@@ -20,9 +20,9 @@ impl<'a, T, B> MulAssign<&T> for TensorViewMut<'a, T, B>
           B: Backend,
 {
     fn mul_assign(&mut self, rhs: &T) {
-        self.backend.apply_elementwise(
+        self.backend.apply_elementwise_binary(
             self.buf, 
-            (OpType::Mul, *rhs),
+            (BinaryOpType::Mul, *rhs),
             &self.meta
         ).unwrap();
     }
@@ -33,9 +33,9 @@ impl<T, B> MulAssign<T> for TensorBase<T, B>
           B: Backend,
 {
     fn mul_assign(&mut self, rhs: T) {
-        self.backend.apply_elementwise(
+        self.backend.apply_elementwise_binary(
             &mut self.buf, 
-            (OpType::Mul, rhs),
+            (BinaryOpType::Mul, rhs),
             &self.meta
         ).unwrap();
     }
@@ -46,9 +46,9 @@ impl<T, B> MulAssign<&T> for TensorBase<T, B>
           B: Backend,
 {
     fn mul_assign(&mut self, rhs: &T) {
-        self.backend.apply_elementwise(
+        self.backend.apply_elementwise_binary(
             &mut self.buf, 
-            (OpType::Mul, *rhs),
+            (BinaryOpType::Mul, *rhs),
             &self.meta
         ).unwrap();
     }

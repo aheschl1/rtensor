@@ -92,7 +92,7 @@ impl<T: TensorValue> RemoteTensor<T> {
         let buf = remote_backend.alloc::<T>(0)?;
         Ok(Self {
             backend: remote_backend,
-            buf: buf,
+            buf,
             meta: MetaTensor::new(vec![], vec![], 0),
             _t: PhantomData,
         })

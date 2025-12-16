@@ -2,7 +2,7 @@ use std::{collections::HashMap, io::{Read, Write}, net::IpAddr, sync::{atomic::A
 
 use flume::Receiver;
 
-use crate::{backend::{cpu::Cpu, remote::{enumdispatch::{dispatch_alloc, dispatch_alloc_from_slice, dispatch_apply_elementwise_1d_strided, dispatch_apply_elementwise_contiguous, dispatch_apply_elementwise_nd, dispatch_broadcast, dispatch_copy, dispatch_copy_from_slice, dispatch_dump, dispatch_len, dispatch_matmul, dispatch_read, dispatch_write}, protocol::{Messages, Request, Response, Slice, TypelessBuf}}, Backend}, core::{meta::ContiguityTypes, primitives::DeviceType, tensor::TensorError, value::types, MetaTensor}};
+use crate::{backend::{cpu::Cpu, remote::{enumdispatch::{dispatch_alloc, dispatch_alloc_from_slice, dispatch_apply_binary_elementwise_1d_strided, dispatch_apply_binary_elementwise_contiguous, dispatch_apply_binary_elementwise_nd, dispatch_apply_neg_1d_strided, dispatch_apply_neg_contiguous, dispatch_apply_neg_nd, dispatch_broadcast, dispatch_copy, dispatch_copy_from_slice, dispatch_dump, dispatch_len, dispatch_matmul, dispatch_read, dispatch_write}, protocol::{Messages, Request, Response, Slice, TypelessBuf}}, Backend}, core::{meta::ContiguityTypes, primitives::DeviceType, tensor::TensorError, value::types, MetaTensor}};
 #[cfg(feature = "cuda")]
 use crate::backend::cuda::Cuda;
 
@@ -372,7 +372,7 @@ macro_rules! dump_for_dtype {
     }};
 }
 
-macro_rules! apply_elementwise_contiguous_for_dtype {
+macro_rules! apply_elementwise_binary_contiguous_for_dtype {
     ($buf_id:expr, $op:expr, $value:expr, $start:expr, $len:expr, $connection:expr, $rust_type:ty, $buffer_field:ident) => {{
         let device_type = select_buffer($connection);
         let typed_value = $value.to_value::<$rust_type>()?;
@@ -382,7 +382,7 @@ macro_rules! apply_elementwise_contiguous_for_dtype {
                 let buf = buffers.$buffer_field
                     .get_mut(&$buf_id)
                     .ok_or_else(|| TensorError::RemoteError(format!("Buffer {} not found", $buf_id)))?;
-                $connection.cpu.apply_elementwise_contiguous(buf, ($op, typed_value), $start, $len)?;
+                $connection.cpu.apply_elementwise_binary_contiguous(buf, ($op, typed_value), $start, $len)?;
             },
             #[cfg(feature = "cuda")]
             DeviceType::Cuda(_device_id) => {
@@ -390,7 +390,7 @@ macro_rules! apply_elementwise_contiguous_for_dtype {
                 let buf = buffers.$buffer_field
                     .get_mut(&$buf_id)
                     .ok_or_else(|| TensorError::RemoteError(format!("Buffer {} not found", $buf_id)))?;
-                $connection.cuda.apply_elementwise_contiguous(buf, ($op, typed_value), $start, $len)?;
+                $connection.cuda.apply_elementwise_binary_contiguous(buf, ($op, typed_value), $start, $len)?;
             },
             _ => {
                 return Err(TensorError::RemoteError("Unsupported device type".into()));
@@ -400,7 +400,7 @@ macro_rules! apply_elementwise_contiguous_for_dtype {
     }};
 }
 
-macro_rules! apply_elementwise_1d_strided_for_dtype {
+macro_rules! apply_elementwise_binary_1d_strided_for_dtype {
     ($buf_id:expr, $op:expr, $value:expr, $offset:expr, $stride:expr, $len:expr, $connection:expr, $rust_type:ty, $buffer_field:ident) => {{
         let device_type = select_buffer($connection);
         let typed_value = $value.to_value::<$rust_type>()?;
@@ -410,7 +410,7 @@ macro_rules! apply_elementwise_1d_strided_for_dtype {
                 let buf = buffers.$buffer_field
                     .get_mut(&$buf_id)
                     .ok_or_else(|| TensorError::RemoteError(format!("Buffer {} not found", $buf_id)))?;
-                $connection.cpu.apply_elementwise_1d_strided(buf, ($op, typed_value), $offset, $stride, $len)?;
+                $connection.cpu.apply_elementwise_binary_1d_strided(buf, ($op, typed_value), $offset, $stride, $len)?;
             },
             #[cfg(feature = "cuda")]
             DeviceType::Cuda(_device_id) => {
@@ -418,7 +418,7 @@ macro_rules! apply_elementwise_1d_strided_for_dtype {
                 let buf = buffers.$buffer_field
                     .get_mut(&$buf_id)
                     .ok_or_else(|| TensorError::RemoteError(format!("Buffer {} not found", $buf_id)))?;
-                $connection.cuda.apply_elementwise_1d_strided(buf, ($op, typed_value), $offset, $stride, $len)?;
+                $connection.cuda.apply_elementwise_binary_1d_strided(buf, ($op, typed_value), $offset, $stride, $len)?;
             },
             _ => {
                 return Err(TensorError::RemoteError("Unsupported device type".into()));
@@ -428,7 +428,7 @@ macro_rules! apply_elementwise_1d_strided_for_dtype {
     }};
 }
 
-macro_rules! apply_elementwise_nd_for_dtype {
+macro_rules! apply_elementwise_binary_nd_for_dtype {
     ($buf_id:expr, $op:expr, $value:expr, $offset:expr, $shape:expr, $stride:expr, $connection:expr, $rust_type:ty, $buffer_field:ident) => {{
         let device_type = select_buffer($connection);
         let typed_value = $value.to_value::<$rust_type>()?;
@@ -438,7 +438,7 @@ macro_rules! apply_elementwise_nd_for_dtype {
                 let buf = buffers.$buffer_field
                     .get_mut(&$buf_id)
                     .ok_or_else(|| TensorError::RemoteError(format!("Buffer {} not found", $buf_id)))?;
-                $connection.cpu.apply_elementwise_nd(buf, ($op, typed_value), $offset, $shape, $stride)?;
+                $connection.cpu.apply_elementwise_binary_nd(buf, ($op, typed_value), $offset, $shape, $stride)?;
             },
             #[cfg(feature = "cuda")]
             DeviceType::Cuda(_device_id) => {
@@ -446,13 +446,91 @@ macro_rules! apply_elementwise_nd_for_dtype {
                 let buf = buffers.$buffer_field
                     .get_mut(&$buf_id)
                     .ok_or_else(|| TensorError::RemoteError(format!("Buffer {} not found", $buf_id)))?;
-                $connection.cuda.apply_elementwise_nd(buf, ($op, typed_value), $offset, $shape, $stride)?;
+                $connection.cuda.apply_elementwise_binary_nd(buf, ($op, typed_value), $offset, $shape, $stride)?;
             },
             _ => {
                 return Err(TensorError::RemoteError("Unsupported device type".into()));
             }
         }
         Ok(())
+    }};
+}
+
+macro_rules! apply_neg_contiguous_for_dtype {
+    ($buf_id:expr, $start:expr, $len:expr, $connection:expr, $rust_type:ty, $buffer_field:ident) => {{
+        let device_type = select_buffer($connection);
+        match device_type {
+            DeviceType::Cpu => {
+                let mut buffers = $connection.cpu_buffers.write().unwrap();
+                let buf = buffers.$buffer_field
+                    .get_mut(&$buf_id)
+                    .ok_or_else(|| TensorError::RemoteError(format!("Buffer {} not found", $buf_id)))?;
+                $connection.cpu.apply_neg_contiguous(buf, $start, $len)
+            },
+            #[cfg(feature = "cuda")]
+            DeviceType::Cuda(_device_id) => {
+                let mut buffers = $connection.cuda_buffers.write().unwrap();
+                let buf = buffers.$buffer_field
+                    .get_mut(&$buf_id)
+                    .ok_or_else(|| TensorError::RemoteError(format!("Buffer {} not found", $buf_id)))?;
+                $connection.cuda.apply_neg_contiguous(buf, $start, $len)
+            },
+            _ => {
+                return Err(TensorError::RemoteError("Unsupported device type".into()));
+            }
+        }
+    }};
+}
+
+macro_rules! apply_neg_nd_for_dtype {
+    ($buf_id:expr, $offset:expr, $shape:expr, $stride:expr, $connection:expr, $rust_type:ty, $buffer_field:ident) => {{
+        let device_type = select_buffer($connection);
+        match device_type {
+            DeviceType::Cpu => {
+                let mut buffers = $connection.cpu_buffers.write().unwrap();
+                let buf = buffers.$buffer_field
+                    .get_mut(&$buf_id)
+                    .ok_or_else(|| TensorError::RemoteError(format!("Buffer {} not found", $buf_id)))?;
+                $connection.cpu.apply_neg_nd(buf, $offset, $shape, $stride)
+            },
+            #[cfg(feature = "cuda")]
+            DeviceType::Cuda(_device_id) => {
+                let mut buffers = $connection.cuda_buffers.write().unwrap();
+                let buf = buffers.$buffer_field
+                    .get_mut(&$buf_id)
+                    .ok_or_else(|| TensorError::RemoteError(format!("Buffer {} not found", $buf_id)))?;
+                $connection.cuda.apply_neg_nd(buf, $offset, $shape, $stride)
+            },
+            _ => {
+                return Err(TensorError::RemoteError("Unsupported device type".into()))
+            }
+        }
+    }};
+}
+
+macro_rules! apply_neg_1d_strided_for_dtype {
+    ($buf_id:expr, $offset:expr, $stride:expr, $len:expr, $connection:expr, $rust_type:ty, $buffer_field:ident) => {{
+        let device_type = select_buffer($connection);
+        match device_type {
+            DeviceType::Cpu => {
+                let mut buffers = $connection.cpu_buffers.write().unwrap();
+                let buf = buffers.$buffer_field
+                    .get_mut(&$buf_id)
+                    .ok_or_else(|| TensorError::RemoteError(format!("Buffer {} not found", $buf_id)))?;
+                $connection.cpu.apply_neg_1d_strided(buf, $offset, $stride, $len)
+            },
+            #[cfg(feature = "cuda")]
+            DeviceType::Cuda(_device_id) => {
+                let mut buffers = $connection.cuda_buffers.write().unwrap();
+                let buf = buffers.$buffer_field
+                    .get_mut(&$buf_id)
+                    .ok_or_else(|| TensorError::RemoteError(format!("Buffer {} not found", $buf_id)))?;
+                $connection.cuda.apply_neg_1d_strided(buf, $offset, $stride, $len)
+            },
+            _ => {
+                Err(TensorError::RemoteError("Unsupported device type".into()))
+            }
+        }
     }};
 }
 
@@ -472,14 +550,14 @@ macro_rules! broadcast_for_dtype {
                     .get(&$dst_id)
                     .ok_or_else(|| TensorError::RemoteError(format!("Dst buffer {} not found", $dst_id)))?;
                 
-                unsafe {
-                    $connection.cpu.broadcast(
-                        (left_buf as *const _, $left_meta),
-                        (right_buf as *const _, $right_meta),
-                        (dst_buf as *const _ as *mut _, $dst_meta),
-                        $op
-                    )?;
-                }
+                
+                $connection.cpu.broadcast(
+                    (left_buf as *const _, $left_meta),
+                    (right_buf as *const _, $right_meta),
+                    (dst_buf as *const _ as *mut _, $dst_meta),
+                    $op
+                )?;
+                
             },
             #[cfg(feature = "cuda")]
             DeviceType::Cuda(_device_id) => {
@@ -494,14 +572,14 @@ macro_rules! broadcast_for_dtype {
                     .get(&$dst_id)
                     .ok_or_else(|| TensorError::RemoteError(format!("Dst buffer {} not found", $dst_id)))?;
                 
-                unsafe {
-                    $connection.cuda.broadcast(
-                        (left_buf as *const _, $left_meta),
-                        (right_buf as *const _, $right_meta),
-                        (dst_buf as *const _ as *mut _, $dst_meta),
-                        $op
-                    )?;
-                }
+                
+                $connection.cuda.broadcast(
+                    (left_buf as *const _, $left_meta),
+                    (right_buf as *const _, $right_meta),
+                    (dst_buf as *const _ as *mut _, $dst_meta),
+                    $op
+                )?;
+                
             },
             _ => {
                 return Err(TensorError::RemoteError("Unsupported device type".into()));
@@ -558,14 +636,14 @@ pub(crate) enum AsyncJob {
     ApplyElementwiseContiguous {
         task_id: u32,
         buf: TypelessBuf,
-        op: (crate::ops::base::OpType, crate::backend::remote::protocol::Value),
+        op: (crate::ops::base::BinaryOpType, crate::backend::remote::protocol::Value),
         start: usize,
         len: usize,
     },
     ApplyElementwise1DStrided {
         task_id: u32,
         buf: TypelessBuf,
-        op: (crate::ops::base::OpType, crate::backend::remote::protocol::Value),
+        op: (crate::ops::base::BinaryOpType, crate::backend::remote::protocol::Value),
         offset: usize,
         stride: isize,
         len: usize,
@@ -573,7 +651,27 @@ pub(crate) enum AsyncJob {
     ApplyElementwiseND {
         task_id: u32,
         buf: TypelessBuf,
-        op: (crate::ops::base::OpType, crate::backend::remote::protocol::Value),
+        op: (crate::ops::base::BinaryOpType, crate::backend::remote::protocol::Value),
+        offset: usize,
+        shape: Vec<usize>,
+        stride: Vec<isize>,
+    },
+    ApplyNegContiguous {
+        task_id: u32,
+        buf: TypelessBuf,
+        start: usize,
+        len: usize,
+    },
+    ApplyNeg1DStrided {
+        task_id: u32,
+        buf: TypelessBuf,
+        offset: usize,
+        stride: isize,
+        len: usize,
+    },
+    ApplyNegND {
+        task_id: u32,
+        buf: TypelessBuf,
         offset: usize,
         shape: Vec<usize>,
         stride: Vec<isize>,
@@ -583,7 +681,7 @@ pub(crate) enum AsyncJob {
         left: (TypelessBuf, MetaTensor),
         right: (TypelessBuf, MetaTensor),
         dst: (TypelessBuf, MetaTensor),
-        op: crate::ops::base::OpType,
+        op: crate::ops::base::BinaryOpType,
     },
     MatMul {
         task_id: u32,
@@ -653,11 +751,11 @@ fn handle_request(
         },
         Messages::Read { buf, offset } => {
             let value = dispatch_read(buf, offset, connection);
-            sync_job!(Messages::ReadResponse { value: value }, err: value.as_ref().err().cloned());
+            sync_job!(Messages::ReadResponse { value }, err: value.as_ref().err().cloned());
         }
         Messages::Write { buf, offset, value } => {
             let result = dispatch_write(buf, offset, value, connection);
-            sync_job!(Messages::WriteResponse { result: result }, err: result.as_ref().err().cloned());
+            sync_job!(Messages::WriteResponse { result }, err: result.as_ref().err().cloned());
         }
         Messages::Len { buf } => {
             let len = dispatch_len(buf, connection);
@@ -671,14 +769,14 @@ fn handle_request(
             let slice = dispatch_dump(src, connection);
             sync_job!(Messages::DumpResponse { data: slice }, err: slice.as_ref().err().cloned());
         }
-        Messages::ApplyElementwiseContiguous { buf, op, start, len } => {
-            async_job!(ack: ApplyElementwiseContiguousResponse, job: ApplyElementwiseContiguous, buf, op, start, len);
+        Messages::ApplyElementwiseBinaryContiguous { buf, op, start, len } => {
+            async_job!(ack: ApplyElementwiseBinaryContiguousResponse, job: ApplyElementwiseContiguous, buf, op, start, len);
         }
-        Messages::ApplyElementwise1DStrided { buf, op, offset, stride, len } => {
-            async_job!(ack: ApplyElementwise1DStridedResponse, job: ApplyElementwise1DStrided, buf, op, offset, stride, len);
+        Messages::ApplyElementwiseBinary1DStrided { buf, op, offset, stride, len } => {
+            async_job!(ack: ApplyElementwiseBinary1DStridedResponse, job: ApplyElementwise1DStrided, buf, op, offset, stride, len);
         }
-        Messages::ApplyElementwiseND { buf, op, offset, shape, stride } => {
-            async_job!(ack: ApplyElementwiseNDResponse, job: ApplyElementwiseND, buf, op, offset, shape, stride);
+        Messages::ApplyElementwiseBinaryND { buf, op, offset, shape, stride } => {
+            async_job!(ack: ApplyElementwiseBinaryNDResponse, job: ApplyElementwiseND, buf, op, offset, shape, stride);
         }
         Messages::Broadcast { left, right, dst, op } => { 
             async_job!(ack: BroadcastResponse, job: Broadcast, left, right, dst, op);    
@@ -686,7 +784,42 @@ fn handle_request(
         Messages::Matmul { lhs, rhs, dst, b, m, k, n, contiguity } => {
             async_job!(ack: MatmulResponse, job: MatMul, lhs, rhs, dst, b, m, k, n, contiguity);
         }
-        _ => {
+        Messages::ApplyNegContiguous { buf, start, len } => {
+            async_job!(ack: ApplyNegContiguousResponse, job: ApplyNegContiguous, buf, start, len);
+        }
+        Messages::ApplyNeg1DStrided { buf, offset, stride, len } => {
+            async_job!(ack: ApplyNeg1DStridedResponse, job: ApplyNeg1DStrided, buf, offset, stride, len);
+        }
+        Messages::ApplyNegND { buf, offset, shape, stride } => {
+            async_job!(ack: ApplyNegNDResponse, job: ApplyNegND, buf, offset, shape, stride);
+        }
+
+        // invalid
+
+        Messages::DeviceTypeResponse { .. } |
+        Messages::AllocFromSliceResponse { .. } |
+        Messages::AllocResponse { .. } |
+        Messages::CopyFromSliceResponse { .. } |
+        Messages::ReadResponse { .. } |
+        Messages::WriteResponse { .. } |
+        Messages::LenResponse { .. } |
+        Messages::CopyResponse { .. } |
+        Messages::DumpResponse { .. } |
+        Messages::ApplyElementwiseBinary1DStridedResponse { .. } |
+        Messages::ApplyElementwiseBinaryContiguousResponse { .. } |
+        Messages::ApplyElementwiseBinaryNDResponse { .. } |
+        Messages::BroadcastResponse { .. } |
+        Messages::ApplyElementwiseBinaryResponse { .. } |
+        Messages::MatmulResponse { .. } |
+        Messages::ApplyNeg1DStridedResponse { .. } |
+        Messages::ApplyNegNDResponse { .. } |
+        Messages::ErrorResponse { .. } |
+        Messages::ActionCompleted { .. } |
+        Messages::ApplyNegContiguousResponse { .. } |
+        // should be handled at dispatch on client
+        Messages::ApplyElementwiseBinary { .. } | 
+        Messages::ApplyNeg { .. } |
+        Messages::ApplyNegResponse { .. } => {
             sync_job!(Messages::ErrorResponse { 
                 message: "Unsupported request".to_string() }, err: Some(TensorError::RemoteError("Unsupported request".to_string()))
             );
@@ -777,6 +910,9 @@ fn drain_background_jobs(connection: ClientConnection) {
             AsyncJob::ApplyElementwiseND { task_id, .. } => *task_id,
             AsyncJob::Broadcast { task_id, .. } => *task_id,
             AsyncJob::MatMul { task_id, .. } => *task_id,
+            AsyncJob::ApplyNegContiguous { task_id, .. } => *task_id,
+            AsyncJob::ApplyNeg1DStrided { task_id, .. } => *task_id,
+            AsyncJob::ApplyNegND { task_id, .. } => *task_id
         };
         let (message, error) = match job {
             AsyncJob::CopyFromSlice { dst, src, .. } => {
@@ -786,21 +922,36 @@ fn drain_background_jobs(connection: ClientConnection) {
             },
             AsyncJob::ApplyElementwiseContiguous { buf, op, start, len, .. } => {
                 let (op_type, value) = op;
-                let result = dispatch_apply_elementwise_contiguous(buf, op_type, value, start, len, &connection);
+                let result = dispatch_apply_binary_elementwise_contiguous(buf, op_type, value, start, len, &connection);
                 let err = result.as_ref().err().cloned();
-                (Messages::ApplyElementwiseContiguousResponse { result }, err)
+                (Messages::ApplyElementwiseBinaryContiguousResponse { result }, err)
             },
             AsyncJob::ApplyElementwise1DStrided { buf, op, offset, stride, len, .. } => {
                 let (op_type, value) = op;
-                let result = dispatch_apply_elementwise_1d_strided(buf, op_type, value, offset, stride, len, &connection);
+                let result = dispatch_apply_binary_elementwise_1d_strided(buf, op_type, value, offset, stride, len, &connection);
                 let err = result.as_ref().err().cloned();
-                (Messages::ApplyElementwise1DStridedResponse { result }, err)
+                (Messages::ApplyElementwiseBinary1DStridedResponse { result }, err)
             },
             AsyncJob::ApplyElementwiseND { buf, op, offset, shape, stride, .. } => {
                 let (op_type, value) = op;
-                let result = dispatch_apply_elementwise_nd(buf, op_type, value, offset, &shape, &stride, &connection);
+                let result = dispatch_apply_binary_elementwise_nd(buf, op_type, value, offset, &shape, &stride, &connection);
                 let err = result.as_ref().err().cloned();
-                (Messages::ApplyElementwiseNDResponse { result }, err)
+                (Messages::ApplyElementwiseBinaryNDResponse { result }, err)
+            },
+            AsyncJob::ApplyNegContiguous { buf, start, len, .. } => {
+                let result = dispatch_apply_neg_contiguous(buf, start, len, &connection);
+                let err = result.as_ref().err().cloned();
+                (Messages::ApplyNegContiguousResponse { result }, err)
+            },
+            AsyncJob::ApplyNeg1DStrided { buf, offset, stride, len, .. } => {
+                let result = dispatch_apply_neg_1d_strided(buf, offset, stride, len, &connection);
+                let err = result.as_ref().err().cloned();
+                (Messages::ApplyNeg1DStridedResponse { result }, err)
+            },
+            AsyncJob::ApplyNegND { buf, offset, shape, stride, .. } => {
+                let result = dispatch_apply_neg_nd(buf, offset, &shape, &stride, &connection);
+                let err = result.as_ref().err().cloned();
+                (Messages::ApplyNegNDResponse { result }, err)
             },
             AsyncJob::Broadcast { left, right, dst, op, .. } => {
                 let result = dispatch_broadcast(left, right, dst, op, &connection);

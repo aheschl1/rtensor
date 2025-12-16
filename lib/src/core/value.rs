@@ -9,9 +9,10 @@ use cudarc::driver::DeviceRepr;
 pub trait TensorValue: 
     Copy + 
     Default +
-    TensorDefault +
+    TypeConstants +
     DeviceRepr +
-    Send + Sync +
+    Send + Sync + 
+    PartialEq + PartialOrd +
     std::ops::Add<Output = Self> + 
     std::ops::Sub<Output = Self> + 
     std::ops::Mul<Output = Self> +
@@ -30,8 +31,9 @@ pub trait TensorValue:
 pub trait TensorValue: 
     Copy + 
     Default +
-    TensorDefault +
+    TypeConstants +
     Send + Sync +
+    PartialEq + PartialOrd +
     std::ops::Add<Output = Self> + 
     std::ops::Sub<Output = Self> + 
     std::ops::Mul<Output = Self> +
@@ -44,11 +46,12 @@ pub trait TensorValue:
 }
 
 /// Provides default constant values for tensor element types.
-pub trait TensorDefault {
+pub trait TypeConstants {
     const ZERO: Self;
     const ONE: Self;
     const MIN: Self;
     const MAX: Self;
+    const SUPPORTS_NEG: bool;
 }
 
 
@@ -63,12 +66,13 @@ macro_rules! impl_tensor_values {
 }
 
 macro_rules! impl_default {
-    ($type:ty, $zero:expr, $one:expr, $min:expr, $max:expr) => {
-        impl TensorDefault for $type {
+    ($type:ty, $zero:expr, $one:expr, $min:expr, $max:expr, $supports_neg:expr) => {
+        impl TypeConstants for $type {
             const ZERO: Self = $zero;
             const ONE: Self = $one;
             const MIN: Self = $min;
             const MAX: Self = $max;
+            const SUPPORTS_NEG: bool = $supports_neg;
         }
     };
 }
@@ -90,22 +94,20 @@ impl_tensor_values!(
     // (usize, DType::U64)
 );
 
-impl_default!(f32, 0.0f32, 1.0f32, f32::MIN, f32::MAX);
-impl_default!(f64, 0.0f64, 1.0f64, f64::MIN, f64::MAX);
-impl_default!(i8, 0i8, 1i8, i8::MIN, i8::MAX);
-impl_default!(i16, 0i16, 1i16, i16::MIN, i16::MAX);
-impl_default!(i32, 0i32, 1i32, i32::MIN, i32::MAX);
-impl_default!(i64, 0i64, 1i64, i64::MIN, i64::MAX);
-impl_default!(i128, 0i128, 1i128, i128::MIN, i128::MAX);
+impl_default!(f32, 0.0f32, 1.0f32, f32::MIN, f32::MAX, true);
+impl_default!(f64, 0.0f64, 1.0f64, f64::MIN, f64::MAX, true);
+impl_default!(i8, 0i8, 1i8, i8::MIN, i8::MAX, true);
+impl_default!(i16, 0i16, 1i16, i16::MIN, i16::MAX, true);
+impl_default!(i32, 0i32, 1i32, i32::MIN, i32::MAX, true);
+impl_default!(i64, 0i64, 1i64, i64::MIN, i64::MAX, true);
+impl_default!(i128, 0i128, 1i128, i128::MIN, i128::MAX, true);
 // impl_default!(isize, 0isize, 1isize, isize::MIN, isize::MAX);
-impl_default!(u8, 0u8, 1u8, u8::MIN, u8::MAX);
-impl_default!(u16, 0u16, 1u16, u16::MIN, u16::MAX);
-impl_default!(u32, 0u32, 1u32, u32::MIN, u32::MAX);
-impl_default!(u64, 0u64, 1u64, u64::MIN, u64::MAX);
-impl_default!(u128, 0u128, 1u128, u128::MIN, u128::MAX);
+impl_default!(u8, 0u8, 1u8, u8::MIN, u8::MAX, false);
+impl_default!(u16, 0u16, 1u16, u16::MIN, u16::MAX, false);
+impl_default!(u32, 0u32, 1u32, u32::MIN, u32::MAX, false);
+impl_default!(u64, 0u64, 1u64, u64::MIN, u64::MAX, false);
+impl_default!(u128, 0u128, 1u128, u128::MIN, u128::MAX, false);
 // impl_default!(usize, 0usize, 1usize, usize::MIN, usize::MAX);
-impl_default!(bool, false, true, false, true);
-
 
 #[cfg(feature = "remote")]
 use serde::{Deserialize, Serialize};
@@ -135,9 +137,9 @@ pub mod types {
     #[cfg(feature = "cuda")]
     use cudarc::driver::DeviceRepr;
 
-    use crate::core::value::{DType, TensorDefault, TensorValue};
+    use crate::core::value::{DType, TypeConstants, TensorValue};
 
-    #[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
+    #[derive(Clone, Copy, Default, Debug, PartialEq, PartialOrd)]
     #[repr(C)]
     pub struct boolean(pub bool);
 
@@ -183,11 +185,12 @@ pub mod types {
         }
     }
 
-    impl TensorDefault for boolean {
+    impl TypeConstants for boolean {
         const ZERO: Self = Self::FALSE;
         const ONE: Self = Self::TRUE;
         const MIN: Self = Self::FALSE;
         const MAX: Self = Self::TRUE;
+        const SUPPORTS_NEG: bool = false;
     }
 
     impl std::ops::Add for boolean {
@@ -260,5 +263,17 @@ mod tests {
         tensor += boolean(true);
         let expected = Tensor::<boolean>::ones((2, 3));
         assert_eq!(tensor, expected);
+    }   
+
+    #[cfg(feature = "cuda")]
+    #[test]
+    fn boolean_tensor_cuda() {
+        use crate::core::primitives::CudaTensor;
+
+        let mut tensor = CudaTensor::<boolean>::zeros((2, 3));
+        tensor += boolean(true);
+        tensor += boolean(true);
+        let expected = CudaTensor::<boolean>::ones((2, 3));
+        assert_eq!(tensor.cpu().unwrap(), expected.cpu().unwrap());
     }   
 }

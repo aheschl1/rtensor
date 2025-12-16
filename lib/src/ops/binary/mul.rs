@@ -1,7 +1,7 @@
 use std::ops::{Mul, MulAssign};
 
 use crate::{backend::Backend, core::{primitives::TensorBase, value::TensorValue, MetaTensor, MetaTensorView, TensorView, TensorViewMut}, ops::binary::{compute_broadcasted_params}};
-use crate::ops::base::OpType;
+use crate::ops::base::BinaryOpType;
 
 /// Macro to implement MulAssign for mutable tensor types (TensorBase and TensorViewMut)
 macro_rules! impl_mul_assign {
@@ -27,14 +27,12 @@ macro_rules! impl_mul_assign {
                 let meta_a = MetaTensor::new(out_shape.clone(), broadcast_stra, self.offset());
                 let meta_b = MetaTensor::new(out_shape.clone(), broadcast_strb, rhs.offset());
 
-                unsafe {
-                    self.backend.broadcast(
-                        (&self.buf as *const B::Buf<T>, &meta_a),
-                        (&rhs.buf as *const B::Buf<T>, &meta_b),
-                        (&mut self.buf as *mut B::Buf<T>, &meta_a),
-                        OpType::Mul,
-                    ).unwrap();
-                }
+                self.backend.broadcast(
+                    (&self.buf as *const B::Buf<T>, &meta_a),
+                    (&rhs.buf as *const B::Buf<T>, &meta_b),
+                    (&mut self.buf as *mut B::Buf<T>, &meta_a),
+                    BinaryOpType::Mul,
+                ).unwrap();
             }
         }
     };
@@ -60,14 +58,12 @@ macro_rules! impl_mul_assign {
                 let meta_a = MetaTensor::new(out_shape.clone(), broadcast_stra, self.offset());
                 let meta_b = MetaTensor::new(out_shape.clone(), broadcast_strb, rhs.offset());
 
-                unsafe {
-                    self.backend.broadcast(
-                        (&self.buf as *const B::Buf<T>, &meta_a),
-                        (rhs.buf as *const B::Buf<T>, &meta_b),
-                        (&mut self.buf as *mut B::Buf<T>, &meta_a),
-                        OpType::Mul,
-                    ).unwrap();
-                }
+                self.backend.broadcast(
+                    (&self.buf as *const B::Buf<T>, &meta_a),
+                    (rhs.buf as *const B::Buf<T>, &meta_b),
+                    (&mut self.buf as *mut B::Buf<T>, &meta_a),
+                    BinaryOpType::Mul,
+                ).unwrap();
             }
         }
     };
@@ -93,14 +89,12 @@ macro_rules! impl_mul_assign {
                 let meta_a = MetaTensor::new(out_shape.clone(), broadcast_stra, self.offset());
                 let meta_b = MetaTensor::new(out_shape.clone(), broadcast_strb, rhs.offset());
 
-                unsafe {
-                    self.backend.broadcast(
-                        (self.buf as *const B::Buf<T>, &meta_a),
-                        (&rhs.buf as *const B::Buf<T>, &meta_b),
-                        (self.buf as *mut B::Buf<T>, &meta_a),
-                        OpType::Mul,
-                    ).unwrap();
-                }
+                self.backend.broadcast(
+                    (self.buf as *const B::Buf<T>, &meta_a),
+                    (&rhs.buf as *const B::Buf<T>, &meta_b),
+                    (self.buf as *mut B::Buf<T>, &meta_a),
+                    BinaryOpType::Mul,
+                ).unwrap();
             }
         }
     };
@@ -126,14 +120,12 @@ macro_rules! impl_mul_assign {
                 let meta_a = MetaTensor::new(out_shape.clone(), broadcast_stra, self.offset());
                 let meta_b = MetaTensor::new(out_shape.clone(), broadcast_strb, rhs.offset());
 
-                unsafe {
-                    self.backend.broadcast(
-                        (self.buf as *const B::Buf<T>, &meta_a),
-                        (rhs.buf as *const B::Buf<T>, &meta_b),
-                        (self.buf as *mut B::Buf<T>, &meta_a),
-                        OpType::Mul,
-                    ).unwrap();
-                }
+                self.backend.broadcast(
+                    (self.buf as *const B::Buf<T>, &meta_a),
+                    (rhs.buf as *const B::Buf<T>, &meta_b),
+                    (self.buf as *mut B::Buf<T>, &meta_a),
+                    BinaryOpType::Mul,
+                ).unwrap();
             }
         }
     };
@@ -159,14 +151,12 @@ macro_rules! impl_mul {
                 
                 let mut result = TensorBase::<T, B>::zeros(out_shape);
 
-                unsafe {
-                    self.backend.broadcast(
-                        (&self.buf as *const B::Buf<T>, &meta_a),
-                        (&rhs.buf as *const B::Buf<T>, &meta_b),
-                        (&mut result.buf as *mut B::Buf<T>, &result.meta),
-                        OpType::Mul,
-                    ).unwrap();
-                }
+                self.backend.broadcast(
+                    (&self.buf as *const B::Buf<T>, &meta_a),
+                    (&rhs.buf as *const B::Buf<T>, &meta_b),
+                    (&mut result.buf as *mut B::Buf<T>, &result.meta),
+                    BinaryOpType::Mul,
+                ).unwrap();
                 result
             }
         }
@@ -189,14 +179,12 @@ macro_rules! impl_mul {
                 
                 let mut result = TensorBase::<T, B>::zeros(out_shape);
 
-                unsafe {
-                    self.backend.broadcast(
-                        (&self.buf as *const B::Buf<T>, &meta_a),
-                        (rhs.buf as *const B::Buf<T>, &meta_b),
-                        (&mut result.buf as *mut B::Buf<T>, &result.meta),
-                        OpType::Mul,
-                    ).unwrap();
-                }
+                self.backend.broadcast(
+                    (&self.buf as *const B::Buf<T>, &meta_a),
+                    (rhs.buf as *const B::Buf<T>, &meta_b),
+                    (&mut result.buf as *mut B::Buf<T>, &result.meta),
+                    BinaryOpType::Mul,
+                ).unwrap();
                 result
             }
         }
@@ -219,14 +207,12 @@ macro_rules! impl_mul {
                 
                 let mut result = TensorBase::<T, B>::zeros(out_shape);
 
-                unsafe {
-                    self.backend.broadcast(
-                        (self.buf as *const B::Buf<T>, &meta_a),
-                        (&rhs.buf as *const B::Buf<T>, &meta_b),
-                        (&mut result.buf as *mut B::Buf<T>, &result.meta),
-                        OpType::Mul,
-                    ).unwrap();
-                }
+                self.backend.broadcast(
+                    (self.buf as *const B::Buf<T>, &meta_a),
+                    (&rhs.buf as *const B::Buf<T>, &meta_b),
+                    (&mut result.buf as *mut B::Buf<T>, &result.meta),
+                    BinaryOpType::Mul,
+                ).unwrap();
                 result
             }
         }
@@ -249,14 +235,12 @@ macro_rules! impl_mul {
                 
                 let mut result = TensorBase::<T, B>::zeros(out_shape);
 
-                unsafe {
-                    self.backend.broadcast(
-                        (self.buf as *const B::Buf<T>, &meta_a),
-                        (rhs.buf as *const B::Buf<T>, &meta_b),
-                        (&mut result.buf as *mut B::Buf<T>, &result.meta),
-                        OpType::Mul,
-                    ).unwrap();
-                }
+                self.backend.broadcast(
+                    (self.buf as *const B::Buf<T>, &meta_a),
+                    (rhs.buf as *const B::Buf<T>, &meta_b),
+                    (&mut result.buf as *mut B::Buf<T>, &result.meta),
+                    BinaryOpType::Mul,
+                ).unwrap();
                 result
             }
         }
@@ -279,14 +263,12 @@ macro_rules! impl_mul {
                 
                 let mut result = TensorBase::<T, B>::zeros(out_shape);
 
-                unsafe {
-                    self.backend.broadcast(
-                        (&self.buf as *const B::Buf<T>, &meta_a),
-                        (&rhs.buf as *const B::Buf<T>, &meta_b),
-                        (&mut result.buf as *mut B::Buf<T>, &result.meta),
-                        OpType::Mul,
-                    ).unwrap();
-                }
+                self.backend.broadcast(
+                    (&self.buf as *const B::Buf<T>, &meta_a),
+                    (&rhs.buf as *const B::Buf<T>, &meta_b),
+                    (&mut result.buf as *mut B::Buf<T>, &result.meta),
+                    BinaryOpType::Mul,
+                ).unwrap();
                 result
             }
         }
@@ -309,14 +291,12 @@ macro_rules! impl_mul {
                 
                 let mut result = TensorBase::<T, B>::zeros(out_shape);
 
-                unsafe {
-                    self.backend.broadcast(
-                        (&self.buf as *const B::Buf<T>, &meta_a),
-                        (rhs.buf as *const B::Buf<T>, &meta_b),
-                        (&mut result.buf as *mut B::Buf<T>, &result.meta),
-                        OpType::Mul,
-                    ).unwrap();
-                }
+                self.backend.broadcast(
+                    (&self.buf as *const B::Buf<T>, &meta_a),
+                    (rhs.buf as *const B::Buf<T>, &meta_b),
+                    (&mut result.buf as *mut B::Buf<T>, &result.meta),
+                    BinaryOpType::Mul,
+                ).unwrap();
                 result
             }
         }
@@ -339,14 +319,12 @@ macro_rules! impl_mul {
                 
                 let mut result = TensorBase::<T, B>::zeros(out_shape);
 
-                unsafe {
-                    self.backend.broadcast(
-                        (self.buf as *const B::Buf<T>, &meta_a),
-                        (&rhs.buf as *const B::Buf<T>, &meta_b),
-                        (&mut result.buf as *mut B::Buf<T>, &result.meta),
-                        OpType::Mul,
-                    ).unwrap();
-                }
+                self.backend.broadcast(
+                    (self.buf as *const B::Buf<T>, &meta_a),
+                    (&rhs.buf as *const B::Buf<T>, &meta_b),
+                    (&mut result.buf as *mut B::Buf<T>, &result.meta),
+                    BinaryOpType::Mul,
+                ).unwrap();
                 result
             }
         }
@@ -369,14 +347,12 @@ macro_rules! impl_mul {
                 
                 let mut result = TensorBase::<T, B>::zeros(out_shape);
 
-                unsafe {
-                    self.backend.broadcast(
-                        (self.buf as *const B::Buf<T>, &meta_a),
-                        (rhs.buf as *const B::Buf<T>, &meta_b),
-                        (&mut result.buf as *mut B::Buf<T>, &result.meta),
-                        OpType::Mul,
-                    ).unwrap();
-                }
+                self.backend.broadcast(
+                    (self.buf as *const B::Buf<T>, &meta_a),
+                    (rhs.buf as *const B::Buf<T>, &meta_b),
+                    (&mut result.buf as *mut B::Buf<T>, &result.meta),
+                    BinaryOpType::Mul,
+                ).unwrap();
                 result
             }
         }
