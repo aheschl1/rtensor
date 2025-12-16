@@ -1,4 +1,4 @@
-// #include "../../../include/unary.h"
+// #include "../../../include/scalar.h"
 
 // template <typename T>
 // __global__ void elementwise_scattered_kernel(

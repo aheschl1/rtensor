@@ -1,10 +1,46 @@
 
-use crate::{backend::{Backend, BackendMatMul}, core::{meta::TensorOffsetIterator, tensor::TensorError, value::{types, TensorValue}, MetaTensor}, openblas::{blasint, cblas_dgemm, cblas_sgemm, CBLAS_ORDER, CBLAS_TRANSPOSE}, ops::base::OpType};
+use crate::{backend::{Backend, BackendMatMul}, core::{meta::TensorOffsetIterator, tensor::TensorError, value::{types, TensorValue}, MetaTensor}, openblas::{blasint, cblas_dgemm, cblas_sgemm, CBLAS_ORDER, CBLAS_TRANSPOSE}, ops::base::BinaryOpType};
 use crate::backend::ContiguityTypes;
-use crate::core::value::TensorDefault;
+use crate::core::value::TypeConstants;
 
 #[derive(Debug, PartialEq, Eq, Clone, Default)]
 pub struct Cpu;
+
+macro_rules! elemwise_contiguous_loop {
+    ($buf:expr, $start:expr, $len:expr, |$x:ident| $body:expr) => {{
+        let slice = &mut $buf[$start .. $start + $len];
+        for $x in slice.iter_mut() {
+            *$x = $body;
+        }
+    }};
+}
+
+macro_rules! elemwise_1d_strided_loop {
+    ($buf:expr, $offset:expr, $stride:expr, $len:expr, |$x:ident| $body:expr) => {{
+        let mut idx: isize = $offset as isize;
+        for _ in 0..$len {
+            let $x = &mut $buf[idx as usize];
+            *$x = $body;
+            idx += $stride;
+        }
+    }};
+}
+
+macro_rules! elemwise_nd_loop {
+    ($buf:expr, $offset:expr, $shape:expr, $stride:expr, |$x:ident| $body:expr) => {{
+        let iter = TensorOffsetIterator::new(
+            $shape,
+            $stride,
+            $offset,
+        );
+        for idx in iter {
+            let $x = &mut $buf[idx];
+            *$x = $body;
+        }
+    }};
+}
+
+
 
 impl Backend for Cpu {
     type Buf<T: TensorValue> = Box<[T]>;
@@ -76,61 +112,12 @@ impl Backend for Cpu {
     }
 
 
-    fn apply_elementwise_contiguous<T: TensorValue>(
-        &self, buf: &mut Self::Buf<T>, 
-        op: (OpType, T), 
-        start: usize,
-        len: usize
-    ) -> Result<(), TensorError> {
-        let bufptr = buf.as_mut();
-        for item in bufptr.iter_mut().skip(start).take(len) {
-            *item = op.0.apply(*item, op.1);
-        }
-        Ok(())
-    }
-    
-    fn apply_elementwise_1d_strided<T: TensorValue>(
-        &self, buf: &mut Self::Buf<T>, 
-        op: (OpType, T), 
-        offset: usize,
-        stride: isize,
-        len: usize
-    ) -> Result<(), TensorError> {
-        let bufptr = buf.as_mut();
-        let mut idx: isize = offset as isize;
-        for _ in 0..len {
-            bufptr[idx as usize] = op.0.apply(bufptr[idx as usize], op.1);
-            idx += stride;
-        }
-        Ok(())
-    }
-    
-    fn apply_elementwise_nd<T: TensorValue>(
-        &self,
-        buf: &mut Self::Buf<T>,
-        op: (OpType, T),
-        offset: usize,
-        shape: &[usize],
-        stride: &[isize],
-    ) -> Result<(), TensorError> {
-        let bufptr = buf.as_mut();
-        let iterator = TensorOffsetIterator::new(
-            shape,
-            stride,
-            offset,
-        );
-        for idx in iterator {
-            bufptr[idx] = op.0.apply(bufptr[idx], op.1);
-        }
-        Ok(())
-    }
-
-    unsafe fn broadcast<T: TensorValue>(
+    fn broadcast<T: TensorValue>(
         &self, 
         left: (*const Self::Buf<T>, &MetaTensor), 
         right: (*const Self::Buf<T>, &MetaTensor),
         dst: (*mut Self::Buf<T>, &MetaTensor),
-        op: OpType
+        op: BinaryOpType
     ) -> Result<(), TensorError> {
         // this is a stupid algorithm which is O(rank*size)
         // it can be optimized to O(size) later
@@ -184,6 +171,89 @@ impl Backend for Cpu {
             }
         }
 
+        Ok(())
+    }
+
+    fn apply_elementwise_binary_contiguous<T: TensorValue>(
+        &self, buf: &mut Self::Buf<T>, 
+        op: (BinaryOpType, T), 
+        start: usize,
+        len: usize
+    ) -> Result<(), TensorError> {
+        let bufptr = buf.as_mut();
+        elemwise_contiguous_loop!(bufptr, start, len, |x| op.0.apply(*x, op.1));
+        Ok(())
+    }
+    
+    fn apply_elementwise_binary_1d_strided<T: TensorValue>(
+        &self, buf: &mut Self::Buf<T>, 
+        op: (BinaryOpType, T), 
+        offset: usize,
+        stride: isize,
+        len: usize
+    ) -> Result<(), TensorError> {
+        let bufptr = buf.as_mut();
+
+        elemwise_1d_strided_loop!(
+            bufptr,
+            offset,
+            stride,
+            len,
+            |x| op.0.apply(*x, op.1)
+        );
+
+        Ok(())
+    }
+    
+    fn apply_elementwise_binary_nd<T: TensorValue>(
+        &self,
+        buf: &mut Self::Buf<T>,
+        op: (BinaryOpType, T),
+        offset: usize,
+        shape: &[usize],
+        stride: &[isize],
+    ) -> Result<(), TensorError> {
+        let bufptr = buf.as_mut();
+        elemwise_nd_loop!(
+            bufptr,
+            offset,
+            shape,
+            stride,
+            |x| op.0.apply(*x, op.1)
+        );
+        Ok(())
+    }
+    
+    fn apply_neg_contiguous<T: TensorValue + std::ops::Neg<Output = T>>(
+        &self, buf: &mut Self::Buf<T>, 
+        start: usize,
+        len: usize
+    ) -> Result<(), TensorError> {
+        let bufptr = buf.as_mut();
+        elemwise_contiguous_loop!(bufptr, start, len, |x| -(*x));
+        Ok(())
+    }
+    
+    fn apply_neg_1d_strided<T: TensorValue + std::ops::Neg<Output = T>>(
+        &self, buf: &mut Self::Buf<T>, 
+        offset: usize,
+        stride: isize,
+        len: usize
+    ) -> Result<(), TensorError> {
+        let bufptr = buf.as_mut();
+        elemwise_1d_strided_loop!(bufptr, offset, stride, len, |x| -(*x));
+        Ok(())
+    }
+    
+    fn apply_neg_nd<T: TensorValue + std::ops::Neg<Output = T>>(
+        &self,
+        buf: &mut Self::Buf<T>,
+        offset: usize,
+        shape: &[usize],
+        stride: &[isize],
+    ) -> Result<(), TensorError> {
+        let bufptr = buf.as_mut();
+        elemwise_nd_loop!(bufptr, offset, shape, stride, |x| -(*x));
         Ok(())
     }
 

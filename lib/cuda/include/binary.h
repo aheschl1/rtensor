@@ -17,6 +17,7 @@ void launch_binary_broadcast_elementwise_i16(const int16_t* lbuf, const int16_t*
 void launch_binary_broadcast_elementwise_i32(const int32_t* lbuf, const int32_t* rbuf, int32_t* dbuf, size_t loff, size_t roff, size_t doff, size_t rank, size_t size, const ptrdiff_t* lstride, const ptrdiff_t* rstride, const ptrdiff_t* dstride, const size_t* shape, uint8_t op, unsigned int block_size);
 void launch_binary_broadcast_elementwise_i64(const int64_t* lbuf, const int64_t* rbuf, int64_t* dbuf, size_t loff, size_t roff, size_t doff, size_t rank, size_t size, const ptrdiff_t* lstride, const ptrdiff_t* rstride, const ptrdiff_t* dstride, const size_t* shape, uint8_t op, unsigned int block_size);
 void launch_binary_broadcast_elementwise_i128(const __int128_t* lbuf, const __int128_t* rbuf, __int128_t* dbuf, size_t loff, size_t roff, size_t doff, size_t rank, size_t size, const ptrdiff_t* lstride, const ptrdiff_t* rstride, const ptrdiff_t* dstride, const size_t* shape, uint8_t op, unsigned int block_size);
+void launch_binary_broadcast_elementwise_boolean(const bool* lbuf, const bool* rbuf, bool* dbuf, size_t loff, size_t roff, size_t doff, size_t rank, size_t size, const ptrdiff_t* lstride, const ptrdiff_t* rstride, const ptrdiff_t* dstride, const size_t* shape, uint8_t op, unsigned int block_size);
 
 #ifdef __cplusplus
 }

@@ -38,7 +38,7 @@ pub fn remote_backend_init(ip: IpAddr, port: u16) -> RemoteBackend {
 
 #[cfg(feature = "remote")]
 pub fn get_backend_default() -> Option<RemoteBackend> {
-    if !REMOTE_BACKENDS.get().is_some() {
+    if REMOTE_BACKENDS.get().is_none() {
         remote_backend_init("127.0.0.1".parse().unwrap(), 7878);
     }
     REMOTE_BACKENDS

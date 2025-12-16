@@ -284,70 +284,117 @@ impl Backend for RemoteBackend {
         })
     }
 
-    fn apply_elementwise_contiguous<T: TensorValue>(
+    fn broadcast<T: TensorValue>(
+        &self,
+        left: (*const Self::Buf<T>, &crate::core::MetaTensor), 
+        right: (*const Self::Buf<T>, &crate::core::MetaTensor),
+        dst: (*mut Self::Buf<T>, &crate::core::MetaTensor),
+        op: crate::ops::base::BinaryOpType
+    ) -> Result<(), crate::core::tensor::TensorError> {
+        let message = unsafe {            
+            Messages::Broadcast {
+                left: ((&*left.0).to_typeless(), left.1.clone()),
+                right: ((&*right.0).to_typeless(), right.1.clone()),
+                dst: ((&*dst.0).to_typeless(), dst.1.clone()),
+                op,
+            }
+        };
+        send_recv!(self, message, Messages::BroadcastResponse { result } => result)
+    }
+
+    fn apply_elementwise_binary_contiguous<T: TensorValue>(
         &self, buf: &mut Self::Buf<T>, 
-        op: (crate::ops::base::OpType, T), 
+        op: (crate::ops::base::BinaryOpType, T), 
         start: usize,
         len: usize
     ) -> Result<(), crate::core::tensor::TensorError> {
-        let message = Messages::ApplyElementwiseContiguous {
+        let message = Messages::ApplyElementwiseBinaryContiguous {
             buf: buf.to_typeless(),
             op: make_op!(op.0, op.1),
             start,
             len,
         };
-        send_recv!(self, message, Messages::ApplyElementwiseContiguousResponse { result } => result)
+        send_recv!(self, message, Messages::ApplyElementwiseBinaryContiguousResponse { result } => result)
     }
 
-    fn apply_elementwise_1d_strided<T: TensorValue>(
+    fn apply_elementwise_binary_1d_strided<T: TensorValue>(
         &self, buf: &mut Self::Buf<T>, 
-        op: (crate::ops::base::OpType, T), 
+        op: (crate::ops::base::BinaryOpType, T), 
         offset: usize,
         stride: isize,
         len: usize
     ) -> Result<(), crate::core::tensor::TensorError> {
-        let message = Messages::ApplyElementwise1DStrided {
+        let message = Messages::ApplyElementwiseBinary1DStrided {
             buf: buf.to_typeless(),
             op: make_op!(op.0, op.1),
             offset,
             stride,
             len,
         };
-        send_recv!(self, message, Messages::ApplyElementwise1DStridedResponse { result } => result)
-    }
-
-    unsafe fn broadcast<T: TensorValue>(
-        &self,
-        left: (*const Self::Buf<T>, &crate::core::MetaTensor), 
-        right: (*const Self::Buf<T>, &crate::core::MetaTensor),
-        dst: (*mut Self::Buf<T>, &crate::core::MetaTensor),
-        op: crate::ops::base::OpType
-    ) -> Result<(), crate::core::tensor::TensorError> {
-        let message = Messages::Broadcast {
-            left: ((&*left.0).to_typeless(), left.1.clone()),
-            right: ((&*right.0).to_typeless(), right.1.clone()),
-            dst: ((&*dst.0).to_typeless(), dst.1.clone()),
-            op,
-        };
-        send_recv!(self, message, Messages::BroadcastResponse { result } => result)
+        send_recv!(self, message, Messages::ApplyElementwiseBinary1DStridedResponse { result } => result)
     }
     
-    fn apply_elementwise_nd<T: TensorValue>(
+    fn apply_elementwise_binary_nd<T: TensorValue>(
         &self,
         buf: &mut Self::Buf<T>,
-        op: (crate::ops::base::OpType, T),
+        op: (crate::ops::base::BinaryOpType, T),
         offset: usize,
         shape: &[usize],
         stride: &[isize],
     ) -> Result<(), TensorError> {
-        let message = Messages::ApplyElementwiseND {
+        let message = Messages::ApplyElementwiseBinaryND {
             buf: buf.to_typeless(),
             op: make_op!(op.0, op.1),
             offset,
             shape: shape.to_vec(),
             stride: stride.to_vec(),
         };
-        send_recv!(self, message, Messages::ApplyElementwiseNDResponse { result } => result)
+        send_recv!(self, message, Messages::ApplyElementwiseBinaryNDResponse { result } => result)
+    }
+    
+    fn apply_neg_contiguous<T: TensorValue>(
+        &self, buf: &mut Self::Buf<T>, 
+        start: usize,
+        len: usize
+    ) -> Result<(), TensorError> {
+        // async jon
+        let message = Messages::ApplyNegContiguous {
+            buf: buf.to_typeless(),
+            start,
+            len,
+        };
+        send_recv!(self, message, Messages::ApplyNegContiguousResponse { result } => result)
+    }
+    
+    fn apply_neg_1d_strided<T: TensorValue>(
+        &self, buf: &mut Self::Buf<T>, 
+        offset: usize,
+        stride: isize,
+        len: usize
+    ) -> Result<(), TensorError> {
+        let message = Messages::ApplyNeg1DStrided {
+            buf: buf.to_typeless(),
+            offset,
+            stride,
+            len,
+        };
+        send_recv!(self, message, Messages::ApplyNeg1DStridedResponse { result } => result)
+    }
+    
+    fn apply_neg_nd<T: TensorValue>(
+        &self,
+        buf: &mut Self::Buf<T>,
+        offset: usize,
+        shape: &[usize],
+        stride: &[isize],
+    ) -> Result<(), TensorError> {
+        let message = Messages::ApplyNegND {
+            buf: buf.to_typeless(),
+            offset,
+            shape: shape.to_vec(),
+            stride: stride.to_vec(),
+        };
+        send_recv!(self, message, Messages::ApplyNegNDResponse { result } => result)
     }
 }
 
@@ -441,20 +488,18 @@ fn read_incoming(remote: RemoteBackend, mut stream: std::net::TcpStream) {
             debug_assert!(msg.complete);
             send_message_to_channel(&remote, msg);
             remote.pending.dec();
+        }else if msg.complete {
+            // no need to send follow up, just decrement pending. because, there was an incomplete one before
+            // that sent the message. async followup is just a backend notification.
+            // nobody waits on follow up of async
+            if let Some(e) = msg.error {
+                remote.poison();
+                panic!("Inconsistent state detected. Received error in async message: {:?}", e);
+            } 
+            remote.pending.dec();
         }else{
-            if msg.complete {
-                // no need to send follow up, just decrement pending. because, there was an incomplete one before
-                // that sent the message. async followup is just a backend notification.
-                // nobody waits on follow up of async
-                if let Some(e) = msg.error {
-                    remote.poison();
-                    panic!("Inconsistent state detected. Received error in async message: {:?}", e);
-                } 
-                remote.pending.dec();
-            }else{
-                //send initial follow up to receiver, do not decrement pending yet
-                send_message_to_channel(&remote, msg);
-            }
+            //send initial follow up to receiver, do not decrement pending yet
+            send_message_to_channel(&remote, msg);
         }
     }
 }

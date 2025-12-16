@@ -34,6 +34,9 @@ pub enum TensorError {
     #[error("tensor is not contiguous {0}")]
     ContiguityError(String),
 
+    #[error("operation not supported: {0}")]
+    UnsupportedOperation(String),
+
     #[cfg(feature = "cuda")]
     #[error("cuda error: {0}")]
     CudaError(String),

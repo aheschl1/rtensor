@@ -4,14 +4,14 @@ use crate::core::value::TensorValue;
 use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "remote", derive(Serialize, Deserialize))]
 #[derive(Clone, Copy)]
-pub enum OpType {
+pub enum BinaryOpType {
     Add,
     Sub,
-    Mul,
-} 
+    Mul
+}
 
 #[cfg(feature = "cuda")]
-impl OpType {
+impl BinaryOpType {
     #[inline(always)]
     pub(crate) fn to_op_code(&self) -> u8 {
         match self {
@@ -22,7 +22,7 @@ impl OpType {
     }
 }
     
-impl OpType {
+impl BinaryOpType {
     #[inline(always)]
     pub fn apply<T: TensorValue>(&self, a: T, b: T) -> T 
     {

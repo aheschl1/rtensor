@@ -17,6 +17,7 @@ void launch_elementwise_contiguous_i16(int16_t* data, size_t n, uint8_t op, int1
 void launch_elementwise_contiguous_i32(int32_t* data, size_t n, uint8_t op, int32_t value, unsigned int block_size);
 void launch_elementwise_contiguous_i64(int64_t* data, size_t n, uint8_t op, int64_t value, unsigned int block_size);
 void launch_elementwise_contiguous_i128(__int128_t* data, size_t n, uint8_t op, __int128_t value, unsigned int block_size);
+void launch_elementwise_contiguous_boolean(bool* data, size_t n, uint8_t op, bool value, unsigned int block_size);
 
 void launch_elementwise_strided_f32(float* data, size_t start, ptrdiff_t stride, size_t len, uint8_t op, float value, unsigned int block_size);
 void launch_elementwise_strided_f64(double* data, size_t start, ptrdiff_t stride, size_t len, uint8_t op, double value, unsigned int block_size);
@@ -30,6 +31,7 @@ void launch_elementwise_strided_i16(int16_t* data, size_t start, ptrdiff_t strid
 void launch_elementwise_strided_i32(int32_t* data, size_t start, ptrdiff_t stride, size_t len, uint8_t op, int32_t value, unsigned int block_size);
 void launch_elementwise_strided_i64(int64_t* data, size_t start, ptrdiff_t stride, size_t len, uint8_t op, int64_t value, unsigned int block_size);
 void launch_elementwise_strided_i128(__int128_t* data, size_t start, ptrdiff_t stride, size_t len, uint8_t op, __int128_t value, unsigned int block_size);
+void launch_elementwise_strided_boolean(bool* data, size_t start, ptrdiff_t stride, size_t len, uint8_t op, bool value, unsigned int block_size);
 
 void launch_elementwise_nd_affine_f32(float* data, size_t offset, const ptrdiff_t* stride, const size_t* shape, size_t rank, size_t size, uint8_t op, float value, unsigned int block_size);
 void launch_elementwise_nd_affine_f64(double* data, size_t offset, const ptrdiff_t* stride, const size_t* shape, size_t rank, size_t size, uint8_t op, double value, unsigned int block_size);
@@ -43,6 +45,7 @@ void launch_elementwise_nd_affine_i16(int16_t* data, size_t offset, const ptrdif
 void launch_elementwise_nd_affine_i32(int32_t* data, size_t offset, const ptrdiff_t* stride, const size_t* shape, size_t rank, size_t size, uint8_t op, int32_t value, unsigned int block_size);
 void launch_elementwise_nd_affine_i64(int64_t* data, size_t offset, const ptrdiff_t* stride, const size_t* shape, size_t rank, size_t size, uint8_t op, int64_t value, unsigned int block_size);
 void launch_elementwise_nd_affine_i128(__int128_t* data, size_t offset, const ptrdiff_t* stride, const size_t* shape, size_t rank, size_t size, uint8_t op, __int128_t value, unsigned int block_size);
+void launch_elementwise_nd_affine_boolean(bool* data, size_t offset, const ptrdiff_t* stride, const size_t* shape, size_t rank, size_t size, uint8_t op, bool value, unsigned int block_size);
 
 // void launch_elementwise_scattered_f32(float* data, const size_t* offsets, size_t n, uint8_t op, float value, unsigned int block_size);
 // void launch_elementwise_scattered_f64(double* data, const size_t* offsets, size_t n, uint8_t op, double value, unsigned int block_size);

@@ -2,7 +2,7 @@ use std::sync::{atomic::{AtomicBool, Ordering}, Arc, LazyLock};
 
 use cudarc::{cublas::{sys::cublasOperation_t, CudaBlas, Gemm, GemmConfig, StridedBatchedConfig}, driver::{CudaContext, CudaSlice, DevicePtr}};
 
-use crate::{backend::{Backend, BackendMatMul}, core::{tensor::TensorError, value::{types, TensorValue}, MetaTensor}, ops::base::OpType};
+use crate::{backend::{Backend, BackendMatMul}, core::{tensor::TensorError, value::{types, TensorValue}, MetaTensor}, ops::base::BinaryOpType};
 use crate::backend::ContiguityTypes;
 
 // Include bindgen-generated FFI declarations for CUDA kernel launchers
@@ -187,9 +187,9 @@ impl Backend for Cuda {
     }
 
 
-    fn apply_elementwise_contiguous<T: TensorValue>(
+    fn apply_elementwise_binary_contiguous<T: TensorValue>(
         &self, buf: &mut Self::Buf<T>, 
-        op: (OpType, T), 
+        op: (BinaryOpType, T), 
         start: usize,
         len: usize
     ) -> Result<(), TensorError> {
@@ -236,13 +236,14 @@ impl Backend for Cuda {
             id if id == std::any::TypeId::of::<i32>() => launch_elementwise!(launch_elementwise_contiguous_i32, i32),
             id if id == std::any::TypeId::of::<i64>() => launch_elementwise!(launch_elementwise_contiguous_i64, i64),
             id if id == std::any::TypeId::of::<i128>() => launch_elementwise!(launch_elementwise_contiguous_i128, i128),
+            id if id == std::any::TypeId::of::<types::boolean>() => launch_elementwise!(launch_elementwise_contiguous_boolean, bool),
             _ => Err(TensorError::CudaError("Unsupported type for CUDA elementwise operation".to_string())),
         }
     }
     
-    fn apply_elementwise_1d_strided<T: TensorValue>(
+    fn apply_elementwise_binary_1d_strided<T: TensorValue>(
         &self, buf: &mut Self::Buf<T>, 
-        op: (OpType, T), 
+        op: (BinaryOpType, T), 
         start: usize,
         stride: isize,
         len: usize
@@ -288,14 +289,15 @@ impl Backend for Cuda {
             id if id == std::any::TypeId::of::<i32>() => launch_elementwise!(launch_elementwise_strided_i32, i32),
             id if id == std::any::TypeId::of::<i64>() => launch_elementwise!(launch_elementwise_strided_i64, i64),
             id if id == std::any::TypeId::of::<i128>() => launch_elementwise!(launch_elementwise_strided_i128, i128),
+            id if id == std::any::TypeId::of::<types::boolean>() => launch_elementwise!(launch_elementwise_strided_boolean, bool),
             _ => Err(TensorError::CudaError("Unsupported type for CUDA elementwise operation".to_string())),
         }
     }
     
-    fn apply_elementwise_nd<T: TensorValue>(
+    fn apply_elementwise_binary_nd<T: TensorValue>(
         &self,
         buf: &mut Self::Buf<T>,
-        op: (OpType, T),
+        op: (BinaryOpType, T),
         offset: usize,
         shape: &[usize],
         stride: &[isize],
@@ -359,16 +361,17 @@ impl Backend for Cuda {
             id if id == std::any::TypeId::of::<i32>() => launch_elementwise!(launch_elementwise_nd_affine_i32, i32),
             id if id == std::any::TypeId::of::<i64>() => launch_elementwise!(launch_elementwise_nd_affine_i64, i64),
             id if id == std::any::TypeId::of::<i128>() => launch_elementwise!(launch_elementwise_nd_affine_i128, i128),
+            id if id == std::any::TypeId::of::<types::boolean>() => launch_elementwise!(launch_elementwise_nd_affine_boolean, bool),
             _ => Err(TensorError::CudaError("Unsupported type for CUDA elementwise operation".to_string())),
         }
     }
 
-    unsafe fn broadcast<T: TensorValue>(
+    fn broadcast<T: TensorValue>(
         &self, 
         left: (*const Self::Buf<T>, &MetaTensor), 
         right: (*const Self::Buf<T>, &MetaTensor),
         dst: (*mut Self::Buf<T>, &MetaTensor),
-        op: OpType
+        op: BinaryOpType
     ) -> Result<(), TensorError> {
         let (lbuf, lmeta) = left;
         let (rbuf, rmeta) = right;
@@ -453,8 +456,36 @@ impl Backend for Cuda {
             id if id == std::any::TypeId::of::<i32>() => launch_broadcast!(launch_binary_broadcast_elementwise_i32, i32),
             id if id == std::any::TypeId::of::<i64>() => launch_broadcast!(launch_binary_broadcast_elementwise_i64, i64),
             id if id == std::any::TypeId::of::<i128>() => launch_broadcast!(launch_binary_broadcast_elementwise_i128, i128),
+            id if id == std::any::TypeId::of::<types::boolean>() => launch_broadcast!(launch_binary_broadcast_elementwise_boolean, bool),
             _ => Err(TensorError::CudaError("Unsupported type for CUDA broadcast operation".to_string())),
         }
+    }
+    
+    fn apply_neg_contiguous<T: TensorValue>(
+        &self, buf: &mut Self::Buf<T>, 
+        start: usize,
+        len: usize
+    ) -> Result<(), TensorError> {
+        todo!()
+    }
+    
+    fn apply_neg_1d_strided<T: TensorValue>(
+        &self, buf: &mut Self::Buf<T>, 
+        offset: usize,
+        stride: isize,
+        len: usize
+    ) -> Result<(), TensorError> {
+        todo!()
+    }
+    
+    fn apply_neg_nd<T: TensorValue>(
+        &self,
+        buf: &mut Self::Buf<T>,
+        offset: usize,
+        shape: &[usize],
+        stride: &[isize],
+    ) -> Result<(), TensorError> {
+        todo!()
     }
 }
 
@@ -601,17 +632,17 @@ macro_rules! cublas_impl {
                     n: n as i32,
                     k: k as i32,
                     alpha: 1.0,
-                    lda: lda,  
-                    ldb: ldb,
+                    lda,  
+                    ldb,
                     beta: 0.0,
-                    ldc: ldc, 
+                    ldc, 
                 };
                 let cfg = StridedBatchedConfig {
                     gemm: cfg,
                     batch_size: b as i32,
                     stride_a: bstride_lhs,
                     stride_b: bstride_rhs,
-                    stride_c: stride_c,
+                    stride_c,
                 };
                 // let mut res = self.alloc(b*n*m)?;
 
