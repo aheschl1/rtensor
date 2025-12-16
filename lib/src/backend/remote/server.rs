@@ -517,15 +517,6 @@ macro_rules! matmul_for_dtype {
         match device_type {
             DeviceType::Cpu => {
                 let mut buffers = $connection.cpu_buffers.write().unwrap();
-                // let lhs_buf = buffers.$buffer_field
-                //     .get(&$lhs_id)
-                //     .ok_or_else(|| TensorError::RemoteError(format!("LHS buffer {} not found", $lhs_id)))?;
-                // let rhs_buf = buffers.$buffer_field
-                //     .get(&$rhs_id)
-                //     .ok_or_else(|| TensorError::RemoteError(format!("RHS buffer {} not found", $rhs_id)))?;
-                // let dst_buf = buffers.$buffer_field
-                //     .get_mut(&$dst_id)
-                //     .ok_or_else(|| TensorError::RemoteError(format!("DST buffer {} not found", $dst_id)))?;
                 let [Some(lhs_buf), Some(rhs_buf), Some(mut dst_buf)] = buffers.$buffer_field.get_disjoint_mut([&$lhs_id, &$rhs_id, &$dst_id]) else {
                     return Err(TensorError::RemoteError("Buffers missing.".into()));
                 };
@@ -540,15 +531,6 @@ macro_rules! matmul_for_dtype {
             #[cfg(feature = "cuda")]
             DeviceType::Cuda(_device_id) => {
                 let mut buffers = $connection.cuda_buffers.write().unwrap();
-                // let lhs_buf = buffers.$buffer_field
-                //     .get(&$lhs_id)
-                //     .ok_or_else(|| TensorError::RemoteError(format!("LHS buffer {} not found", $lhs_id)))?;
-                // let rhs_buf = buffers.$buffer_field
-                //     .get(&$rhs_id)
-                //     .ok_or_else(|| TensorError::RemoteError(format!("RHS buffer {} not found", $rhs_id)))?;
-                // let mut dst_buf = buffers.$buffer_field
-                //     .get(&$dst_id)
-                //     .ok_or_else(|| TensorError::RemoteError(format!("DST buffer {} not found", $dst_id)))?;
                 let [Some(lhs_buf), Some(rhs_buf), Some(mut dst_buf)] = buffers.$buffer_field.get_disjoint_mut([&$lhs_id, &$rhs_id, &$dst_id]) else {
                     return Err(TensorError::RemoteError("Buffers missing.".into()));
                 };
@@ -621,238 +603,93 @@ pub(crate) enum AsyncJob {
 fn handle_request(
     request: Request, 
     connection: &ClientConnection,
-){
-    let task_id = request.task_id;
-    match request.message {
-        Messages::DeviceType => {
-            let device_type = select_buffer(connection);
+){ 
+    macro_rules! async_job {
+        (ack: $message_type:ident, job: $job_type:ident, $($args:tt)*)  => {
+            let response = Response {
+                asynchronous: true,
+                complete: false,
+                task_id: request.task_id,
+                error: None,
+                message: Messages::$message_type {result: Ok(())},
+            };
+            connection.queue_response(response).expect("Failed to send message");
+
+            let job = AsyncJob::$job_type {
+                task_id: request.task_id,
+                $($args)*
+            };
+            connection.queue_job(job).expect("Failed to queue job");
+        };
+    }
+
+    macro_rules! sync_job {
+        ($message:expr, err: $error:expr) => {
             let response = Response {
                 asynchronous: false,
                 complete: true,
-                task_id,
-                error: None,
-                message: Messages::DeviceTypeResponse { device_type },
+                task_id: request.task_id,
+                error: $error,
+                message: $message
             };
             connection.queue_response(response).expect("Failed to send message");
+        };
+    }
+
+    match request.message {
+        Messages::DeviceType => {
+            sync_job!(Messages::DeviceTypeResponse { device_type: select_buffer(connection) }, err: None);
         }
         Messages::AllocFromSlice { slice } => {
             let remote_buf = dispatch_alloc_from_slice(slice, connection);
-            let response = Response {
-                asynchronous: false,
-                complete: true,
-                task_id,                
-                error: remote_buf.as_ref().err().cloned(),
-                message: Messages::AllocFromSliceResponse { buf: remote_buf },
-            };
-            connection.queue_response(response).expect("Failed to send message");
+            sync_job!(Messages::AllocFromSliceResponse { buf: remote_buf }, err: remote_buf.as_ref().err().cloned());
         },
         Messages::Alloc { len, dtype } => {
             let remote_buf = dispatch_alloc(len, dtype, connection);
-            let response = Response {
-                asynchronous: false,
-                complete: true,
-                task_id,
-                error: remote_buf.as_ref().err().cloned(),
-                message: Messages::AllocResponse { buf: remote_buf },
-            };
-            connection.queue_response(response).expect("Failed to send message");
+            sync_job!(Messages::AllocResponse { buf: remote_buf }, err: remote_buf.as_ref().err().cloned());
         },
         Messages::CopyFromSlice { dst, src } => {
-            // Send initial acknowledgment
-            let ack_response = Response {
-                asynchronous: true,
-                complete: false,
-                task_id,
-                error: None,
-                message: Messages::CopyFromSliceResponse { result: Ok(()) },
-            };
-            connection.queue_response(ack_response).expect("Failed to send message");
-            
-            // Clone what we need for the background thread            
-            let job = AsyncJob::CopyFromSlice {
-                task_id,
-                dst,
-                src,
-            };
-            connection.queue_job(job).expect("Failed to queue job");
+            async_job!(ack: CopyFromSliceResponse, job: CopyFromSlice, dst, src);
         },
         Messages::Read { buf, offset } => {
             let value = dispatch_read(buf, offset, connection);
-            let response = Response {
-                asynchronous: false,
-                complete: true,
-                task_id,
-                error: value.as_ref().err().cloned(),
-                message: Messages::ReadResponse { value: value },
-            };
-            connection.queue_response(response).expect("Failed to send message");
+            sync_job!(Messages::ReadResponse { value: value }, err: value.as_ref().err().cloned());
         }
         Messages::Write { buf, offset, value } => {
             let result = dispatch_write(buf, offset, value, connection);
-            let response = Response {
-                asynchronous: false,
-                complete: true,
-                task_id,
-                error: result.as_ref().err().cloned(),
-                message: Messages::WriteResponse { result },
-            };
-            connection.queue_response(response).expect("Failed to send message");
+            sync_job!(Messages::WriteResponse { result: result }, err: result.as_ref().err().cloned());
         }
         Messages::Len { buf } => {
             let len = dispatch_len(buf, connection);
-            let response = Response {
-                asynchronous: false,
-                complete: true,
-                task_id,
-                error: len.as_ref().err().cloned(),
-                message: Messages::LenResponse { len: len.unwrap_or(0) },
-            };
-            connection.queue_response(response).expect("Failed to send message");
+            sync_job!(Messages::LenResponse { len: len.unwrap_or(0) }, err: len.as_ref().err().cloned());
         }
         Messages::Copy { src } => {
             let new_buf = dispatch_copy(src, connection);
-            let response = Response {
-                asynchronous: false,
-                complete: true,
-                task_id,
-                error: new_buf.as_ref().err().cloned(),
-                message: Messages::CopyResponse { buf: new_buf },
-            };
-            connection.queue_response(response).expect("Failed to send message");
+            sync_job!(Messages::CopyResponse { buf: new_buf }, err: new_buf.as_ref().err().cloned());
         }
         Messages::Dump { src } => {
             let slice = dispatch_dump(src, connection);
-            let response = Response {
-                asynchronous: false,
-                complete: true,
-                task_id,
-                error: slice.as_ref().err().cloned(),
-                message: Messages::DumpResponse { data: slice },
-            };
-            connection.queue_response(response).expect("Failed to send message");
+            sync_job!(Messages::DumpResponse { data: slice }, err: slice.as_ref().err().cloned());
         }
         Messages::ApplyElementwiseContiguous { buf, op, start, len } => {
-            // Send initial acknowledgment
-            let ack_response = Response {
-                asynchronous: true,
-                complete: false,
-                task_id,
-                error: None,
-                message: Messages::ApplyElementwiseContiguousResponse { result: Ok(()) },
-            };
-            connection.queue_response(ack_response).expect("Failed to send message");
-            
-            let job = AsyncJob::ApplyElementwiseContiguous {
-                task_id,
-                buf,
-                op,
-                start,
-                len,
-            };
-            connection.queue_job(job).expect("Failed to queue job");
+            async_job!(ack: ApplyElementwiseContiguousResponse, job: ApplyElementwiseContiguous, buf, op, start, len);
         }
         Messages::ApplyElementwise1DStrided { buf, op, offset, stride, len } => {
-            // Send initial acknowledgment
-            let ack_response = Response {
-                asynchronous: true,
-                complete: false,
-                task_id,
-                error: None,
-                message: Messages::ApplyElementwise1DStridedResponse { result: Ok(()) },
-            };
-            connection.queue_response(ack_response).expect("Failed to send message");
-            let job = AsyncJob::ApplyElementwise1DStrided {
-                task_id,
-                buf,
-                op,
-                offset,
-                stride,
-                len,
-            };
-            connection.queue_job(job).expect("Failed to queue job");
+            async_job!(ack: ApplyElementwise1DStridedResponse, job: ApplyElementwise1DStrided, buf, op, offset, stride, len);
         }
         Messages::ApplyElementwiseND { buf, op, offset, shape, stride } => {
-            // Send initial acknowledgment
-            let ack_response = Response {
-                asynchronous: true,
-                complete: false,
-                task_id,
-                error: None,
-                message: Messages::ApplyElementwiseNDResponse { result: Ok(()) },
-            };
-            connection.queue_response(ack_response).expect("Failed to send message");
-            
-            let job = AsyncJob::ApplyElementwiseND {
-                task_id,
-                buf,
-                op,
-                offset,
-                shape,
-                stride,
-            };
-            connection.queue_job(job).expect("Failed to queue job");
+            async_job!(ack: ApplyElementwiseNDResponse, job: ApplyElementwiseND, buf, op, offset, shape, stride);
         }
-        Messages::Broadcast { left, right, dst, op } => {
-            // Send initial acknowledgment
-            let ack_response = Response {
-                asynchronous: true,
-                complete: false,
-                task_id,
-                error: None,
-                message: Messages::BroadcastResponse { result: Ok(()) },
-            };
-            connection.queue_response(ack_response).expect("Failed to send message");
-            
-            let job = AsyncJob::Broadcast {
-                task_id,
-                left,
-                right,
-                dst,
-                op,
-            };
-            connection.queue_job(job).expect("Failed to queue job");            
+        Messages::Broadcast { left, right, dst, op } => { 
+            async_job!(ack: BroadcastResponse, job: Broadcast, left, right, dst, op);    
         }
         Messages::Matmul { lhs, rhs, dst, b, m, k, n, contiguity } => {
-            // let result = dispatch_matmul(lhs, rhs, dst, b, m, k, n, contiguity, connection);
-            // let response = Response {
-            //     asynchronous: false,
-            //     complete: true,
-            //     task_id,
-            //     error: result.as_ref().err().cloned(),
-            //     message: Messages::MatmulResponse { result: result },
-            // };
-            // connection.queue_response(response).expect("Failed to send message");
-            let ack_response = Response {
-                asynchronous: true,
-                complete: false,
-                task_id,
-                error: None,
-                message: Messages::MatmulResponse { result: Ok(()) },
-            };
-            connection.queue_response(ack_response).expect("Failed to send message");
-            let job = AsyncJob::MatMul {
-                task_id,
-                lhs,
-                rhs,
-                dst,
-                b,
-                m,
-                k,
-                n,
-                contiguity,
-            };
-            connection.queue_job(job).expect("Failed to queue job");
-            // let result = dispatch_matmul(lhs, rhs, dst, b, m, k, n, contiguity, connection);
+            async_job!(ack: MatmulResponse, job: MatMul, lhs, rhs, dst, b, m, k, n, contiguity);
         }
         _ => {
-            let response = Response {
-                asynchronous: false,
-                complete: true,
-                task_id,
-                error: Some(TensorError::RemoteError("Unsupported request".to_string())),
-                message: Messages::ErrorResponse { message: "Unsupported request".to_string() },
-            };
-            connection.queue_response(response).expect("Failed to send message");
+            sync_job!(Messages::ErrorResponse { 
+                message: "Unsupported request".to_string() }, err: Some(TensorError::RemoteError("Unsupported request".to_string()))
+            );
         }
     }
 }

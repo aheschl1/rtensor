@@ -563,31 +563,9 @@ macro_rules! cublas_impl {
                 k: usize,
                 n: usize,
                 contiguity: ContiguityTypes
-            ) -> Result<(), TensorError> {
-                // cuBLAS uses column-major order, but our tensors are row-major
-                // To compute C = A * B in row-major, we compute C^T = B^T * A^T in column-major
-                // This means we swap A and B, and swap m and n
-
-                // let (m, n) = (n, m);
-                
+            ) -> Result<(), TensorError> {                
                 let (lhs_buf, lhs_meta) = lhs;
                 let (rhs_buf, rhs_meta) = rhs;
-
-                // let lda = lhs_meta.strides()[lhs_meta.rank() - 2] as i32; // flipped 
-                // let ldb = rhs_meta.strides()[rhs_meta.rank() - 2] as i32;
-                // let ldc = m as i32;
-
-                // let bstride_lhs = if lhs_meta.rank() > 2 {
-                //     lhs_meta.strides()[lhs_meta.rank() - 3] as i64
-                // } else{
-                //     m as i64 * k as i64
-                // };
-
-                // let bstride_rhs = if rhs_meta.rank() > 2 {
-                //     rhs_meta.strides()[rhs_meta.rank() - 3] as i64
-                // } else{
-                //     k as i64 * n as i64
-                // };
 
                 let lhs_ptr = rhs_buf.ptr.slice(rhs_meta.offset..);
                 let rhs_ptr = lhs_buf.ptr.slice(lhs_meta.offset..);
