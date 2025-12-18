@@ -273,6 +273,8 @@ pub trait TensorAccess<T: TensorValue, B: Backend>: Sized {
     
     /// Remove all dimensions of size 1.
     fn squeeze(&self) -> TensorView<'_, T, B>;
+
+    // fn squeeze_in_place(&self);
 }
 
 /// Provides mutable access to tensor elements and slicing operations.
@@ -313,6 +315,8 @@ pub trait TensorAccessMut<T: TensorValue, B: Backend>: TensorAccess<T, B> {
     
     /// Remove all dimensions of size 1 (mutable).
     fn squeeze_mut(&mut self) -> TensorViewMut<'_, T, B>;
+
+
 }
 
 impl<T: TensorValue, B: Backend, V> TensorAccess<T, B> for V
@@ -403,6 +407,8 @@ where B: Backend, V: AsView<T, B>
         res.meta.strides = new_strides;
         res
     }
+
+   
 }
 
 impl<T: TensorValue, B: Backend, V> TensorAccessMut<T, B> for V
@@ -477,6 +483,8 @@ where V: AsViewMut<T, B>
         res.meta.strides = new_strides;
         res
     }
+
+  
 
 }
 
@@ -585,7 +593,7 @@ fn compute_unsqueezed_parameters(shape: &Shape, stride: &Strides, dim: Dim) -> R
 }
 
 #[inline]
-fn compute_squeezed_parameters(shape: &Shape, stride: &Strides, dim: Option<Dim>) -> Result<(Shape, Strides), TensorError> {
+pub(crate) fn compute_squeezed_parameters(shape: &Shape, stride: &Strides, dim: Option<Dim>) -> Result<(Shape, Strides), TensorError> {
     let mut result_shape = shape.clone();
     let mut result_stride = stride.clone();
 
