@@ -1,7 +1,7 @@
 pub mod base;
 pub mod scalar;
 pub mod unary;
-pub mod binary;
+pub mod broadcast;
 pub mod linalg;
 
 #[cfg(test)]
