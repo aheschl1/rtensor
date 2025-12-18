@@ -6,8 +6,8 @@ use std::net::IpAddr;
 use crate::backend::Backend;
 use crate::backend::cpu::Cpu;
 use crate::core::value::TensorValue;
-use crate::core::{shape_to_stride, Shape, MetaTensor};
-use crate::core::tensor::TensorError;
+use crate::core::{MetaTensor, MetaTensorView, Shape, shape_to_stride};
+use crate::core::tensor::{TensorError, compute_squeezed_parameters};
 
 /// A generic tensor with backend-specific storage.
 /// 
@@ -318,6 +318,12 @@ where
         let element_count = shape.iter().product::<usize>();
         let min_buf = vec![T::MIN; element_count];
         Self::from_buf(min_buf, shape).expect("Failed to allocate memory")
+    }
+
+    pub fn squeeze_in_place(&mut self) {
+        let (new_shape, new_strides) = unsafe { compute_squeezed_parameters(self.shape(), self.strides(), None).unwrap_unchecked() };
+        self.meta.shape = new_shape;
+        self.meta.strides = new_strides;
     }
 
 }
