@@ -62,7 +62,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::{core::Tensor, ops::unary::neg::Negate};
+    use crate::{core::Tensor, ops::unary::Negate};
 
     #[test]
     fn test_negate() {

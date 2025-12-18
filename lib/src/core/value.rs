@@ -51,7 +51,6 @@ pub trait TypeConstants {
     const ONE: Self;
     const MIN: Self;
     const MAX: Self;
-    const SUPPORTS_NEG: bool;
 }
 
 
@@ -66,13 +65,12 @@ macro_rules! impl_tensor_values {
 }
 
 macro_rules! impl_default {
-    ($type:ty, $zero:expr, $one:expr, $min:expr, $max:expr, $supports_neg:expr) => {
+    ($type:ty, $zero:expr, $one:expr, $min:expr, $max:expr) => {
         impl TypeConstants for $type {
             const ZERO: Self = $zero;
             const ONE: Self = $one;
             const MIN: Self = $min;
             const MAX: Self = $max;
-            const SUPPORTS_NEG: bool = $supports_neg;
         }
     };
 }
@@ -94,19 +92,19 @@ impl_tensor_values!(
     // (usize, DType::U64)
 );
 
-impl_default!(f32, 0.0f32, 1.0f32, f32::MIN, f32::MAX, true);
-impl_default!(f64, 0.0f64, 1.0f64, f64::MIN, f64::MAX, true);
-impl_default!(i8, 0i8, 1i8, i8::MIN, i8::MAX, true);
-impl_default!(i16, 0i16, 1i16, i16::MIN, i16::MAX, true);
-impl_default!(i32, 0i32, 1i32, i32::MIN, i32::MAX, true);
-impl_default!(i64, 0i64, 1i64, i64::MIN, i64::MAX, true);
-impl_default!(i128, 0i128, 1i128, i128::MIN, i128::MAX, true);
+impl_default!(f32, 0.0f32, 1.0f32, f32::MIN, f32::MAX);
+impl_default!(f64, 0.0f64, 1.0f64, f64::MIN, f64::MAX);
+impl_default!(i8, 0i8, 1i8, i8::MIN, i8::MAX);
+impl_default!(i16, 0i16, 1i16, i16::MIN, i16::MAX);
+impl_default!(i32, 0i32, 1i32, i32::MIN, i32::MAX);
+impl_default!(i64, 0i64, 1i64, i64::MIN, i64::MAX);
+impl_default!(i128, 0i128, 1i128, i128::MIN, i128::MAX);
 // impl_default!(isize, 0isize, 1isize, isize::MIN, isize::MAX);
-impl_default!(u8, 0u8, 1u8, u8::MIN, u8::MAX, false);
-impl_default!(u16, 0u16, 1u16, u16::MIN, u16::MAX, false);
-impl_default!(u32, 0u32, 1u32, u32::MIN, u32::MAX, false);
-impl_default!(u64, 0u64, 1u64, u64::MIN, u64::MAX, false);
-impl_default!(u128, 0u128, 1u128, u128::MIN, u128::MAX, false);
+impl_default!(u8, 0u8, 1u8, u8::MIN, u8::MAX);
+impl_default!(u16, 0u16, 1u16, u16::MIN, u16::MAX);
+impl_default!(u32, 0u32, 1u32, u32::MIN, u32::MAX);
+impl_default!(u64, 0u64, 1u64, u64::MIN, u64::MAX);
+impl_default!(u128, 0u128, 1u128, u128::MIN, u128::MAX);
 // impl_default!(usize, 0usize, 1usize, usize::MIN, usize::MAX);
 
 #[cfg(feature = "remote")]
@@ -141,6 +139,12 @@ pub mod types {
 
     #[derive(Clone, Copy, Default, Debug, PartialEq, PartialOrd)]
     #[repr(C)]
+    /// The boolean type for tensors.
+    /// 
+    /// # Operations
+    /// - Addition (`+`): Logical OR operation.
+    /// - Subtraction (`-`): Logical XOR operation.
+    /// - Multiplication (`*`): Logical AND operation.
     pub struct boolean(pub bool);
 
     impl boolean {
@@ -190,25 +194,24 @@ pub mod types {
         const ONE: Self = Self::TRUE;
         const MIN: Self = Self::FALSE;
         const MAX: Self = Self::TRUE;
-        const SUPPORTS_NEG: bool = false;
     }
 
     impl std::ops::Add for boolean {
-        type Output = Self;
+        type Output = Self; // OR
         fn add(self, rhs: Self) -> Self::Output {
             Self(self.0 || rhs.0)
         }
     }
 
     impl std::ops::Sub for boolean {
-        type Output = Self;
+        type Output = Self; // XOR
         fn sub(self, rhs: Self) -> Self::Output {
-            Self(self.0 && !rhs.0)
+            Self(self.0 != rhs.0)
         }
     }
 
     impl std::ops::Mul for boolean {
-        type Output = Self;
+        type Output = Self; // AND
         fn mul(self, rhs: Self) -> Self::Output {
             Self(self.0 && rhs.0)
         }
@@ -222,7 +225,7 @@ pub mod types {
 
     impl std::ops::SubAssign for boolean {
         fn sub_assign(&mut self, rhs: Self) {
-            self.0 = self.0 && !rhs.0;
+            self.0 = self.0 != rhs.0;
         }
     }
 
@@ -257,17 +260,110 @@ mod tests {
     use crate::core::{value::types::boolean, Tensor};
 
     #[test]
-    fn boolean_tensor() {
+    fn boolean_tensor_add() {
         let mut tensor = Tensor::<boolean>::zeros((2, 3));
         tensor += boolean(true);
         tensor += boolean(true);
         let expected = Tensor::<boolean>::ones((2, 3));
         assert_eq!(tensor, expected);
-    }   
+    }
+
+    #[test]
+    fn boolean_tensor_add_operation() {
+        // Test OR operation (false + false = false, false + true = true, true + true = true)
+        let a = Tensor::<boolean>::from_buf(vec![
+            boolean(false), boolean(false), boolean(true), boolean(true)
+        ], (4,)).unwrap();
+        let b = Tensor::<boolean>::from_buf(vec![
+            boolean(false), boolean(true), boolean(false), boolean(true)
+        ], (4,)).unwrap();
+        let result = a + b;
+        let expected = Tensor::<boolean>::from_buf(vec![
+            boolean(false), boolean(true), boolean(true), boolean(true)
+        ], (4,)).unwrap();
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn boolean_tensor_sub_operation() {
+        // Test AND NOT operation (a && !b)
+        let a = Tensor::<boolean>::from_buf(vec![
+            boolean(false), boolean(false), boolean(true), boolean(true)
+        ], (4,)).unwrap();
+        let b = Tensor::<boolean>::from_buf(vec![
+            boolean(false), boolean(true), boolean(false), boolean(true)
+        ], (4,)).unwrap();
+        let result = a - b;
+        let expected = Tensor::<boolean>::from_buf(vec![
+            boolean(false), boolean(true), boolean(true), boolean(false)
+        ], (4,)).unwrap();
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn boolean_tensor_mul_operation() {
+        // Test AND operation (false * false = false, false * true = false, true * true = true)
+        let a = Tensor::<boolean>::from_buf(vec![
+            boolean(false), boolean(false), boolean(true), boolean(true)
+        ], (4,)).unwrap();
+        let b = Tensor::<boolean>::from_buf(vec![
+            boolean(false), boolean(true), boolean(false), boolean(true)
+        ], (4,)).unwrap();
+        let result = a * b;
+        let expected = Tensor::<boolean>::from_buf(vec![
+            boolean(false), boolean(false), boolean(false), boolean(true)
+        ], (4,)).unwrap();
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn boolean_tensor_add_assign() {
+        let mut a = Tensor::<boolean>::from_buf(vec![
+            boolean(false), boolean(true)
+        ], (2,)).unwrap();
+        let b = Tensor::<boolean>::from_buf(vec![
+            boolean(false), boolean(true)
+        ], (2,)).unwrap();
+        a += b;
+        let expected = Tensor::<boolean>::from_buf(vec![
+            boolean(false), boolean(true)
+        ], (2,)).unwrap();
+        assert_eq!(a, expected);
+    }
+
+    #[test]
+    fn boolean_tensor_sub_assign() {
+        let mut a = Tensor::<boolean>::from_buf(vec![
+            boolean(true), boolean(true)
+        ], (2,)).unwrap();
+        let b = Tensor::<boolean>::from_buf(vec![
+            boolean(false), boolean(true)
+        ], (2,)).unwrap();
+        a -= b;
+        let expected = Tensor::<boolean>::from_buf(vec![
+            boolean(true), boolean(false)
+        ], (2,)).unwrap();
+        assert_eq!(a, expected);
+    }
+
+    #[test]
+    fn boolean_tensor_mul_assign() {
+        let mut a = Tensor::<boolean>::from_buf(vec![
+            boolean(true), boolean(true), boolean(false)
+        ], (3,)).unwrap();
+        let b = Tensor::<boolean>::from_buf(vec![
+            boolean(true), boolean(false), boolean(true)
+        ], (3,)).unwrap();
+        a *= b;
+        let expected = Tensor::<boolean>::from_buf(vec![
+            boolean(true), boolean(false), boolean(false)
+        ], (3,)).unwrap();
+        assert_eq!(a, expected);
+    }
 
     #[cfg(feature = "cuda")]
     #[test]
-    fn boolean_tensor_cuda() {
+    fn boolean_tensor_cuda_add() {
         use crate::core::primitives::CudaTensor;
 
         let mut tensor = CudaTensor::<boolean>::zeros((2, 3));
@@ -275,5 +371,115 @@ mod tests {
         tensor += boolean(true);
         let expected = CudaTensor::<boolean>::ones((2, 3));
         assert_eq!(tensor.cpu().unwrap(), expected.cpu().unwrap());
-    }   
+    }
+
+    #[cfg(feature = "cuda")]
+    #[test]
+    fn boolean_tensor_cuda_add_operation() {
+        use crate::core::primitives::CudaTensor;
+
+        // Test OR operation (false + false = false, false + true = true, true + true = true)
+        let a = CudaTensor::<boolean>::from_buf(vec![
+            boolean(false), boolean(false), boolean(true), boolean(true)
+        ], (4,)).unwrap();
+        let b = CudaTensor::<boolean>::from_buf(vec![
+            boolean(false), boolean(true), boolean(false), boolean(true)
+        ], (4,)).unwrap();
+        let result = (a + b).cpu().unwrap();
+        let expected = Tensor::<boolean>::from_buf(vec![
+            boolean(false), boolean(true), boolean(true), boolean(true)
+        ], (4,)).unwrap();
+        assert_eq!(result, expected);
+    }
+
+    #[cfg(feature = "cuda")]
+    #[test]
+    fn boolean_tensor_cuda_sub_operation() {
+        use crate::core::primitives::CudaTensor;
+
+        let a = CudaTensor::<boolean>::from_buf(vec![
+            boolean(false), boolean(false), boolean(true), boolean(true)
+        ], (4,)).unwrap();
+        let b = CudaTensor::<boolean>::from_buf(vec![
+            boolean(false), boolean(true), boolean(false), boolean(true)
+        ], (4,)).unwrap();
+        let result = (a - b).cpu().unwrap();
+        let expected = Tensor::<boolean>::from_buf(vec![
+            boolean(false), boolean(true), boolean(true), boolean(false)
+        ], (4,)).unwrap();
+        assert_eq!(result, expected);
+    }
+
+    #[cfg(feature = "cuda")]
+    #[test]
+    fn boolean_tensor_cuda_mul_operation() {
+        use crate::core::primitives::CudaTensor;
+
+        // Test AND operation (false * false = false, false * true = false, true * true = true)
+        let a = CudaTensor::<boolean>::from_buf(vec![
+            boolean(false), boolean(false), boolean(true), boolean(true)
+        ], (4,)).unwrap();
+        let b = CudaTensor::<boolean>::from_buf(vec![
+            boolean(false), boolean(true), boolean(false), boolean(true)
+        ], (4,)).unwrap();
+        let result = (a * b).cpu().unwrap();
+        let expected = Tensor::<boolean>::from_buf(vec![
+            boolean(false), boolean(false), boolean(false), boolean(true)
+        ], (4,)).unwrap();
+        assert_eq!(result, expected);
+    }
+
+    #[cfg(feature = "cuda")]
+    #[test]
+    fn boolean_tensor_cuda_add_assign() {
+        use crate::core::primitives::CudaTensor;
+
+        let mut a = CudaTensor::<boolean>::from_buf(vec![
+            boolean(false), boolean(true)
+        ], (2,)).unwrap();
+        let b = CudaTensor::<boolean>::from_buf(vec![
+            boolean(false), boolean(true)
+        ], (2,)).unwrap();
+        a += b;
+        let expected = Tensor::<boolean>::from_buf(vec![
+            boolean(false), boolean(true)
+        ], (2,)).unwrap();
+        assert_eq!(a.cpu().unwrap(), expected);
+    }
+
+    #[cfg(feature = "cuda")]
+    #[test]
+    fn boolean_tensor_cuda_sub_assign() {
+        use crate::core::primitives::CudaTensor;
+
+        let mut a = CudaTensor::<boolean>::from_buf(vec![
+            boolean(true), boolean(true)
+        ], (2,)).unwrap();
+        let b = CudaTensor::<boolean>::from_buf(vec![
+            boolean(false), boolean(true)
+        ], (2,)).unwrap();
+        a -= b;
+        let expected = Tensor::<boolean>::from_buf(vec![
+            boolean(true), boolean(false)
+        ], (2,)).unwrap();
+        assert_eq!(a.cpu().unwrap(), expected);
+    }
+
+    #[cfg(feature = "cuda")]
+    #[test]
+    fn boolean_tensor_cuda_mul_assign() {
+        use crate::core::primitives::CudaTensor;
+
+        let mut a = CudaTensor::<boolean>::from_buf(vec![
+            boolean(true), boolean(true), boolean(false)
+        ], (3,)).unwrap();
+        let b = CudaTensor::<boolean>::from_buf(vec![
+            boolean(true), boolean(false), boolean(true)
+        ], (3,)).unwrap();
+        a *= b;
+        let expected = Tensor::<boolean>::from_buf(vec![
+            boolean(true), boolean(false), boolean(false)
+        ], (3,)).unwrap();
+        assert_eq!(a.cpu().unwrap(), expected);
+    }
 }

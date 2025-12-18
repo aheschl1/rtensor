@@ -2,6 +2,8 @@ use crate::{backend::Backend, core::{primitives::TensorBase, tensor::{AsTensor, 
 
 pub mod neg;
 
+pub use neg::Negate;
+
 pub trait InplaceUnaryOp<T: TensorValue, B: Backend> {
     fn apply_relu(
         &mut self
