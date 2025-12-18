@@ -95,6 +95,7 @@ fn setup_openblas() {
             .current_dir(&openblas_source_dir)
             .arg("NO_SHARED=1")
             .arg("NO_LAPACK=1")
+            .arg("NOFORTRAN=1")
             .arg("USE_OPENMP=0")
             .arg("libs")  // Only build libraries, skip tests
             .arg("netlib")  // Build reference BLAS
@@ -108,6 +109,7 @@ fn setup_openblas() {
                 .current_dir(&openblas_source_dir)
                 .arg("NO_SHARED=1")
                 .arg("NO_LAPACK=1")
+                .arg("NOFORTRAN=1")
                 .arg("USE_OPENMP=0")
                 .arg("TARGET=GENERIC")
                 .arg("libs")
