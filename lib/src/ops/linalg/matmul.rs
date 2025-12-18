@@ -1,4 +1,4 @@
-use crate::{backend::BackendMatMul, core::{meta::ContiguityTypes, primitives::TensorBase, shape_to_stride, tensor::{AsTensor, AsView, TensorAccess, TensorError}, value::TensorValue, Dim, MetaTensor, MetaTensorView, Shape}, ops::linalg::MatMul};
+use crate::{backend::BackendMatMul, core::{Dim, MetaTensor, MetaTensorView, Shape, meta::ContiguityTypes, primitives::TensorBase, shape_to_stride, tensor::{AsTensor, AsView, TensorAccess, TensorAccessMut, TensorError}, value::TensorValue}, ops::linalg::MatMul};
 
 impl<L, R, T, B> MatMul<R, T, B> for L
 where
@@ -142,7 +142,8 @@ where
         ))
     }
 
-    fn dot(&self, rhs: &R) -> Result<TensorBase<T, B>, TensorError> {
+    fn dot(&self, rhs: &R) -> Result<TensorBase<T, B>, TensorError>
+    {
         let lview = self.view();
         let rview = rhs.view();
         if lview.rank() != 1 || rview.rank() != 1 {
@@ -151,7 +152,12 @@ where
             ));
         }
 
-        Ok(lview.unsqueeze().matmul(unsafe{&rview.unsqueeze_at(1).unwrap_unchecked()})?.squeeze().owned())
+        // Perform the matmul.
+        let mut m1 = lview.unsqueeze().matmul(unsafe { &rview.unsqueeze_at(1).unwrap_unchecked() })?;
+
+        // Here we use squeeze in place to prevent two memcopys.
+        m1.squeeze_in_place();
+        Ok(m1)
     }
 
 }
