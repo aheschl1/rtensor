@@ -1,237 +1,123 @@
-
-use std::path::PathBuf;
+use std::{env, path::PathBuf, process::Command};
 
 fn main() {
     #[cfg(feature = "cuda")]
-    {
-        build_cuda_kernels();
-    }
-    setup_openblas();
-    
+    build_cuda_kernels();
+
+    build_openblas();
+
     println!("cargo:rerun-if-changed=build.rs");
 }
 
-fn setup_openblas() {
-    use std::env;
-    use std::fs;
-    use std::path::PathBuf;
-    use std::process::Command;
-    
+fn build_openblas() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let openblas_install_dir = out_dir.join("openblas-install");
-    let openblas_lib_dir = openblas_install_dir.join("lib");
-    let openblas_include_dir = openblas_install_dir.join("include");
-    
-    // Check if OpenBLAS is already built and installed
-    let openblas_lib = openblas_lib_dir.join("libopenblas.a");
-    let openblas_header = openblas_include_dir.join("cblas.h");
-    
-    if openblas_lib.exists() && openblas_header.exists() {
-        println!("cargo:warning=OpenBLAS already built at: {}", openblas_install_dir.display());
+    let src_dir = out_dir.join("OpenBLAS-0.3.30");
+    let zip_path = out_dir.join("OpenBLAS-0.3.30.zip");
+    let install_dir = out_dir.join("openblas-install");
+    let lib_dir = install_dir.join("lib");
+    let include_dir = install_dir.join("include");
+
+    let lib_openblas = lib_dir.join("libopenblas.a");
+    let cblas_h = include_dir.join("cblas.h");
+
+    if lib_openblas.exists() && cblas_h.exists() {
+        println!("cargo:warning=Using cached OpenBLAS at {}", install_dir.display());
     } else {
-        println!("cargo:warning=Building OpenBLAS from source...");
-        
-        let download_url = "https://github.com/aheschl1/rtensors/releases/download/blas/OpenBLAS-0.3.30.zip";
-        let zip_path = out_dir.join("OpenBLAS-0.3.30.zip");
-        let openblas_source_dir = out_dir.join("OpenBLAS-0.3.30");
-        
-        // Download the source archive if not already present
+        let url = "https://github.com/aheschl1/rtensors/releases/download/blas/OpenBLAS-0.3.30.zip";
+
         if !zip_path.exists() {
-            println!("Downloading OpenBLAS source from {}...", download_url);
-            let curl_status = Command::new("curl")
-                .arg("-L")
-                .arg("-o")
-                .arg(&zip_path)
-                .arg(download_url)
-                .status()
-                .expect("Failed to run curl. Please install curl.");
-            
             assert!(
-                curl_status.success(),
-                "Failed to download OpenBLAS from {}", 
-                download_url
+                Command::new("curl")
+                    .args(["-L", "-o"])
+                    .arg(&zip_path)
+                    .arg(url)
+                    .status()
+                    .expect("curl failed")
+                    .success(),
+                "failed to download OpenBLAS"
             );
-            
-            println!("Downloaded OpenBLAS source to: {}", zip_path.display());
         }
-        
-        // Extract the zip archive if not already extracted
-        if !openblas_source_dir.exists() {
-            println!("Extracting OpenBLAS source...");
-            let unzip_status = Command::new("unzip")
-                .arg("-q")
-                .arg(&zip_path)
-                .arg("-d")
-                .arg(&out_dir)
-                .status()
-                .expect("Failed to run unzip. Please install unzip.");
-            
+
+        if !src_dir.exists() {
             assert!(
-                unzip_status.success(),
-                "Failed to extract OpenBLAS zip archive"
+                Command::new("unzip")
+                    .args(["-q"])
+                    .arg(&zip_path)
+                    .arg("-d")
+                    .arg(&out_dir)
+                    .status()
+                    .expect("unzip failed")
+                    .success(),
+                "failed to extract OpenBLAS"
             );
-            
-            println!("Extracted OpenBLAS to: {}", openblas_source_dir.display());
-            
-            // Run make clean to ensure a fresh build
-            println!("Cleaning OpenBLAS build directory...");
-            let _ = Command::new("make")
-                .current_dir(&openblas_source_dir)
-                .arg("clean")
-                .output();
         }
-        
-        // Build OpenBLAS
-        println!("Compiling OpenBLAS (this may take a few minutes)...");
-        
-        // Get number of processors for parallel build
-        let nproc = std::thread::available_parallelism()
+
+        let jobs = std::thread::available_parallelism()
             .map(|n| n.get().to_string())
-            .unwrap_or_else(|_| "4".to_string());
-        
-        // Let OpenBLAS auto-detect the target, but provide a fallback
-        // If auto-detection fails, use GENERIC target for maximum compatibility
-        let make_output = Command::new("make")
-            .current_dir(&openblas_source_dir)
-            .arg("NO_SHARED=1")
-            .arg("NO_LAPACK=1")
-            // .arg("NOFORTRAN=1")
-            .arg("USE_OPENMP=0")
-            .arg("libs")  // Only build libraries, skip tests
-            .arg("netlib")  // Build reference BLAS
-            .arg(format!("-j{}", nproc))
-            .output()
-            .expect("Failed to run make. Please install make and a Fortran compiler (gfortran).");
-        
-        if !make_output.status.success() {
-            eprintln!("cargo:warning=First build attempt failed, retrying with TARGET=GENERIC...");
-            let make_output2 = Command::new("make")
-                .current_dir(&openblas_source_dir)
-                .arg("NO_SHARED=1")
-                .arg("NO_LAPACK=1")
-                // .arg("NOFORTRAN=1")
-                .arg("USE_OPENMP=0")
-                .arg("TARGET=GENERIC")
-                .arg("libs")
-                .arg("netlib")
-                .arg(format!("-j{}", nproc))
-                .output()
-                .expect("Failed to run make. Please install make and a Fortran compiler (gfortran).");
-            
-            if !make_output2.status.success() {
-                eprintln!("Make stdout: {}", String::from_utf8_lossy(&make_output2.stdout));
-                eprintln!("Make stderr: {}", String::from_utf8_lossy(&make_output2.stderr));
-                panic!("Failed to compile OpenBLAS even with TARGET=GENERIC. Make sure you have gfortran installed (apt install gfortran or yum install gcc-gfortran).");
+            .unwrap_or_else(|_| "4".into());
+
+        let make = |extra: &[&str]| {
+            let mut cmd = Command::new("make");
+            cmd.current_dir(&src_dir)
+                .arg(format!("-j{}", jobs))
+                .args([
+                    "NO_SHARED=1",
+                    "NO_LAPACK=1",
+                    "NOFORTRAN=1",
+                    "USE_OPENMP=0",
+                    "DYNAMIC_ARCH=0",
+                ])
+                .args(extra);
+            cmd
+        };
+
+        if !make(&["libs"]).status().unwrap().success() {
+            assert!(
+                make(&["TARGET=GENERIC", "libs"])
+                    .status()
+                    .unwrap()
+                    .success(),
+                "OpenBLAS build failed"
+            );
+        }
+
+        std::fs::create_dir_all(&lib_dir).unwrap();
+        std::fs::create_dir_all(&include_dir).unwrap();
+
+        let built_lib = src_dir.join("libopenblas.a");
+        assert!(built_lib.exists(), "libopenblas.a not produced");
+        std::fs::copy(&built_lib, &lib_openblas).unwrap();
+
+        for entry in std::fs::read_dir(&src_dir).unwrap() {
+            let p = entry.unwrap().path();
+            if p.extension().and_then(|s| s.to_str()) == Some("h") {
+                std::fs::copy(&p, include_dir.join(p.file_name().unwrap())).unwrap();
             }
         }
-        
-        println!("OpenBLAS compiled successfully");
-        
-        // Install OpenBLAS to our custom directory
-        println!("Installing OpenBLAS to: {}", openblas_install_dir.display());
-        
-        // Since we built with NO_SHARED=1, manually copy the static library and headers
-        // instead of using `make install` which expects both static and shared libs
-        std::fs::create_dir_all(&openblas_lib_dir).expect("Failed to create lib directory");
-        std::fs::create_dir_all(&openblas_include_dir).expect("Failed to create include directory");
-        
-        // Find and copy the static library (lib*.a)
-        let lib_files: Vec<_> = std::fs::read_dir(&openblas_source_dir)
-            .expect("Failed to read OpenBLAS source directory")
-            .filter_map(|e| e.ok())
-            .filter(|e| {
-                let name = e.file_name();
-                let name_str = name.to_string_lossy();
-                name_str.starts_with("lib") && name_str.ends_with(".a")
-            })
-            .collect();
-        
-        assert!(!lib_files.is_empty(), "No static library (lib*.a) found in OpenBLAS build directory");
-        
-        let first_lib_name = lib_files.first().map(|e| e.file_name());
-        
-        for lib_file in lib_files {
-            let dest = openblas_lib_dir.join(lib_file.file_name());
-            std::fs::copy(lib_file.path(), &dest)
-                .unwrap_or_else(|_| panic!("Failed to copy {}", lib_file.file_name().to_string_lossy()));
-            println!("Copied {} to {}", lib_file.file_name().to_string_lossy(), dest.display());
-        }
-        
-        // Copy all header files from the source directory
-        for entry in std::fs::read_dir(&openblas_source_dir).expect("Failed to read OpenBLAS source directory").flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) == Some("h") {
-                let dest = openblas_include_dir.join(entry.file_name());
-                std::fs::copy(&path, &dest)
-                    .unwrap_or_else(|_| panic!("Failed to copy {}", entry.file_name().to_string_lossy()));
-            }
-        }
-        println!("Copied all header files to include directory");
-        
-        // Create a symlink from libopenblas.a to whatever the actual library name is
-        // This ensures consistent linking
-        if !openblas_lib_dir.join("libopenblas.a").exists() {
-            if let Some(lib_name) = first_lib_name {
-                #[cfg(unix)]
-                {
-                    use std::os::unix::fs::symlink;
-                    symlink(
-                        &lib_name,
-                        openblas_lib_dir.join("libopenblas.a")
-                    ).ok(); // Ignore errors if symlink already exists
-                }
-                #[cfg(not(unix))]
-                {
-                    // On non-Unix, just copy the file
-                    std::fs::copy(
-                        openblas_lib_dir.join(&lib_name),
-                        openblas_lib_dir.join("libopenblas.a")
-                    ).ok();
-                }
-            }
-        }
-        
-        println!("OpenBLAS installed successfully");
-        
-        // Clean up the zip file to save space (optional)
-        fs::remove_file(&zip_path).ok();
     }
-    
-    // Tell cargo where to find the OpenBLAS library
-    println!("cargo:rustc-link-search=native={}", openblas_lib_dir.display());
+
+    println!("cargo:rustc-link-search=native={}", lib_dir.display());
     println!("cargo:rustc-link-lib=static=openblas");
-    
-    // Also need to link against libgfortran for OpenBLAS
-    println!("cargo:rustc-link-lib=dylib=gfortran");
     println!("cargo:rustc-link-lib=dylib=m");
     println!("cargo:rustc-link-lib=dylib=pthread");
-    
-    // Tell cargo to rerun if OpenBLAS directory changes
-    println!("cargo:rerun-if-changed={}", openblas_install_dir.display());
-    
-    // Generate bindings for OpenBLAS headers
-    generate_openblas_bindings(&openblas_include_dir, &out_dir);
+
+    generate_openblas_bindings(&include_dir);
 }
 
-fn generate_openblas_bindings(include_dir: &std::path::PathBuf, out_dir: &std::path::PathBuf) {
-    let cblas_header = include_dir.join("cblas.h");
-    
-    println!("Generating OpenBLAS bindings from: {}", cblas_header.display());
-    
-    // Generate bindings for cblas.h (which is the main C interface)
+fn generate_openblas_bindings(include_dir: &PathBuf) {
+    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let cblas = include_dir.join("cblas.h");
+
     let bindings = bindgen::Builder::default()
-        .header(cblas_header.to_str().unwrap())
+        .header(cblas.to_str().unwrap())
         .clang_arg(format!("-I{}", include_dir.display()))
-        // Parse cblas.h and include related headers
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
-        // Allowlist the functions and types we want
         .allowlist_function("openblas_.*")
         .allowlist_function("goto_.*")
         .allowlist_function("cblas_.*")
         .allowlist_type("CBLAS_.*")
         .allowlist_type("blasint")
         .allowlist_var("OPENBLAS_.*")
-        // Generate types as simple as possible
         .default_enum_style(bindgen::EnumVariation::Rust {
             non_exhaustive: false,
         })
@@ -240,19 +126,12 @@ fn generate_openblas_bindings(include_dir: &std::path::PathBuf, out_dir: &std::p
         .derive_copy(true)
         .derive_eq(true)
         .derive_partialeq(true)
-        // Use core instead of std for better portability
-        .use_core()
-        // Finish the builder and generate the bindings
         .generate()
         .expect("Unable to generate OpenBLAS bindings");
 
-    // Write the bindings to the $OUT_DIR/openblas_bindings.rs file
-    let out_path = PathBuf::from(out_dir);
     bindings
-        .write_to_file(out_path.join("openblas_bindings.rs"))
-        .expect("Couldn't write OpenBLAS bindings!");
-    
-    println!("Generated OpenBLAS bindings at: {}", out_path.join("openblas_bindings.rs").display());
+        .write_to_file(out_dir.join("openblas_bindings.rs"))
+        .unwrap();
 }
 
 #[cfg(feature = "cuda")]
