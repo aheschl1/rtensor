@@ -1,4 +1,4 @@
-use crate::{backend::BackendMatMul, core::{Dim, MetaTensor, MetaTensorView, Shape, meta::ContiguityTypes, primitives::TensorBase, shape_to_stride, tensor::{AsTensor, AsView, TensorAccess, TensorAccessMut, TensorError}, value::TensorValue}, ops::linalg::MatMul};
+use crate::{backend::BackendMatMul, core::{Dim, MetaTensor, MetaTensorView, Shape, meta::ContiguityTypes, primitives::TensorBase, shape_to_stride, tensor::{AsTensor, AsView, TensorAccess, TensorError}, value::TensorValue}, ops::linalg::MatMul};
 
 impl<L, R, T, B> MatMul<R, T, B> for L
 where
