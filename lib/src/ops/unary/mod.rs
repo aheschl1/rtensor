@@ -18,13 +18,13 @@ pub trait InplaceUnaryOp<T: TensorValue, B: Backend> {
         &mut self
     )
     where 
-        T: InvExp
+        T: Exp + InvExp
     ;
     fn apply_tanh(
         &mut self
     )
     where 
-        T: InvExp + Exp;
+        T: Exp + InvExp;
 }
 
 pub trait UnaryOp<T: TensorValue, B: Backend> {
@@ -35,12 +35,12 @@ pub trait UnaryOp<T: TensorValue, B: Backend> {
         &self,
     ) -> TensorBase<T, B>
     where 
-        T: InvExp;
+        T: Exp + InvExp;
     fn tanh(
         &self,
     ) -> TensorBase<T, B>
     where 
-        T: InvExp + Exp;
+        T: Exp + InvExp;
 }
 
 
@@ -55,7 +55,7 @@ impl<T: TensorValue, B: Backend, V: AsViewMut<T, B>> InplaceUnaryOp<T, B> for V 
         &mut self
     )
     where 
-        T: InvExp
+        T: Exp + InvExp
     {
         self.sigmoid_inplace();
     }
@@ -64,7 +64,7 @@ impl<T: TensorValue, B: Backend, V: AsViewMut<T, B>> InplaceUnaryOp<T, B> for V 
         &mut self
     )
     where 
-        T: InvExp + Exp
+        T: Exp + InvExp
     {
         self.tanh_inplace();
     }
@@ -84,7 +84,7 @@ impl<T: TensorValue, B: Backend, V: AsTensor<T, B>> UnaryOp<T, B> for V {
         &self,
     ) -> TensorBase<T, B>
     where 
-        T: InvExp
+        T: Exp + InvExp
     {
         let mut result = self.owned();
         result.apply_sigmoid();
@@ -95,7 +95,7 @@ impl<T: TensorValue, B: Backend, V: AsTensor<T, B>> UnaryOp<T, B> for V {
         &self,
     ) -> TensorBase<T, B>
     where 
-        T: InvExp + Exp
+        T: Exp + InvExp
     {
         let mut result = self.owned();
         result.apply_tanh();
@@ -105,7 +105,7 @@ impl<T: TensorValue, B: Backend, V: AsTensor<T, B>> UnaryOp<T, B> for V {
 
 #[cfg(test)]
 mod tests {
-    use crate::{backend::cpu::Cpu, core::Tensor, ops::unary::{InplaceUnaryOp, Negate, Relu, Sigmoid, Tanh}, testing::{unary_assert_1d_strided, unary_assert_contiguous, unary_assert_nd_strided}};
+    use crate::{backend::cpu::Cpu, ops::unary::{Negate, Relu, Sigmoid, Tanh}, testing::{unary_assert_1d_strided, unary_assert_contiguous, unary_assert_nd_strided}};
 
     #[test]
     fn test_negate_contiguous() {

@@ -1,6 +1,6 @@
 
 
-use crate::{core::{MetaTensor, MetaTensorView, Shape, meta::ContiguityTypes, primitives::TensorBase, primops::{Exp, InvExp}, tensor::TensorError, value::TensorValue}, ops::base::BinaryOpType};
+use crate::{core::{meta::ContiguityTypes, primitives::TensorBase, primops::{Exp, InvExp}, tensor::TensorError, value::TensorValue, MetaTensor, MetaTensorView, Shape}, ops::base::BinaryOpType};
 
 pub mod cpu;
 
@@ -207,7 +207,7 @@ pub trait Backend: Send + Sync + 'static + Clone {
     specify_trait_unary_cabal!{neg where T: std::ops::Neg<Output = T>}
     specify_trait_unary_cabal!{relu}
     specify_trait_unary_cabal!{sigmoid where T: InvExp}
-    specify_trait_unary_cabal!{tanh where T: InvExp + Exp}
+    specify_trait_unary_cabal!{tanh where T: Exp + InvExp}
 }
 
 pub trait BackendMatMul<T: TensorValue>: Backend {

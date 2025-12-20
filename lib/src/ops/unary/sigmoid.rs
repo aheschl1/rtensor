@@ -1,12 +1,12 @@
-use crate::{backend::Backend, core::{TensorView, TensorViewMut, primitives::TensorBase, primops::InvExp, tensor::{AsTensor, AsViewMut}, value::TensorValue}};
+use crate::{backend::Backend, core::{primops::{Exp, InvExp}, tensor::AsViewMut, value::TensorValue}};
 
-pub trait Sigmoid<T: TensorValue + InvExp, B: Backend> {
+pub trait Sigmoid<T: TensorValue + Exp, B: Backend> {
     fn sigmoid_inplace(
         &mut self
     );
 }
 
-impl<T: TensorValue + InvExp, B: Backend, V: AsViewMut<T, B>> Sigmoid<T, B> for V {
+impl<T: TensorValue + Exp + InvExp, B: Backend, V: AsViewMut<T, B>> Sigmoid<T, B> for V {
     fn sigmoid_inplace(
         &mut self
     ) {

@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use cudarc::{driver::{CudaContext, LaunchConfig, PushKernelArg}, nvrtc::Ptx};
+use cudarc::driver::CudaContext;
 
 use crate::core::tensor::TensorError;
 

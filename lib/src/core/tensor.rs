@@ -1,5 +1,5 @@
 
-use crate::{backend::Backend, core::{idx::Idx, meta::is_contiguous_relaxed, primitives::{DeviceType, TensorBase}, value::TensorValue, Dim, MetaTensor, MetaTensorView, Shape, Strides, TensorView, TensorViewMut}};
+use crate::{backend::Backend, core::{idx::Idx, meta::is_contiguous_relaxed, primitives::{DeviceType, TensorBase}, value::{TensorValue, WeightValue}, Dim, MetaTensor, MetaTensorView, Shape, Strides, TensorView, TensorViewMut}};
 use super::slice::{Slice, compute_sliced_parameters};
 use thiserror::Error;
 
@@ -83,6 +83,25 @@ pub trait AsTensor<T: TensorValue, B: Backend> {
 }
 
 impl<T: TensorValue, B: Backend> AsView<T, B> for TensorBase<T, B> {
+    fn view(&self) -> TensorView<'_, T, B> {
+        TensorView::<T, B>::from_parts(
+            &self.buf, 
+            &self.backend, 
+            self.meta.clone()
+        )
+    }
+    
+    fn view_as(&self, shape: Shape) -> Result<TensorView<'_, T, B>, TensorError> {
+        // collapse into shape
+        if !is_contiguous_relaxed(&self.meta.shape, &self.meta.strides){
+            return Err(TensorError::ContiguityError("Cannot view_as non contiguous tensor".to_string()));
+        }
+
+        panic!()
+    }
+} 
+
+impl<T: TensorValue, B: Backend> AsView<T, B> for &TensorBase<T, B> {
     fn view(&self) -> TensorView<'_, T, B> {
         TensorView::<T, B>::from_parts(
             &self.buf, 
@@ -484,8 +503,34 @@ where V: AsViewMut<T, B>
         res
     }
 
-  
+}
 
+pub trait RandomTensor<T: TensorValue + rand::distr::uniform::SampleUniform, B: Backend> {
+    fn uniform(shape: impl Into<Shape>) -> Result<TensorBase<T, B>, TensorError>;
+}
+
+impl<T: TensorValue + WeightValue, B: Backend> RandomTensor<T, B> for TensorBase<T, B> {
+    fn uniform(shape: impl Into<Shape>) -> Result<TensorBase<T, B>, TensorError> {
+        let shape = shape.into();
+        // random vector of size shape.size(), fill with uniform random values
+        let size = shape.size();
+        let mut raw = vec![T::default(); size];
+
+        // fill with random values
+        let mut rng = rand::rng();
+        for v in &mut raw.iter_mut() {
+            *v = rand::Rng::random_range(&mut rng, T::from_f32(-1.0)..T::from_f32(1.0));
+        }
+
+        let backend = B::new();
+        let buf = backend.alloc_from_slice(raw.into_boxed_slice())?;
+        let stride = super::shape_to_stride(&shape);
+        Ok(TensorBase::from_parts(backend, buf, MetaTensor::new(
+            shape,
+            stride,
+            0
+        )))
+    }
 }
 
 /// Converts a logical index (coordinate, single position, or scalar) into a

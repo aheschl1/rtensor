@@ -1,12 +1,12 @@
-use crate::{backend::Backend, core::{TensorView, TensorViewMut, primitives::TensorBase, primops::{Exp, InvExp}, tensor::{AsTensor, AsViewMut}, value::TensorValue}};
+use crate::{backend::Backend, core::{primitives::TensorBase, primops::{Exp, InvExp}, tensor::{AsTensor, AsViewMut}, value::TensorValue, TensorView, TensorViewMut}};
 
-pub trait Tanh<T: TensorValue + InvExp + Exp, B: Backend> {
+pub trait Tanh<T: TensorValue + Exp, B: Backend> {
     fn tanh_inplace(
         &mut self
     );
 }
 
-impl<T: TensorValue + InvExp + Exp, B: Backend, V: AsViewMut<T, B>> Tanh<T, B> for V {
+impl<T: TensorValue + Exp + InvExp, B: Backend, V: AsViewMut<T, B>> Tanh<T, B> for V {
     fn tanh_inplace(
         &mut self
     ) {

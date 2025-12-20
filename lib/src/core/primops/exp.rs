@@ -1,25 +1,25 @@
-use std::ops::Div;
-
-use crate::core::value::{TensorValue, types::boolean};
-
-
+use crate::core::value::{TensorValue, WeightValue};
 
 pub trait Exp: TensorValue {
     fn apply_exp(&self) -> Self;
 }
 
 
-impl Exp for f32 {
+impl<V: WeightValue> Exp for V {
     #[inline]
     fn apply_exp(&self) -> Self {
-        self.exp()
+        self.vexp()
     }
 }
 
-impl Exp for f64 {
+pub trait InvExp: TensorValue {
+    fn apply_invexp(&self) -> Self;
+}
+
+impl<V: WeightValue> InvExp for V {
     #[inline]
-    fn apply_exp(&self) -> Self {
-        self.exp()
+    fn apply_invexp(&self) -> Self {
+        (-*self).vexp()
     }
 }
 

@@ -25,6 +25,39 @@ pub trait TensorValue:
     const DTYPE: crate::core::value::DType;
 }
 
+// a value which can be used for neural network weights
+pub trait WeightValue : 
+    rand::distr::uniform::SampleUniform + 
+    TensorValue + 
+    std::ops::Neg<Output=Self> + 
+{
+    fn from_f32(value: f32) -> Self;
+    fn vexp(&self) -> Self;
+}
+
+// FROM f32 IS A PLACEHOLDER FOR ADVANCED RANDOMNESS LOGIC LATER
+impl WeightValue for f32 {
+    #[inline(always)]
+    fn from_f32(value: f32) -> Self {
+        value
+    }
+    
+    fn vexp(&self) -> Self {
+        self.exp()
+    }
+}
+
+impl WeightValue for f64 {
+    #[inline(always)]
+    fn from_f32(value: f32) -> Self {
+        value as f64
+    }
+    
+    fn vexp(&self) -> Self {
+        self.exp()
+    }
+}
+
 #[cfg(not(feature = "cuda"))]
 /// Trait for types that can be stored in tensors.
 /// 

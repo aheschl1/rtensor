@@ -2,7 +2,7 @@ use std::sync::{atomic::{AtomicBool, Ordering}, Arc, LazyLock};
 
 use cudarc::{cublas::{sys::cublasOperation_t, CudaBlas, Gemm, GemmConfig, StridedBatchedConfig}, driver::{CudaContext, CudaSlice, DevicePtr}};
 
-use crate::{backend::{Backend, BackendMatMul, cpu::Cpu}, core::{MetaTensor, Tensor, primitives::TensorBase, primops::{Exp, InvExp}, tensor::TensorError, value::{TensorValue, types}}, ops::base::BinaryOpType};
+use crate::{backend::{cpu::Cpu, Backend, BackendMatMul}, core::{primitives::TensorBase, primops::{Exp, InvExp}, tensor::TensorError, value::{types, TensorValue}, MetaTensor, Tensor}, ops::base::BinaryOpType};
 use crate::backend::ContiguityTypes;
 
 // Include bindgen-generated FFI declarations for CUDA kernel launchers
@@ -929,7 +929,7 @@ impl Backend for Cuda {
         }
     }
 
-    fn apply_tanh_contiguous<T: TensorValue + InvExp + Exp>(
+    fn apply_tanh_contiguous<T: TensorValue + Exp>(
         &self, buf: &mut Self::Buf<T>, 
         start: usize,
         len: usize
@@ -964,7 +964,7 @@ impl Backend for Cuda {
         }
     }
     
-    fn apply_tanh_1d_strided<T: TensorValue + InvExp + Exp>(
+    fn apply_tanh_1d_strided<T: TensorValue + Exp>(
         &self, buf: &mut Self::Buf<T>, 
         offset: usize,
         stride: isize,
@@ -1001,7 +1001,7 @@ impl Backend for Cuda {
         }
     }
     
-    fn apply_tanh_nd<T: TensorValue + InvExp>(
+    fn apply_tanh_nd<T: TensorValue + Exp>(
         &self,
         buf: &mut Self::Buf<T>,
         offset: usize,

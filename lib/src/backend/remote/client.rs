@@ -421,15 +421,15 @@ impl Backend for RemoteBackend {
         todo!()
     }
     
-    fn apply_tanh_nd<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,shape: &[usize],stride: &[isize],) -> Result<(),TensorError>where T:InvExp+Exp {
+    fn apply_tanh_nd<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,shape: &[usize],stride: &[isize],) -> Result<(),TensorError>where T:Exp {
         todo!()
     }
     
-    fn apply_tanh_1d_strided<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,stride:isize,len:usize) -> Result<(),TensorError>where T:InvExp+Exp {
+    fn apply_tanh_1d_strided<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,stride:isize,len:usize) -> Result<(),TensorError>where T:Exp {
         todo!()
     }
     
-    fn apply_tanh_contiguous<T:TensorValue>(&self,buf: &mut Self::Buf<T>,start:usize,len:usize) -> Result<(),TensorError>where T:InvExp+Exp {
+    fn apply_tanh_contiguous<T:TensorValue>(&self,buf: &mut Self::Buf<T>,start:usize,len:usize) -> Result<(),TensorError>where T:Exp {
         todo!()
     }
 }
