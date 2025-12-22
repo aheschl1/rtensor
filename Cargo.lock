@@ -359,6 +359,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a2d987857b319362043e95f5353c0535c1f58eec5336fdfcf626430af7def58"
 
 [[package]]
+name = "rpc_proc"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "rtensors"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "bindgen",
+ "cc",
+ "cudarc",
+ "flume",
+ "paste",
+ "rand",
+ "regex",
+ "rpc_proc",
+ "serde",
+ "slotmap",
+ "thiserror",
+]
+
+[[package]]
 name = "rustc-hash"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -439,23 +466,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
-]
-
-[[package]]
-name = "tensors"
-version = "0.1.0"
-dependencies = [
- "bincode",
- "bindgen",
- "cc",
- "cudarc",
- "flume",
- "paste",
- "rand",
- "regex",
- "serde",
- "slotmap",
- "thiserror",
 ]
 
 [[package]]

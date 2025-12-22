@@ -53,6 +53,13 @@ impl Slice {
     }
 }
 
+
+impl<T: TensorValue> From<Box<[T]>> for Slice {
+    fn from(boxed: Box<[T]>) -> Self {
+        Slice::from_boxed_slice(boxed)
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Value {
     data: Vec<u8>, // bytes

@@ -182,13 +182,32 @@ macro_rules! make_op {
     };
 }
 
+#[rpc_proc::rpc(
+    Box<[T]> = Slice,
+    &T = Slice,
+    Self::Buf<T> = TypelessBuf,
+    &Self::Buf<T> = TypelessBuf,
+    &mut Self::Buf<T> = TypelessBuf,
+    T = Value,
+    &[T] = Slice,
+    Result<Self::Buf<T>, crate::core::tensor::TensorError> = Result<TypelessBuf, TensorError>,
+    Result<T, crate::core::tensor::TensorError> = Result<Value, TensorError>,
+    Result<Box<[T]>, crate::core::tensor::TensorError> = Result<Slice, crate::core::tensor::TensorError>,
+    (*const Self::Buf<T>, &crate::core::MetaTensor) = (TypelessBuf, crate::core::MetaTensor),
+    (*mut Self::Buf<T>, &crate::core::MetaTensor) = (TypelessBuf, crate::core::MetaTensor),
+    (crate::ops::base::BinaryOpType, T) = (crate::ops::base::BinaryOpType, Value),
+    &[usize] = Vec<usize>,
+    &[isize] = Vec<isize>,
+)]
 impl Backend for RemoteBackend {
     type Buf<T: TensorValue> = RemoteBuf<T>;
 
+    #[rpc(skip)]
     fn new() -> Self {
         get_backend_default().expect("No default remote backend available")
     }
     
+    #[rpc(skip)]
     fn device_type() -> crate::core::primitives::DeviceType {
         // let message = Messages::DeviceType;
         // let receiver = self.send_message(message);
@@ -206,13 +225,14 @@ impl Backend for RemoteBackend {
 
     fn alloc_from_slice<T: TensorValue>(&self, src: Box<[T]>) -> Result<Self::Buf<T>, crate::core::tensor::TensorError> {
         let message = Messages::AllocFromSlice {
-            slice: Slice::from_boxed_slice(src),
+            slice: src.into(),
         };
         send_recv!(self, message, Messages::AllocFromSliceResponse { buf } => {
             Ok(RemoteBuf::from_typeless(buf?))
         })
     }
 
+    #[rpc(extra(dtype: DType = T::DTYPE))]
     fn alloc<T: TensorValue>(&self, len: usize) -> Result<Self::Buf<T>, crate::core::tensor::TensorError> {
         let message = Messages::Alloc {
             len,
