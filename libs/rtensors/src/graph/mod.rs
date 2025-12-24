@@ -1,6 +1,5 @@
 use std::{collections::HashMap, hash::Hash};
 
-use rand::distr::uniform;
 use slotmap::new_key_type;
 
 use crate::{backend::{cpu::Cpu, Backend, BackendMatMul}, core::{primitives::TensorBase, tensor::{RandomTensor, TensorError}, value::{TensorValue, WeightValue}, MetaTensorView}};
@@ -36,6 +35,12 @@ pub struct Group<T: TensorValue, B: Backend> {
     nodes: slotmap::SlotMap<TensorId, Box<dyn Node<T, B>>>,
     children: HashMap<TensorId, Vec<TensorId>>,
     roots: Vec<TensorId>,
+}
+
+impl<T: TensorValue, B: Backend> Default for Group<T, B> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<T: TensorValue, B: Backend> Group<T, B> {
@@ -131,7 +136,7 @@ impl<T: TensorValue + WeightValue, B: BackendMatMul<T>> Node<T, B> for LinearBas
             GraphError::ComputationError("Bias tensor not found".to_string())
         })?;
 
-        let output = input.matmul(weight).map_err(|x| GraphError::from(x))? + bias;
+        let output = input.matmul(weight).map_err(GraphError::from)? + bias;
 
         Ok(vec![output])
         

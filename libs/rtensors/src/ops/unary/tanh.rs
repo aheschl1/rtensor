@@ -1,4 +1,4 @@
-use crate::{backend::Backend, core::{primitives::TensorBase, primops::{Exp, InvExp}, tensor::{AsTensor, AsViewMut}, value::TensorValue, TensorView, TensorViewMut}};
+use crate::{backend::Backend, core::{primops::{Exp, InvExp}, tensor::AsViewMut, value::TensorValue}};
 
 pub trait Tanh<T: TensorValue + Exp, B: Backend> {
     fn tanh_inplace(

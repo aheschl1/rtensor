@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::{backend::{Backend, cpu::Cpu}, core::{MetaTensorView, Slice, Tensor, TensorView, TensorViewMut, primitives::TensorBase, tensor::{AsTensor, TensorAccess, TensorAccessMut}, value::TensorValue}};
+use crate::{backend::Backend, core::{MetaTensorView, Slice, TensorViewMut, primitives::TensorBase, tensor::{AsTensor, TensorAccess, TensorAccessMut}, value::TensorValue}};
 #[cfg(feature = "cuda")]
 use crate::backend::cuda::Cuda;
 

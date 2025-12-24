@@ -1,6 +1,6 @@
 
 
-use crate::{core::{meta::ContiguityTypes, primitives::TensorBase, primops::{Exp, InvExp}, tensor::TensorError, value::TensorValue, MetaTensor, MetaTensorView, Shape}, ops::base::BinaryOpType};
+use crate::{core::{meta::ContiguityTypes, primops::{Exp, InvExp}, tensor::TensorError, value::TensorValue, MetaTensor, MetaTensorView}, ops::base::BinaryOpType};
 
 pub mod cpu;
 

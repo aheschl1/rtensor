@@ -9,9 +9,9 @@ pub(crate) struct Slice {
     pub(crate) dtype: DType,
 }
 
-impl<T: TensorValue> Into<Result<Box<[T]>, TensorError>> for Slice {
-    fn into(self) -> Result<Box<[T]>, TensorError> {
-        self.to_boxed_slice::<T>()
+impl<T: TensorValue> From<Slice> for Result<Box<[T]>, TensorError> {
+    fn from(val: Slice) -> Self {
+        val.to_boxed_slice::<T>()
     }
 }
 
@@ -80,9 +80,9 @@ pub(crate) struct Value {
     dtype: DType,
 }
 
-impl<T: TensorValue> Into<Result<T, TensorError>> for Value {
-    fn into(self) -> Result<T, TensorError> {
-        self.to_value::<T>()
+impl<T: TensorValue> From<Value> for Result<T, TensorError> {
+    fn from(val: Value) -> Self {
+        val.to_value::<T>()
     }
 }
 
@@ -129,9 +129,9 @@ pub(crate) struct TypelessBuf {
     pub(crate) dtype: DType,
 }
 
-impl<T: TensorValue> Into<Result<RemoteBuf<T>, TensorError>> for TypelessBuf {
-    fn into(self) -> Result<RemoteBuf<T>, TensorError> {
-        Ok(RemoteBuf::from_typeless(self))
+impl<T: TensorValue> From<TypelessBuf> for Result<RemoteBuf<T>, TensorError> {
+    fn from(val: TypelessBuf) -> Self {
+        Ok(RemoteBuf::from_typeless(val))
     }
 }
 

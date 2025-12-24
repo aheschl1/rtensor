@@ -234,7 +234,7 @@ impl Backend for RemoteBackend {
         };
         let receiver = self.send_message(message);
         match receiver.recv() {
-            Ok(Messages::LenResponse(len)) => {len.into()},
+            Ok(Messages::LenResponse(len)) => {len},
             _ => panic!("Failed to get buffer length or unexpected response"),
         }
     }

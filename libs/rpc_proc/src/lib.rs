@@ -203,6 +203,7 @@ impl Parse for ExtraVariantArg {
 
 
 /// Arguments parsed from the `#[rpc(...)]` attribute on a method.
+#[derive(Default)]
 struct RpcMethodArgs {
     /// If true, skip code generation for this method.
     skip: bool,
@@ -212,15 +213,6 @@ struct RpcMethodArgs {
     override_variant_name: Option<Ident>
 }
 
-impl Default for RpcMethodArgs {
-    fn default() -> Self {
-        Self {
-            skip: false,
-            extra_variant_args: vec![],
-            override_variant_name: None,
-        }
-    }
-}
 
 impl RpcMethodArgs {
     /// Parses the `#[rpc(...)]` attribute.

@@ -1,4 +1,4 @@
-use crate::{backend::Backend, core::{primitives::TensorBase, tensor::{AsTensor, AsViewMut}, value::TensorValue, TensorView, TensorViewMut}};
+use crate::{backend::Backend, core::{tensor::AsViewMut, value::TensorValue}};
 
 pub trait Relu<T: TensorValue, B: Backend> {
     fn relu_inplace(
