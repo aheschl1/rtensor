@@ -407,3 +407,28 @@ pub(crate) fn dispatch_matmul(
     
     Ok(())
 }
+
+pub(crate) fn dispath_copy_within(
+    dst: TypelessBuf,
+    src: TypelessBuf,
+    dst_offset: usize,
+    src_offset: usize,
+    len: usize,
+    connection: &ClientConnection,
+) -> Result<(), TensorError> {
+    match dst.dtype {
+        DType::U8 => copy_within_for_dtype!(dst.id, src.id, dst_offset, src_offset, len, connection, u8, u8_buffers),
+        DType::U16 => copy_within_for_dtype!(dst.id, src.id, dst_offset, src_offset, len, connection, u16, u16_buffers),
+        DType::U32 => copy_within_for_dtype!(dst.id, src.id, dst_offset, src_offset, len, connection, u32, u32_buffers),
+        DType::U64 => copy_within_for_dtype!(dst.id, src.id, dst_offset, src_offset, len, connection, u64, u64_buffers),
+        DType::U128 => copy_within_for_dtype!(dst.id, src.id, dst_offset, src_offset, len, connection, u128, u128_buffers),
+        DType::I8 => copy_within_for_dtype!(dst.id, src.id, dst_offset, src_offset, len, connection, i8, i8_buffers),
+        DType::I16 => copy_within_for_dtype!(dst.id, src.id, dst_offset, src_offset, len, connection, i16, i16_buffers),
+        DType::I32 => copy_within_for_dtype!(dst.id, src.id, dst_offset, src_offset, len, connection, i32, i32_buffers),
+        DType::I64 => copy_within_for_dtype!(dst.id, src.id, dst_offset, src_offset, len, connection, i64, i64_buffers),
+        DType::I128 => copy_within_for_dtype!(dst.id, src.id, dst_offset, src_offset, len, connection, i128, i128_buffers),
+        DType::F32 => copy_within_for_dtype!(dst.id, src.id, dst_offset, src_offset, len, connection, f32, f32_buffers),
+        DType::F64 => copy_within_for_dtype!(dst.id, src.id, dst_offset, src_offset, len, connection, f64, f64_buffers),
+        DType::BOOL => copy_within_for_dtype!(dst.id, src.id, dst_offset, src_offset, len, connection, types::boolean, bool_buffers),
+    }
+}

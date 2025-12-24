@@ -224,8 +224,17 @@ impl Backend for RemoteBackend {
     fn alloc_from_slice<T: TensorValue>(&self, src: Box<[T]>) -> Result<Self::Buf<T>, crate::core::tensor::TensorError>{unreachable!("Macro implmented")}
     #[rpc(extra(dtype: DType = T::DTYPE))]
     fn alloc<T: TensorValue>(&self, len: usize) -> Result<Self::Buf<T>, crate::core::tensor::TensorError>{unreachable!("Macro implmented")}
+    
+    #[rpc(sync)]
     fn copy_from_slice<T: TensorValue>(&self, dst: &mut Self::Buf<T>, src: &[T]) -> Result<(), crate::core::tensor::TensorError> {unreachable!("Macro implmented")}
+    
+    #[rpc(sync)]
+    fn copy_range_within<T: TensorValue>(&self, dst: &mut Self::Buf<T>, src: &Self::Buf<T>, dst_offset: usize, src_offset: usize, len: usize) -> Result<(), TensorError>{unreachable!("Macro implmented")}
+    
+    #[rpc(sync)]
     fn read<T: TensorValue>(&self, buf: &Self::Buf<T>, offset: usize) -> Result<T, crate::core::tensor::TensorError> {unreachable!("Macro implmented")}
+    
+    #[rpc(sync)]
     fn write<T: TensorValue>(&self, buf: &mut Self::Buf<T>, offset: usize, value: T) -> Result<(), crate::core::tensor::TensorError> {unreachable!("Macro implmented")}
     #[rpc(skip)] // skip because the pattern is different when not Result
     fn len<T: TensorValue>(&self, buf: &Self::Buf<T>) -> usize {
@@ -238,8 +247,13 @@ impl Backend for RemoteBackend {
             _ => panic!("Failed to get buffer length or unexpected response"),
         }
     }
+
+    #[rpc(sync)]
     fn copy<T: TensorValue>(&self, src: &Self::Buf<T>) -> Result<Self::Buf<T>, crate::core::tensor::TensorError>{unreachable!("Macro implmented")}
+    
+    #[rpc(sync)]
     fn dump<T: TensorValue>(&self, src: &Self::Buf<T>) -> Result<Box<[T]>, crate::core::tensor::TensorError>{unreachable!("Macro implmented")}
+    
     fn broadcast<T: TensorValue>(
         &self,
         left: (*const Self::Buf<T>, &crate::core::MetaTensor), 

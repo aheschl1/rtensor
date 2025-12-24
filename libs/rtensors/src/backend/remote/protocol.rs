@@ -301,13 +301,6 @@ pub (crate) enum Messages {
     },
     BroadcastResponse (Result<(), TensorError>),
 
-    ApplyElementwiseBinary {
-        buf: TypelessBuf,
-        op: (BinaryOpType, Value),
-        meta: MetaTensor,
-    },
-    ApplyElementwiseBinaryResponse (Result<(), TensorError>),
-
     ApplyNegContiguous {
         buf: TypelessBuf,
         start: usize,
@@ -330,12 +323,6 @@ pub (crate) enum Messages {
         stride: Vec<isize>,
     },
     ApplyNegNdResponse (Result<(), TensorError>),
-
-    ApplyNeg {
-        buf: TypelessBuf,
-        meta: MetaTensor,
-    },
-    ApplyNegResponse (Result<(), TensorError>),
 
     Matmul {
         lhs: (TypelessBuf, MetaTensor),
@@ -418,6 +405,15 @@ pub (crate) enum Messages {
     },
     ApplyTanhContiguousResponse(Result<(), TensorError>),
 
+    CopyRangeWithin {
+        dst: TypelessBuf,
+        src: TypelessBuf,
+        dst_offset: usize,
+        src_offset: usize,
+        len: usize,
+    },
+    CopyRangeWithinResponse(Result<(), TensorError>),
+
     ActionCompleted(u32)
 
 }
@@ -439,15 +435,22 @@ impl Messages {
             Messages::ApplyElementwiseBinaryContiguousResponse { .. } |
             Messages::ApplyElementwiseBinaryNdResponse { .. } |
             Messages::BroadcastResponse { .. } |
-            Messages::ApplyElementwiseBinaryResponse { .. } |
             Messages::MatmulResponse { .. } |
             Messages::ApplyNeg1dStridedResponse { .. } |
             Messages::ApplyNegContiguousResponse { .. } |
             Messages::ApplyNegNdResponse { .. } |
             Messages::ErrorResponse { .. } |
             Messages::ActionCompleted { .. } |
-            Messages::ApplyNegResponse { .. } => true,
-            
+            Messages::ApplyReluNdResponse { .. } |
+            Messages::ApplyRelu1dStridedResponse { .. } |
+            Messages::ApplyReluContiguousResponse { .. } |
+            Messages::ApplySigmoidNdResponse { .. } |
+            Messages::ApplySigmoid1dStridedResponse { .. } |
+            Messages::ApplySigmoidContiguousResponse { .. } |
+            Messages::ApplyTanhNdResponse { .. } |
+            Messages::ApplyTanh1dStridedResponse { .. } |
+            Messages::ApplyTanhContiguousResponse { .. } |
+            Messages::CopyRangeWithinResponse { .. } => true,
             _ => false,
         }
     }

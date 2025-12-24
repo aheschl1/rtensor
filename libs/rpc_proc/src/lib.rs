@@ -69,7 +69,15 @@ pub fn routines(attr: TokenStream, item: TokenStream) -> TokenStream {
                 },
                 _ => quote! { () },
             };
+            let sync_tokens = if rpc_args.sync {
+                quote! {
+                    self.sync();
+                }
+            } else {
+                quote! {}
+            };
             new_method.block = parse_quote!({
+                #sync_tokens
                 let message = #enum_variant::#variant_name {
                     #( #initializers ),*
                 };
@@ -210,7 +218,9 @@ struct RpcMethodArgs {
     /// Extra arguments to inject into the message.
     extra_variant_args: Vec<ExtraVariantArg>,
     /// enum variant name
-    override_variant_name: Option<Ident>
+    override_variant_name: Option<Ident>,
+    // sync before action'
+    sync: bool,
 }
 
 
@@ -234,7 +244,10 @@ impl RpcMethodArgs {
                 let ident: Ident = content.parse()?;
                 args.override_variant_name = Some(ident);
                 Ok(())
-            }else {
+            } else if meta.path.is_ident("sync") {
+                args.sync = true;
+                Ok(())
+            } else {
                 Err(meta.error("unsupported rpc attribute argument"))
             }
         })?;
