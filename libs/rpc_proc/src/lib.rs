@@ -6,8 +6,8 @@
 
 use std::{cell::RefCell, collections::HashMap};
 use proc_macro::TokenStream;
-use quote::{format_ident, quote};
-use syn::{parenthesized, parse::{Parse, ParseStream}, parse_macro_input, parse_quote, Attribute, Expr, Fields, Ident, ItemImpl, PathArguments, Token, Type, Variant};
+use quote::{format_ident, quote, ToTokens};
+use syn::{parenthesized, parse::{Parse, ParseStream}, parse_macro_input, parse_quote, punctuated::Punctuated, Attribute, Expr, Fields, Ident, ItemImpl, Meta, PathArguments, Token, Type, Variant};
 use syn::Result;
 
 
@@ -39,11 +39,9 @@ pub fn request_handle(attr: TokenStream, item: TokenStream) -> TokenStream {
     // variant ident : gen routine
     let mut handle_arms = HashMap::new();
 
+    let mut skip_match_body = quote!{};
+
     for variant in enum_block.variants.iter_mut() {
-        if variant.ident.to_string().contains("Response") {
-            // todo, assert that the response exists for all types which are not skip
-            continue;
-        }
         let variant_args = if let Some(attr) = rpc_attr(&variant.attrs) {
             let args = VariantArgs::parse(attr).expect("Failed to parse args");
             // Remove the helper attribute so it doesn't appear in output
@@ -52,8 +50,18 @@ pub fn request_handle(attr: TokenStream, item: TokenStream) -> TokenStream {
         } else {
             None
         }.unwrap_or_default();
-
-        if variant_args.skip {
+        if variant.ident.to_string().contains("Response")  || variant_args.skip{
+            // todo, assert that the response exists for all types which are not skip
+            let i = variant.ident.clone();
+            let skip_body = match variant.fields {
+                Fields::Named(_) => {quote!{#enum_ident::#i { .. }}},
+                Fields::Unnamed(_) => {quote!{#enum_ident::#i ( .. )}},
+                Fields::Unit => {quote!{#enum_ident::#i}}
+            };
+            skip_match_body = quote!{
+                #skip_match_body 
+                #skip_body => panic!("Unexpected message type request."),
+            };
             continue;
         }
         let (routine, fields) = process_variant(variant, &variant_args, enum_ident, &dispatch_args.dispatch_module);
@@ -66,7 +74,7 @@ pub fn request_handle(attr: TokenStream, item: TokenStream) -> TokenStream {
     for (variant, (routine, fields)) in handle_arms.iter() {
         match_body = quote! {
             #match_body
-            #enum_ident::#variant { #fields } => {
+            #enum_ident::#variant { #fields .. } => {
                 #routine
             },
         }
@@ -75,17 +83,15 @@ pub fn request_handle(attr: TokenStream, item: TokenStream) -> TokenStream {
     quote! {
         #enum_block
 
-        fn handle_request_(
+        fn _handle_request(
             message: #enum_ident,
             task_id: u32,
             connection: &#connection_type
         ) {
             match message {
                 #match_body
-                _ => {
-                    panic!("Unexpected request type.")
-                }
-            };
+                #skip_match_body
+            }
         }
     }.into()
 }
@@ -188,46 +194,32 @@ struct HandleArgs {
     dispatch_module: syn::Path,
 }
 
-
 impl Parse for HandleArgs {
     fn parse(input: ParseStream) -> Result<Self> {
+        let args = Punctuated::<Meta, Token![,]>::parse_terminated(input)?;
+
         let mut connection_type = None;
         let mut dispatch_module = None;
 
-        while !input.is_empty() {
-            let ident: Ident = input.parse()?;
-            let content;
-            parenthesized!(content in input);
-
-            if ident == "connection" {
-                if connection_type.is_some() {
-                    return Err(input.error("duplicate `connection`"));
+        for meta in args {
+            match meta {
+                Meta::NameValue(nv) if nv.path.is_ident("connection") => {
+                    connection_type = Some(syn::parse2(nv.value.to_token_stream())?);
                 }
-                connection_type = Some(content.parse()?);
-            } else if ident == "dispatch" {
-                if dispatch_module.is_some() {
-                    return Err(input.error("duplicate `dispatch`"));
+                Meta::NameValue(nv) if nv.path.is_ident("dispatch") => {
+                    dispatch_module = Some(syn::parse2(nv.value.to_token_stream())?);
                 }
-                dispatch_module = Some(content.parse()?);
-            } else {
-                return Err(syn::Error::new_spanned(
-                    ident,
-                    "expected `connection(...)` or `dispatch(...)`",
-                ));
-            }
-
-            if input.peek(Token![,]) {
-                input.parse::<Token![,]>()?;
+                _ => {
+                    return Err(syn::Error::new_spanned(meta, "unknown argument"));
+                }
             }
         }
 
         Ok(Self {
-            connection_type: connection_type.ok_or_else(|| {
-                input.error("missing `connection(...)`")
-            })?,
-            dispatch_module: dispatch_module.ok_or_else(|| {
-                input.error("missing `dispatch(...)`")
-            })?,
+            connection_type: connection_type
+                .ok_or_else(|| input.error("missing `connection`"))?,
+            dispatch_module: dispatch_module
+                .ok_or_else(|| input.error("missing `dispatch`"))?,
         })
     }
 }

@@ -214,8 +214,8 @@ impl_typeless_buf_conversions!(
 
 #[derive(Serialize, Deserialize)]
 #[rpc_proc::request_handle(
-    connection(super::server::ClientConnection), 
-    dispatch(super::enumdispatch)
+    connection = super::server::ClientConnection,
+    dispatch = super::enumdispatch
 )]
 pub (crate) enum Messages {
     ErrorResponse {
