@@ -187,6 +187,13 @@ impl MetaTensor {
     
     /// Whether the layout is contiguous in row-major order.
     pub fn is_contiguous(&self) -> bool { is_contiguous_relaxed(&self.shape, &self.strides) }
+
+    /// a version of contiguity which allows for strides of grater than 1 on the innermost dimension
+    /// this can be used for example in matmul to see if multiple batch dimensions are contiguous together
+    /// is_contiguous could not be used in that case, because the metadata indicates a stride greater than 1 on the innermost batch dimension
+    pub fn is_flat(&self) -> bool {
+        is_flat(&self.shape, &self.strides)
+    }
     
     /// Borrow the shape vector.
     pub fn shape(&self) -> &Shape { &self.shape }
@@ -463,6 +470,27 @@ pub(crate) fn is_contiguous_relaxed(shape: &Shape, stride: &Strides) -> bool {
     }
     true
 }
+
+/// contiguity, but allowing for non 1 innermost stride
+#[inline(always)]
+fn is_flat(shape: &Shape, stride: &Strides) -> bool {
+    if shape.is_empty() { return true; }
+    if shape.contains(&0) { return true; }
+    if shape.len() != stride.len() { return false; }
+
+    let innermost_stride = stride[shape.len() - 1].unsigned_abs();
+    let mut expected = innermost_stride;
+    for i in (0..shape.len()).rev() {
+        let dim = shape[i];
+        let s = stride[i];
+        if dim != 1 {
+            if s.unsigned_abs() != expected { return false; }
+            expected = expected.saturating_mul(dim);
+        }
+    }
+    true
+}
+
 
 /// Provides read-only access to tensor metadata (shape, strides, offset).
 /// 

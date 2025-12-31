@@ -351,6 +351,7 @@ macro_rules! blas_impl {
 
                 let (lhs_buf, lhs_meta): (&Self::Buf<$t>, &MetaTensor) = lhs;
                 let (rhs_buf, rhs_meta): (&Self::Buf<$t>, &MetaTensor) = rhs;
+
                 let lda = match &contiguity {
                     ContiguityTypes::ColumnMajor => lhs_meta.strides()[lhs_meta.rank() - 1] as blasint,
                     ContiguityTypes::RowMajor => lhs_meta.strides()[lhs_meta.rank() - 2] as blasint,

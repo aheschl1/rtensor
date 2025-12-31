@@ -1,4 +1,4 @@
-use crate::{backend::BackendMatMul, core::{Dim, MetaTensor, MetaTensorView, Shape, meta::ContiguityTypes, primitives::TensorBase, shape_to_stride, tensor::{AsTensor, AsView, TensorAccess, TensorError}, value::TensorValue}, ops::linalg::MatMul};
+use crate::{backend::BackendMatMul, core::{meta::ContiguityTypes, primitives::TensorBase, shape_to_stride, tensor::{AsTensor, AsView, TensorAccess, TensorError}, value::TensorValue, Dim, MetaTensor, MetaTensorView, Shape}, ops::{broadcast::compute_broadcasted_params, linalg::MatMul}};
 
 impl<L, R, T, B> MatMul<R, T, B> for L
 where
@@ -18,12 +18,22 @@ where
         let rhs_view0 = rhs.view();
 
         let mut _lhs_storage = None;
-        let mut _rhs_storage = None;
+        let mut _rhs_storage: Option<TensorBase<T, B>> = None;
 
-        let contiguity_type_lhs = contiguity_type(&lhs_view0.meta)
-            .map_err(|()| TensorError::InvalidShape("LHS tensor must have rank >= 2 for matmul".to_string()))?;
-        let contiguity_type_rhs =  contiguity_type(&rhs_view0.meta)
-            .map_err(|()| TensorError::InvalidShape("RHS tensor must have rank >= 2 for matmul".to_string()))?;
+        if lhs_view0.rank() < 2 {
+            return Err(TensorError::InvalidShape(
+                "LHS tensor must have rank >= 2 for matmul".to_string(),
+            ));
+        }
+
+        if rhs_view0.rank() < 2 {
+            return Err(TensorError::InvalidShape(
+                "RHS tensor must have rank >= 2 for matmul".to_string(),
+            ));
+        }
+
+        let contiguity_type_lhs = contiguity_type(&lhs_view0.meta);
+        let contiguity_type_rhs =  contiguity_type(&rhs_view0.meta);
 
         // the 0 copy scenario is both are already row major or both are column major
         // the 1 copy case is one is row major, the other is not
@@ -89,6 +99,22 @@ where
         let lhs_batch_dims: Vec<usize> = lhs_meta.shape.0[..lr - 2].to_vec();
         let rhs_batch_dims: Vec<usize> = rhs_meta.shape.0[..rr - 2].to_vec();
 
+        // goal, find broadcast params for batch dims.
+        // this will allow us to handle broadcasting out in matmul
+        let lhs_batch_meta = MetaTensor::new(
+            Shape::from(lhs_batch_dims.clone()),
+            lhs_meta.strides.0[..lr - 2].to_vec(),
+            0, // offset doesn't matter for broadcasting
+        );
+        let rhs_batch_meta = MetaTensor::new(
+            Shape::from(rhs_batch_dims.clone()),
+            rhs_meta.strides.0[..rr - 2].to_vec(),
+            0,
+        );
+
+        // let broadcasted_params = compute_broadcasted_params(&lhs_batch_meta, &rhs_batch_meta);
+
+        // if broadcasted_params.is_err() {
         if lhs_batch_dims != rhs_batch_dims {
             return Err(TensorError::SizeMismatch(format!(
                 "Batch dimensions must match for matmul, got lhs batch dims {:?} and rhs batch dims {:?}",
@@ -96,7 +122,7 @@ where
             )));
         }
 
-        let b = if lhs_batch_dims.is_empty() {
+        let b = if lhs_batch_dims.is_empty() { // lhs matches rhs
             1
         } else {
             lhs_batch_dims.iter().product::<usize>()
@@ -173,12 +199,12 @@ where
 #[inline]
 fn contiguity_type(
     meta: &MetaTensor,
-) -> Result<ContiguityTypes, ()> {
+) -> ContiguityTypes {
     let shape = &meta.shape;
     let strides = &meta.strides;
 
     if shape.len() < 2 {
-        return Err(());
+        return ContiguityTypes::RowMajor;
     }
 
     // if strides[shape.len() - 1] != 1isize {
@@ -187,13 +213,35 @@ fn contiguity_type(
 
     // 2 cases: row major or column major
     // row major means -1 dim is contiguous
-    if strides[shape.len() - 1] == 1isize {
-        return Ok(ContiguityTypes::RowMajor);
-    }
-    // column major means -2 dim is contiguous
-    if strides[shape.len() - 2] == 1isize {
-        return Ok(ContiguityTypes::ColumnMajor);
+    let inner_contiguity = {
+        if strides[shape.len() - 1] == 1isize {
+            ContiguityTypes::RowMajor
+        }
+        // column major means -2 dim is contiguous
+        else if strides[shape.len() - 2] == 1isize {
+            ContiguityTypes::ColumnMajor
+        } else {
+            ContiguityTypes::None
+        }
+    };
+
+    // we need to check on the batch dims - if there are multiple batch dims, they need to be contiguous together
+    // if they are not, we say None, if they are, we take the previous
+    let batch_dims = &shape.0[..shape.len() - 2];
+    let batch_strides = &strides.0[..strides.len() - 2];
+    if batch_dims.len() > 1 {
+        let mut expected_stride = batch_strides[batch_strides.len() - 1];
+        for i in (0..batch_dims.len() - 1).rev() {
+            let dim = batch_dims[i + 1];
+            let stride = batch_strides[i];
+            expected_stride *= dim as isize;
+            if stride != expected_stride {
+                return ContiguityTypes::None;
+            }
+        }
+        inner_contiguity
+    } else {
+        inner_contiguity
     }
 
-    Ok(ContiguityTypes::None)
 }
