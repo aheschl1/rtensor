@@ -1295,7 +1295,7 @@ mod tests {
 
     #[test]
     pub fn test_reductio() {
-        let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> = CudaTensor::<f64>::from_buf(vec![0.2, 0.3, 0.1, 0.3], (4, 1)).unwrap();
+        let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> = CudaTensor::<f64>::from_buf(vec![0.2, 0.3, 0.1, 0.3, 0.3, -0.1, -0.3, 0.3], (4, 2)).unwrap();
         println!("CUDA: {:?}", cuda.owned().cpu().unwrap());
         cuda.tanh_inplace();
     }
