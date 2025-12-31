@@ -1,6 +1,4 @@
-
-
-use crate::{core::{meta::ContiguityTypes, primops::{Exp, InvExp}, tensor::TensorError, value::TensorValue, MetaTensor, MetaTensorView}, ops::{base::BinaryOpType, reduction::ReductionOpTypes}};
+use crate::{core::{meta::ContiguityTypes, primops::{Exp, InvExp}, tensor::TensorError, value::TensorValue, Dim, MetaTensor, MetaTensorView}, ops::{base::BinaryOpType, reduction::ReductionOpTypes}};
 
 pub mod cpu;
 
@@ -210,8 +208,36 @@ pub trait Backend: Send + Sync + 'static + Clone {
     specify_trait_unary_cabal!{sigmoid where T: InvExp}
     specify_trait_unary_cabal!{tanh where T: Exp + InvExp}
 
-    fn apply_reduce<T: TensorValue>(&self, src: &Self::Buf<T>, dst: &Self::Buf<T>, op: ReductionOpTypes) -> Result<(), TensorError>{
-        todo!()
+    fn apply_reduce_contiguous_flat<T: TensorValue>(
+        &self, 
+        src: &Self::Buf<T>, 
+        dst: &mut Self::Buf<T>, 
+        start: usize, 
+        len: usize, 
+        op: ReductionOpTypes
+    ) -> Result<(), TensorError>;
+
+    fn apply_reduce<T: TensorValue>(
+        &self, 
+        src: (&Self::Buf<T>, &MetaTensor), 
+        dst: (&mut Self::Buf<T>, &MetaTensor), 
+        dim: Dim,
+        op: ReductionOpTypes
+    ) -> Result<(), TensorError>{
+        let (src_buf, src_meta) = src;
+        let (dst_buf, dst_meta) = dst;
+
+        if src_meta.rank() == 1 && src_meta.is_contiguous() {
+            return self.apply_reduce_contiguous_flat(
+                src_buf,
+                dst_buf,
+                src_meta.offset,
+                src_meta.size(),
+                op
+            );
+        }
+
+        panic!();
     }
 }
 

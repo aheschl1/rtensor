@@ -298,6 +298,17 @@ impl Backend for Cpu {
     impl_cpu_unary!{ relu, _relu }
     impl_cpu_unary!{ sigmoid, _sigmoid where T: InvExp}
     impl_cpu_unary!{ tanh, _tanh where T: Exp + InvExp }
+    
+    fn apply_reduce_contiguous_flat<T: TensorValue>(
+        &self, 
+        src: &Self::Buf<T>, 
+        dst: &mut Self::Buf<T>, 
+        start: usize, 
+        len: usize, 
+        op: crate::ops::reduction::ReductionOpTypes
+    ) -> Result<(), TensorError> {
+        todo!()
+    }
 
 }
 

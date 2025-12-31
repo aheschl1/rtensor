@@ -16,37 +16,48 @@ pub trait ReductionOp : Sized {
     fn min(&self, axes: &Idx) -> Result<Self, TensorError>;
 }
 
+macro_rules! do_reduce {
+    ($op:expr, $axes:ident, $self:ident) => {
+        if let Idx::At(axis) = $axes {
+            let mut output = materialize_output::<T, B>(&$self.meta, $self.backend.clone())?;
+            $self.backend.apply_reduce(
+                (&$self.buf, &$self.meta), 
+                (&mut output.buf, &output.meta), 
+                *axis,
+                $op,
+            )?;
+            Ok(output)
+        } else{
+            Err(TensorError::WrongDims(
+                "Reduction over multiple axes is not implemented yet.".to_string(),
+            ))
+        }
+    };
+}
+
 impl<T, B> ReductionOp for TensorBase<T, B>
 where
     T: TensorValue,
     B: Backend,
 {
     fn sum(&self, axes: &Idx) -> Result<Self, TensorError> {
-        let output = materialize_output::<T, B>(&self.meta, self.backend.clone())?;
-        self.backend.apply_reduce(&self.buf, &output.buf, ReductionOpTypes::Sum)?;
-        Ok(output)
+        do_reduce!(ReductionOpTypes::Sum, axes, self)
     }
 
     fn prod(&self, axes: &Idx) -> Result<Self, TensorError> {
-        let output = materialize_output::<T, B>(&self.meta, self.backend.clone())?;
-        self.backend.apply_reduce(&self.buf, &output.buf, ReductionOpTypes::Prod)?;
-        Ok(output)
+        do_reduce!(ReductionOpTypes::Prod, axes, self)
+    }
+
+    fn max(&self, axes: &Idx) -> Result<Self, TensorError> {
+        do_reduce!(ReductionOpTypes::Max, axes, self)
+    }
+
+    fn min(&self, axes: &Idx) -> Result<Self, TensorError> {
+        do_reduce!(ReductionOpTypes::Min, axes, self)
     }
 
     fn mean(&self, axes: &Idx) -> Result<Self, TensorError> {
         todo!()
-    }
-
-    fn max(&self, axes: &Idx) -> Result<Self, TensorError> {
-        let output = materialize_output::<T, B>(&self.meta, self.backend.clone())?;
-        self.backend.apply_reduce(&self.buf, &output.buf, ReductionOpTypes::Max)?;
-        Ok(output)
-    }
-
-    fn min(&self, axes: &Idx) -> Result<Self, TensorError> {
-        let output = materialize_output::<T, B>(&self.meta, self.backend.clone())?;
-        self.backend.apply_reduce(&self.buf, &output.buf, ReductionOpTypes::Min)?;
-        Ok(output)
     }
 }
 
