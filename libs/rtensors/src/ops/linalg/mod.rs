@@ -1662,6 +1662,130 @@ mod tests {
         assert_eq!(result, expected);
     }
 
+    // #[test]
+    // fn test_matmul_broadcast_batch() {
+    //     let a = Tensor::<f32>::from_buf(
+    //         vec![
+    //             1.0, 2.0, 3.0,
+    //             4.0, 5.0, 6.0,
+    //         ],
+    //         vec![1, 2, 3]
+    //     ).unwrap();
+
+    //     let b = Tensor::<f32>::from_buf(
+    //         vec![
+    //             7.0, 8.0,
+    //             9.0, 10.0,
+    //             11.0, 12.0,
+
+    //             1.0, 2.0,
+    //             3.0, 4.0,
+    //             5.0, 6.0,
+    //         ],
+    //         vec![2, 3, 2]
+    //     ).unwrap();
+
+    //     let result = a.matmul(&b).unwrap();
+        
+    //     assert_eq!(*result.shape(), vec![2, 2, 2]);
+    //     let expected = Tensor::<f32>::from_buf(
+    //         vec![
+    //             58.0, 64.0,
+    //             139.0, 154.0,
+
+    //             22.0, 28.0,
+    //             49.0, 64.0,
+    //         ],
+    //         vec![2, 2, 2]
+    //     ).unwrap();
+        
+    //     assert_eq!(result, expected);
+    // }
+
+    #[test]
+    fn test_multibatch_non_contiguous_matmul() {
+        let a = Tensor::<f32>::from_buf(
+            vec![
+                1.0, 2.0, 3.0,
+                4.0, 5.0, 6.0,
+
+                11.0, 12.0, 13.0,
+                14.0, 15.0, 16.0,
+
+                21.0, 22.0, 23.0,
+                24.0, 25.0, 26.0,
+
+                11.0, 12.0, 13.0,
+                14.0, 15.0, 16.0,
+
+
+                1.0, 2.0, 3.0,
+                4.0, 5.0, 6.0,
+
+                11.0, 12.0, 13.0,
+                14.0, 15.0, 16.0,
+            ],
+            vec![3, 2, 2, 3]
+        ).unwrap();
+
+        let b = Tensor::<f32>::from_buf(
+            vec![
+                7.0, 8.0,
+                9.0, 10.0,
+                11.0, 12.0,
+
+                17.0, 18.0,
+                19.0, 20.0,
+                21.0, 22.0,
+
+                7.0, 8.0,
+                9.0, 10.0,
+                11.0, 12.0,
+
+                17.0, 18.0,
+                19.0, 20.0,
+                21.0, 22.0,
+
+                7.0, 8.0,
+                9.0, 10.0,
+                11.0, 12.0,
+
+                17.0, 18.0,
+                19.0, 20.0,
+                21.0, 22.0,
+            ],
+            vec![3, 2, 3, 2]
+        ).unwrap();
+
+        let aslice = a.slice(0, Slice::full().step(2)).unwrap();
+        let bslice = b.slice(0, Slice::full().step(2)).unwrap();
+
+        assert_eq!(*aslice.shape(), vec![2, 2, 2, 3]);
+        assert_eq!(*bslice.shape(), vec![2, 2, 3, 2]);
+        
+        let result = aslice.matmul(&bslice).unwrap();
+        
+        assert_eq!(*result.shape(), vec![2, 2, 2, 2]);
+        let expected = Tensor::<f32>::from_buf(
+            vec![
+                58.0, 64.0,
+                139.0, 154.0,
+
+                688.0, 724.0,
+                859.0, 904.0,
+
+                58.0, 64.0,
+                139.0, 154.0,
+
+                688.0, 724.0,
+                859.0, 904.0,
+            ],
+            vec![2, 2, 2, 2]
+        ).unwrap();
+        
+        assert_eq!(result, expected);
+    }
+
 }
 
 #[cfg(all(test, feature = "cuda"))]

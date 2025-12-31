@@ -1,15 +1,17 @@
 
 
-use crate::core::{tensor::TensorError, MetaTensor};
+use crate::core::{tensor::TensorError, MetaTensor, Shape, Strides};
 pub mod add;
 pub mod sub;
 pub mod mul;
 
+/// Computes the broadcasted shape and strides for two tensors.
+/// Returns a tuple of (broadcasted_shape, lhs_strides, rhs_strides).
 #[inline]
 pub(crate) fn compute_broadcasted_params(
     a: &MetaTensor,
     b: &MetaTensor,
-) -> Result<(Vec<usize>, Vec<isize>, Vec<isize>), TensorError>{
+) -> Result<(Shape, Strides, Strides), TensorError>{
     let mut sa: Vec<usize> = a.shape().clone().into();
     let mut sb: Vec<usize> = b.shape().clone().into();
     let mut stra: Vec<isize> = a.strides().clone().into();
@@ -47,5 +49,5 @@ pub(crate) fn compute_broadcasted_params(
         out_strb.push(if b == 1 && out > 1 { 0 } else { strb[i] });
     }
 
-    Ok((out_shape, out_stra, out_strb))
+    Ok((out_shape.into(), out_stra.into(), out_strb.into()))
 }
