@@ -123,6 +123,7 @@ void launch_tanh_strided_f64(double* data, size_t offset, ptrdiff_t stride, size
 void launch_tanh_nd_affine_f32(float* data, size_t offset, const ptrdiff_t* stride, const size_t* shape, size_t rank, size_t size, unsigned int block_size);
 void launch_tanh_nd_affine_f64(double* data, size_t offset, const ptrdiff_t* stride, const size_t* shape, size_t rank, size_t size, unsigned int block_size);
 
+void launch_flat_contiguous_reduce_sum_double(double *data, double *out, size_t start, size_t len, unsigned int block_size);
 
 // void launch_elementwise_scattered_f32(float* data, const size_t* offsets, size_t n, uint8_t op, float value, unsigned int block_size);
 // void launch_elementwise_scattered_f64(double* data, const size_t* offsets, size_t n, uint8_t op, double value, unsigned int block_size);

@@ -212,7 +212,7 @@ DECLARE_UNARY_LAUNCHERS(tanh, TanhOp, double, f64)
 
 
 
-extern "C" void launch_test_summy(double *data, size_t start, size_t len, unsigned int block_size)
-{
-    // launch_test_sum_op(data, start, len, block_size);
-}
+// extern "C" void launch_test_summy(double *data, size_t start, size_t len, unsigned int block_size)
+// {
+//     // launch_test_sum_op(data, start, len, block_size);
+// }

@@ -990,39 +990,10 @@ impl Backend for Cuda {
 
         // Dispatch based on type - only signed types support negation
         match std::any::TypeId::of::<T>() {
-            // id if id == std::any::TypeId::of::<f32>() => launch_negate!(launch_tanh_contiguous_f32, f32),
-            id if id == std::any::TypeId::of::<f64>() => launch_negate!(launch_test_summy, f64),
+            id if id == std::any::TypeId::of::<f32>() => launch_negate!(launch_tanh_contiguous_f32, f32),
+            id if id == std::any::TypeId::of::<f64>() => launch_negate!(launch_tanh_contiguous_f64, f64),
             _ => Err(TensorError::CudaError("Unsupported type for CUDA negation operation".to_string())),
         }
-
-        //  let stream = self.stream();
-
-
-        // macro_rules! launch_negate {
-        //     ($launch_fn:ident, $t:ty) => {{
-        //         let (raw_ptr, _) = buf.ptr.device_ptr(&stream);
-        //         let data_ptr = raw_ptr as *mut $t;
-
-        //         unsafe {
-        //             $launch_fn(
-        //                 data_ptr as *mut $t,
-        //                 start,
-        //                 len,
-        //                 DEFAULT_BLOCK_SIZE,
-        //             );
-        //         }
-        //         self.dirty();
-        //         Ok(())
-        //     }};
-        // }
-        
-
-        // // Dispatch based on type - only signed types support negation
-        // match std::any::TypeId::of::<T>() {
-        //     id if id == std::any::TypeId::of::<f32>() => launch_negate!(launch_tanh_contiguous_f32, f32),
-        //     id if id == std::any::TypeId::of::<f64>() => launch_negate!(launch_tanh_contiguous_f64, f64),
-        //     _ => Err(TensorError::CudaError("Unsupported type for CUDA negation operation".to_string())),
-        // }
     }
     
     fn apply_tanh_1d_strided<T: TensorValue + Exp>(
@@ -1125,6 +1096,69 @@ impl Backend for Cuda {
     // impl_cpu_unary! { sigmoid, _temp }
 }
 
+
+impl Cuda {
+    pub fn _test_apply_sum_flat_contiguous<T: TensorValue>(
+        backend: &Cuda,
+        buf: &mut <Cuda as Backend>::Buf<T>,
+        out: &mut <Cuda as Backend>::Buf<T>,
+        start: usize,   
+        len: usize
+    ) {
+        apply_sum_flat_contiguous(backend, buf, out, start, len);
+    }
+}
+
+fn apply_sum_flat_contiguous<T: TensorValue>(
+    backend: &Cuda,
+    buf: &mut <Cuda as Backend>::Buf<T>,
+    out: &mut <Cuda as Backend>::Buf<T>,
+    start: usize,   
+    len: usize
+) {
+    // fn apply_tanh_contiguous<T: TensorValue + Exp>(
+    //     &self, buf: &mut Self::Buf<T>, 
+    //     start: usize,
+    //     len: usize
+    // ) -> Result<(), TensorError> {
+    //     let stream = self.stream();
+
+    let stream = backend.stream();
+
+        macro_rules! launch_negate {
+            ($launch_fn:ident, $t:ty) => {{
+                let (raw_ptr, _) = buf.ptr.device_ptr(&stream);
+                let data_ptr = raw_ptr as *mut $t;
+
+                let (raw_output_ptr, _) = out.ptr.device_ptr(&stream);
+                let out_ptr = raw_output_ptr as *mut $t;
+
+                unsafe {
+                    $launch_fn(
+                        data_ptr as *mut $t,
+                        out_ptr as *mut $t,
+                        start,
+                        len,
+                        DEFAULT_BLOCK_SIZE,
+                    );
+                }
+                backend.dirty();
+                Ok(())
+            }};
+        }
+        
+
+        // Dispatch based on type - only signed types support negation
+        match std::any::TypeId::of::<T>() {
+            // id if id == std::any::TypeId::of::<f32>() => launch_negate!(launch_tanh_contiguous_f32, f32),
+            id if id == std::any::TypeId::of::<f64>() => launch_negate!(launch_flat_contiguous_reduce_sum_double, f64),
+            _ => Err(TensorError::CudaError("Unsupported type for CUDA negation operation".to_string())),
+        };
+
+        println!("DONE");
+
+    // }
+}
 
 pub fn _temp<T: TensorValue>(x: &mut T) -> T {
     *x
@@ -1321,7 +1355,7 @@ generic_matmul_impl!(types::boolean, launch_matmul_boolean, bool);
 
 #[cfg(test)]
 mod tests {
-    use crate::{backend::cuda::Cuda, core::{primitives::CudaTensor, tensor::AsTensor}, ops::unary::{InplaceUnaryOp, Tanh}};
+    use crate::{backend::cuda::Cuda, core::{MetaTensorView, primitives::CudaTensor, tensor::AsTensor}, ops::unary::{InplaceUnaryOp, Tanh}};
 
 
 
@@ -1329,6 +1363,18 @@ mod tests {
     pub fn test_reductio() {
         let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> = CudaTensor::<f64>::from_buf(vec![0.2, 0.3, 0.1, 0.3, 0.3, -0.1, -0.3, 0.3], (4, 2)).unwrap();
         println!("CUDA: {:?}", cuda.owned().cpu().unwrap());
-        cuda.tanh_inplace();
+        // cuda.tanh_inplace();
+
+        let start = cuda.offset();
+        let size = cuda.size();
+
+        let sus = cuda.backend;
+
+        let mut out = CudaTensor::<f64>::from_buf(vec![0.0], (1,)).unwrap();
+        
+        Cuda::_test_apply_sum_flat_contiguous(&sus, &mut cuda.buf, &mut out.buf, start, size);
+
+
+        println!("OUT: {:?}", out.cpu());
     }
 }
