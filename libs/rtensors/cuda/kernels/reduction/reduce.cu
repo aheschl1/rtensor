@@ -14,7 +14,6 @@ struct SumOp
     }
 };
 
-
 /// @brief Designed to run a reduction operation on a contiguous array where we would like to reduce
 /// everything to a single element.
 /// @tparam T the datatype to use
@@ -29,13 +28,12 @@ struct SumOp
 template <typename T, typename Op>
 void launch_flat_contiguous_reduce(
     T *data,
-    T* d_out,
+    T *d_out,
     size_t start,
     size_t num_items,
     unsigned int block_size,
     Op op,
-    T init
-)
+    T init)
 {
     // Declare, allocate, and initialize device-accessible pointers for
     // input and output
@@ -56,11 +54,79 @@ void launch_flat_contiguous_reduce(
         d_temp_storage, temp_storage_bytes,
         d_in, d_out, num_items, op, init);
 
-
     // Free the temporary storage allocation.
     cudaFree(&d_temp_storage);
 }
 
+template <typename T, typename Op>
+__global__ void sum_axis_contig_kernel(
+    const T* __restrict__ in,
+    T* __restrict__ out,
+    size_t offset,
+    size_t outer,
+    size_t R,
+    size_t inner,
+    Op op,
+    T init
+) {
+    size_t out_linear = (size_t)blockIdx.x;
+    size_t out_elems  = outer * inner;
+    if (out_linear >= out_elems) return;
+
+    // Map linear output index -> (o, i)
+    size_t o = out_linear / inner;
+    size_t i = out_linear - o * inner;
+
+    // Base pointer for this output element: in[o, 0, i]
+    const T* base = in + offset + o * (R * inner) + i;
+
+    // Each thread accumulates a partial sum over k = threadIdx.x, threadIdx.x+blockDim.x, ...
+    T thread_sum = init;
+    for (size_t k = threadIdx.x; k < R; k += (size_t)blockDim.x) {
+        thread_sum = op(thread_sum, base[k * inner]);
+    }
+
+    // Reduce thread_sum across the block (simple shared-memory reduction)
+    __shared__ T smem[256]; // assumes blockDim.x <= 256; adjust if you want bigger
+    smem[threadIdx.x] = thread_sum;
+    __syncthreads();
+
+    // power-of-two reduction
+    for (unsigned s = blockDim.x / 2; s > 0; s >>= 1) {
+        if(threadIdx.x < s) {
+            smem[threadIdx.x] = op(smem[threadIdx.x], smem[threadIdx.x + s]);
+        }
+        __syncthreads();
+    }
+
+    if (threadIdx.x == 0) {
+        out[out_linear] = (T)smem[0];
+    }
+}
+
+template <typename T>
+void sum_axis_strided_fast_launch(
+    const T *d_in,
+    T *d_out,
+    size_t offset,
+    size_t outer,
+    size_t r,
+    size_t inner,
+    unsigned int blocksize
+)
+{
+    size_t out_elems = outer * inner;
+    if(out_elems == 0) {
+        // This is the fast path.
+        return;
+    }
+
+    int block = blocksize;
+
+    dim3 grid((unsigned) out_elems);
+
+    sum_axis_contig_kernel<T, SumOp><<<grid, block>>>(d_in, d_out, offset, outer, r, inner, SumOp {}, (T) 0);
+}
 
 template <typename T>
 void launch_test_sum_op(
@@ -70,9 +136,9 @@ void launch_test_sum_op(
     unsigned int block_size)
 {
 
-    T* output;
+    T *output;
     cudaMalloc(&output, sizeof(T));
-    launch_flat_contiguous_reduce<T, SumOp>(data, output, start, len, block_size, SumOp {}, (T) 0);
+    launch_flat_contiguous_reduce<T, SumOp>(data, output, start, len, block_size, SumOp{}, (T)0);
     T h0;
     cudaMemcpy(&h0, output, sizeof(T), cudaMemcpyDeviceToHost);
     printf("first element = %g\n", (double)h0); // cast for safe printf
@@ -124,10 +190,21 @@ void launch_test_sum_op(
 //         launch_tanh_contiguous_op<TYPE>(data, start, len, block_size); \
 //     }
 
-
 extern "C" void launch_flat_contiguous_reduce_sum_double(double *data, double *out, size_t start, size_t len, unsigned int block_size)
 {
-    launch_flat_contiguous_reduce<double, SumOp>(data, out, start, len, block_size, SumOp {}, (double) 0);
+    launch_flat_contiguous_reduce<double, SumOp>(data, out, start, len, block_size, SumOp{}, (double)0);
+}
+
+extern "C" void launch_nd_sum_double(double *data, double *out, size_t offset, size_t outer, size_t r, size_t inner, unsigned int blocksize)
+{
+    sum_axis_strided_fast_launch<double>(
+        data,
+        out,
+        offset,
+        outer,
+        r,
+        inner,
+    blocksize);
 }
 
 extern "C" void launch_test_summy(double *data, size_t start, size_t len, unsigned int block_size)

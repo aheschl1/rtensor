@@ -205,6 +205,34 @@ impl MetaTensor {
     pub fn byte_strides(&self, item_size: usize) -> Vec<isize> {
         self.strides.iter().map(|s| s * item_size as isize).collect()
     }
+
+    pub fn inner_dimensions(&self, dim: usize) -> usize {
+        let mut count = 1;
+        for i in 0..self.shape().len() {
+            if i <= dim {
+                continue;
+            }
+            count *= self.shape.as_slice()[i];
+        }
+        count.max(1)
+    }
+
+    pub fn outer_dimensions(&self, dim: usize) -> usize {
+        if dim == 0 {
+            return 1;
+        }
+        let mut count = 1;
+        for i in 0..self.shape().len() {
+        
+            count *= self.shape.as_slice()[i];
+            if i == dim - 1 {
+                break;
+            }
+            
+        }
+        count
+
+    }
     
     /// Return the starting offset (in elements) into the underlying buffer.
     pub fn offset(&self) -> usize { self.offset }
