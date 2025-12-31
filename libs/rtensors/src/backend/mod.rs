@@ -1,4 +1,4 @@
-use crate::{core::{meta::ContiguityTypes, primops::{Exp, InvExp}, tensor::TensorError, value::TensorValue, MetaTensor, MetaTensorView}, ops::{base::BinaryOpType, reduction::ReductionOpTypes}};
+use crate::{core::{meta::ContiguityTypes, primops::{Exp, InvExp}, tensor::TensorError, value::TensorValue, Dim, MetaTensor, MetaTensorView}, ops::{base::BinaryOpType, reduction::ReductionOpTypes}};
 
 pub mod cpu;
 
