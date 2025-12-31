@@ -1,6 +1,6 @@
 
 
-use crate::{core::{meta::ContiguityTypes, primops::{Exp, InvExp}, tensor::TensorError, value::TensorValue, MetaTensor, MetaTensorView}, ops::base::BinaryOpType};
+use crate::{core::{meta::ContiguityTypes, primops::{Exp, InvExp}, tensor::TensorError, value::TensorValue, MetaTensor, MetaTensorView}, ops::{base::BinaryOpType, reduction::ReductionOpTypes}};
 
 pub mod cpu;
 
@@ -209,6 +209,10 @@ pub trait Backend: Send + Sync + 'static + Clone {
     specify_trait_unary_cabal!{relu}
     specify_trait_unary_cabal!{sigmoid where T: InvExp}
     specify_trait_unary_cabal!{tanh where T: Exp + InvExp}
+
+    fn apply_reduce<T: TensorValue>(&self, src: &Self::Buf<T>, dst: &Self::Buf<T>, op: ReductionOpTypes) -> Result<(), TensorError>{
+        todo!()
+    }
 }
 
 pub trait BackendMatMul<T: TensorValue>: Backend {
