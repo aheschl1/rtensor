@@ -1360,6 +1360,16 @@ impl Backend for Cuda {
         todo!()
     }
     
+    fn apply_reduce_contiguous_nd<T: TensorValue>(
+        &self, 
+        src: (&Self::Buf<T>, &MetaTensor), 
+        dst: (&mut Self::Buf<T>, &MetaTensor), 
+        dim: crate::core::Dim,
+        op: crate::ops::reduction::ReductionOpTypes
+    ) -> Result<(), TensorError> {
+        todo!()
+    }
+    
     // impl_cpu_unary!{ relu, _temp }
     // impl_cpu_unary! { neg, _temp }
     // impl_cpu_unary! { sigmoid, _temp }
