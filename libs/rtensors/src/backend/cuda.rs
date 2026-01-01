@@ -8,7 +8,7 @@ use cudarc::{
     driver::{CudaContext, CudaSlice, DevicePtr},
 };
 
-use crate::backend::ContiguityTypes;
+use crate::{backend::ContiguityTypes, ops::reduction::ReductionOpTypes};
 use crate::{
     backend::{cpu::Cpu, Backend, BackendMatMul},
     core::{
@@ -1357,7 +1357,7 @@ impl Backend for Cuda {
         len: usize, 
         op: crate::ops::reduction::ReductionOpTypes
     ) -> Result<(), TensorError> {
-        todo!()
+        apply_reduction_contiguous_single_elem(self, src, dst, start, len, op)
     }
     
     fn apply_reduce_contiguous_nd<T: TensorValue>(
@@ -1367,32 +1367,44 @@ impl Backend for Cuda {
         dim: crate::core::Dim,
         op: crate::ops::reduction::ReductionOpTypes
     ) -> Result<(), TensorError> {
-        todo!()
+        apply_nd_reduction_contiguous(self, src, dst, dim, op)
     }
     
+
+    fn apply_reduce_total<T: TensorValue>(
+            &self, 
+            src: (&Self::Buf<T>, &MetaTensor), 
+            mut dst: (&mut Self::Buf<T>, &MetaTensor), 
+            dim: crate::core::Dim,
+            op: crate::ops::reduction::ReductionOpTypes
+        ) -> Result<(), TensorError> {
+        apply_reduction_contiguous_single_elem(self, &src.0, &mut dst.0, src.1.offset(), src.1.size(), op)
+    }
+
     // impl_cpu_unary!{ relu, _temp }
     // impl_cpu_unary! { neg, _temp }
     // impl_cpu_unary! { sigmoid, _temp }
 }
 
-impl Cuda {
-    pub fn _test_apply_sum_flat_contiguous<T: TensorValue>(
-        backend: &Cuda,
-        buf: &mut <Cuda as Backend>::Buf<T>,
-        out: &mut <Cuda as Backend>::Buf<T>,
-        start: usize,
-        len: usize,
-    ) {
-        apply_sum_flat_contiguous(backend, buf, out, start, len);
-    }
-}
+// impl Cuda {
+//     pub fn _test_apply_sum_flat_contiguous<T: TensorValue>(
+//         backend: &Cuda,
+//         buf: &mut <Cuda as Backend>::Buf<T>,
+//         out: &mut <Cuda as Backend>::Buf<T>,
+//         start: usize,
+//         len: usize,
+//     ) {
+//         apply_reduction_contiguous_single_elem(backend, buf, out, start, len);
+//     }
+// }
 
-fn apply_sum_flat_contiguous<T: TensorValue>(
+fn apply_reduction_contiguous_single_elem<T: TensorValue>(
     backend: &Cuda,
-    buf: &mut <Cuda as Backend>::Buf<T>,
+    buf: &<Cuda as Backend>::Buf<T>,
     out: &mut <Cuda as Backend>::Buf<T>,
     start: usize,
     len: usize,
+    op: ReductionOpTypes
 ) -> Result<(), TensorError> {
     let stream = backend.stream();
 
@@ -1410,6 +1422,7 @@ fn apply_sum_flat_contiguous<T: TensorValue>(
                     out_ptr as *mut $t,
                     start,
                     len,
+                    op as u8,
                     DEFAULT_BLOCK_SIZE,
                 );
             }
@@ -1422,7 +1435,7 @@ fn apply_sum_flat_contiguous<T: TensorValue>(
     match std::any::TypeId::of::<T>() {
         // id if id == std::any::TypeId::of::<f32>() => launch_negate!(launch_tanh_contiguous_f32, f32),
         id if id == std::any::TypeId::of::<f64>() => {
-            launch_negate!(launch_flat_contiguous_reduce_sum_double, f64)
+            launch_negate!(launch_flat_contiguous_reduce_f64, f64)
         }
         _ => Err(TensorError::CudaError(
             "Unsupported type for CUDA negation operation".to_string(),
@@ -1433,11 +1446,12 @@ fn apply_sum_flat_contiguous<T: TensorValue>(
 
 
 /// This assumes a  contiguous tensor.
-fn _apply_sum_contiguous<T: TensorValue>(
+fn apply_nd_reduction_contiguous<T: TensorValue>(
     backend: &Cuda,
-    (in_d, in_d_meta): (&mut <Cuda as Backend>::Buf<T>, MetaTensor),
-    (out_d, _): (&mut <Cuda as Backend>::Buf<T>, MetaTensor),
-    axis: usize
+    (in_d, in_d_meta): (&<Cuda as Backend>::Buf<T>, &MetaTensor),
+    (out_d, _): (&mut <Cuda as Backend>::Buf<T>, &MetaTensor),
+    axis: usize,
+    code: ReductionOpTypes
 ) -> Result<(), TensorError> {
 
 
@@ -1474,6 +1488,7 @@ fn _apply_sum_contiguous<T: TensorValue>(
                     inner,
                     red_len,
                     outer,
+                    code as u8,
                     DEFAULT_BLOCK_SIZE
                 );
             }
@@ -1486,7 +1501,7 @@ fn _apply_sum_contiguous<T: TensorValue>(
     match std::any::TypeId::of::<T>() {
         // id if id == std::any::TypeId::of::<f32>() => launch_negate!(launch_tanh_contiguous_f32, f32),
         id if id == std::any::TypeId::of::<f64>() => {
-            launch_negate!(launch_nd_sum_double, f64)
+            launch_negate!(launch_nd_reduce_contiguous_f64, f64)
         }
         _ => Err(TensorError::CudaError(
             "Unsupported type for CUDA negation operation".to_string(),
@@ -1690,30 +1705,117 @@ generic_matmul_impl!(types::boolean, launch_matmul_boolean, bool);
 
 #[cfg(test)]
 mod tests {
+    use std::error::Error;
+
     use crate::{
-        backend::cuda::{_apply_sum_contiguous, Cuda},
-        core::{MetaTensorView, primitives::CudaTensor, tensor::AsTensor},
-        ops::unary::{InplaceUnaryOp, Tanh},
+        backend::cuda::{apply_nd_reduction_contiguous, Cuda},
+        core::{MetaTensorView, Tensor, idx::Idx, primitives::CudaTensor, tensor::{AsTensor, TensorAccess}},
+        ops::{reduction::{ReductionOp, TotalReductionOp}, unary::{InplaceUnaryOp, Tanh}},
     };
 
     #[test]
-    pub fn test_reductio() {
+    pub fn test_reduce_total_sum_case1() {
         let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
             CudaTensor::<f64>::from_buf(vec![0.2, 0.3, 0.1, 0.3, 0.3, -0.1, -0.3, 0.3], (4, 2))
                 .unwrap();
-        println!("CUDA: {:?}", cuda.owned().cpu().unwrap());
-        // cuda.tanh_inplace();
+        assert_eq!(cuda.total_sum().unwrap().item().unwrap(), 1.1);
+    }
 
-        let start = cuda.offset();
-        let size = cuda.size();
+    #[test]
+    pub fn test_reduce_total_max_case1() {
+         let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
+            CudaTensor::<f64>::from_buf(vec![0.2, 0.3, 0.1, 0.3, 0.3, -0.1, -0.3, 0.3], (4, 2))
+                .unwrap();
+        assert_eq!(cuda.max(&Idx::Item).unwrap().item().unwrap(), 0.3);
+    }
 
-        let sus = cuda.backend;
+     #[test]
+    pub fn test_reduce_total_min_case1() {
+         let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
+            CudaTensor::<f64>::from_buf(vec![0.2, 0.3, 0.1, -0.9, 0.3, -0.1, -0.3, 0.3], (4, 2))
+                .unwrap();
+        assert_eq!(cuda.min(&Idx::Item).unwrap().item().unwrap(), -0.9);
+    }
 
-        let mut out = CudaTensor::<f64>::from_buf(vec![0.0], (1,)).unwrap();
 
-        Cuda::_test_apply_sum_flat_contiguous(&sus, &mut cuda.buf, &mut out.buf, start, size);
+    #[test]
+    pub fn test_reduce_total_prod_case1() {
+         let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
+            CudaTensor::<f64>::from_buf(vec![1., 2., 3., 4., 5., 6., 7., 8.], (4, 2))
+                .unwrap();
+        assert_eq!(cuda.prod(&Idx::Item).unwrap().item().unwrap(), 40320.);
+    }
 
-        println!("OUT: {:?}", out.cpu());
+    #[test]
+    pub fn test_reduce_total_mean_case1() {
+         let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
+            CudaTensor::<f64>::from_buf(vec![1., 2., 3., 4., 5., 6., 7., 8.], (4, 2))
+                .unwrap();
+        assert_eq!(cuda.mean(&Idx::Item).unwrap().item().unwrap(), 4.5);
+    }
+
+    #[test]
+    pub fn test_reduce_sum_case1() -> Result<(), Box<dyn Error>> {
+        let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
+            CudaTensor::<f64>::from_buf(vec![1., 0., 1., 0., 1., 1., 1., 0.], (4, 2))
+                .unwrap();
+        assert_eq!(cuda.sum(&Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![2., 3.], (1, 2))?.cpu()?);
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_reduce_max_case1() -> Result<(), Box<dyn Error>> {
+        let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
+            CudaTensor::<f64>::from_buf(vec![3., 5., 6., 8., 1., 2., -1., 4.], (4, 2))
+                .unwrap();
+        assert_eq!(cuda.max(&Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![8., 4.], (1, 2))?.cpu()?);
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_reduce_min_case1() -> Result<(), Box<dyn Error>> {
+        let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
+            CudaTensor::<f64>::from_buf(vec![3., 5., 6., 8., 1., 2., -1., 4.], (4, 2))
+                .unwrap();
+        assert_eq!(cuda.min(&Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![3., -1.], (1, 2))?.cpu()?);
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_reduce_prod_case1() -> Result<(), Box<dyn Error>> {
+        let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
+            CudaTensor::<f64>::from_buf(vec![3., 5., 6., 8., 1., 2., -1., 4.], (4, 2))
+                .unwrap();
+        assert_eq!(cuda.prod(&Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![720., -8.], (1, 2))?.cpu()?);
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_reduce_mean_case1() -> Result<(), Box<dyn Error>> {
+        let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
+            CudaTensor::<f64>::from_buf(vec![1.,  2., 3., 4., 5., 6., 7., 8.], (4, 2))
+                .unwrap();
+        assert_eq!(cuda.mean(&Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![2.5, 6.5], (1, 2))?.cpu()?);
+        Ok(())
+    }
+
+
+    #[test]
+    pub fn test_reduce_mean_case2() -> Result<(), Box<dyn Error>> {
+        let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
+            CudaTensor::<f64>::from_buf(vec![1.,  2., 3., 4., 5., 6., 7., 8.], (4, 2))
+                .unwrap();
+        assert_eq!(cuda.mean(&Idx::At(1))?.cpu()?, CudaTensor::from_buf(vec![3.0, 4.0, 5.0, 6.0], (4, 1))?.cpu()?);
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_reduce_softmax_case1() -> Result<(), Box<dyn Error>> {
+        let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
+            CudaTensor::<f64>::from_buf(vec![1.,  2., 3., 4., 5., 6., 7., 8.], (4, 2))
+                .unwrap();
+        assert_eq!(cuda.mean(&Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![2.5, 6.5], (1, 2))?.cpu()?);
+        Ok(())
     }
 
     #[test]
@@ -1725,18 +1827,21 @@ mod tests {
 
         println!("Original: {:?}", cuda.cpu());
 
-        let mut out: crate::core::primitives::TensorBase<f64, Cuda> = CudaTensor::from_buf(vec![0.0f64, 0.0f64], (2,))
-            .unwrap();
+        let result = cuda.sum(&Idx::At(1));
+        println!("Result: {:?}", result.unwrap().cpu());
+
+        // let mut out: crate::core::primitives::TensorBase<f64, Cuda> = CudaTensor::from_buf(vec![0.0f64, 0.0f64], (2,))
+        //     .unwrap();
 
 
-        let in_tensor = (&mut cuda.buf, cuda.meta.clone());
-        let out_tensor = (&mut out.buf, out.meta.clone());
+        // let in_tensor = (&mut cuda.buf, cuda.meta.clone());
+        // let out_tensor = (&mut out.buf, out.meta.clone());
 
-        _apply_sum_contiguous(&cuda.backend, in_tensor,  out_tensor, 1)
-            .unwrap();
+        // _apply_sum_contiguous(&cuda.backend, in_tensor,  out_tensor, 1)
+        //     .unwrap();
         
 
-        println!("Output: {:?}", out.cpu());
+        // println!("Output: {:?}", out.cpu());
 
         // println!("CUDA: {:?}", cuda.owned().cpu().unwrap());
         // // cuda.tanh_inplace();
