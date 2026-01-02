@@ -320,15 +320,29 @@ impl Backend for Cpu {
         todo!()
     }
 
-    // fn apply_reduce_total<T: TensorValue>(
-    //         &self, 
-    //         src: (&Self::Buf<T>, &MetaTensor), 
-    //         dst: (&mut Self::Buf<T>, &MetaTensor), 
-    //         dim: crate::core::Dim,
-    //         op: crate::ops::reduction::ReductionOpTypes
-    //     ) -> Result<(), TensorError> {
-    //     todo!()
-    // }
+    fn apply_reduce_total<T: TensorValue>(
+            &self, 
+            src: (&Self::Buf<T>, &MetaTensor), 
+            dst: (&mut Self::Buf<T>, &MetaTensor), 
+            dim: crate::core::Dim,
+            op: crate::ops::reduction::ReductionOpTypes
+        ) -> Result<(), TensorError> {
+        todo!()
+    }
+
+ 
+
+    fn apply_abs_1d_strided<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,stride:isize,len:usize) -> Result<(),TensorError> {
+        todo!()
+    }
+
+    fn apply_abs_contiguous<T:TensorValue>(&self,buf: &mut Self::Buf<T>,start:usize,len:usize) -> Result<(),TensorError> {
+        todo!()
+    }
+
+    fn apply_abs_nd<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,shape: &[usize],stride: &[isize],) -> Result<(),TensorError> {
+        todo!()
+    }
 
 }
 
