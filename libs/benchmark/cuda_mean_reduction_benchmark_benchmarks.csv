@@ -1,0 +1,4 @@
+benchmark_name,rtensors_time_us,pytorch_time_us,speedup
+MeanReduction_100x100,5805,17193,2.9614
+MeanReduction_500x500,1392,117,0.0847
+MeanReduction_1000x1000,4243,121,0.0286

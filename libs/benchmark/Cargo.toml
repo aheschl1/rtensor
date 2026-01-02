@@ -1,0 +1,12 @@
+[package]
+name = "benchmark"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = []
+cuda = ["rtensors/cuda"]
+
+[dependencies]
+pyo3 = { version = "0.27.2", features = ["auto-initialize"] }
+rtensors = {path="../rtensors"}

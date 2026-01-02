@@ -110,3 +110,9 @@ impl From<(usize, usize, usize, usize, usize, usize)> for Idx {
     }
 }
 
+impl From<()> for Idx {
+    fn from(_: ()) -> Self {
+        Idx::Item
+    }
+}
+

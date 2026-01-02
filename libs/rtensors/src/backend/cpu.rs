@@ -1,6 +1,6 @@
 
 
-use crate::{backend::{Backend, BackendMatMul}, core::{meta::TensorOffsetIterator, primops::{Exp, InvExp}, tensor::TensorError, value::{types, TensorValue}, MetaTensor}, openblas::{blasint, cblas_dgemm, cblas_sgemm, CBLAS_ORDER, CBLAS_TRANSPOSE}, ops::base::BinaryOpType};
+use crate::{backend::{Backend, BackendMatMul}, core::{meta::TensorOffsetIterator, primops::{Exp, InvExp, SquareRoot}, tensor::TensorError, value::{types, TensorValue}, MetaTensor}, openblas::{blasint, cblas_dgemm, cblas_sgemm, CBLAS_ORDER, CBLAS_TRANSPOSE}, ops::base::BinaryOpType};
 use crate::backend::ContiguityTypes;
 use crate::core::value::TypeConstants;
 
@@ -292,12 +292,33 @@ impl Backend for Cpu {
         Ok(())
     }
     
-    
-
     impl_cpu_unary!{ neg, _negate where T: std::ops::Neg<Output = T> }
     impl_cpu_unary!{ relu, _relu }
     impl_cpu_unary!{ sigmoid, _sigmoid where T: InvExp}
     impl_cpu_unary!{ tanh, _tanh where T: Exp + InvExp }
+    impl_cpu_unary!{ abs, _abs }
+    impl_cpu_unary!{ sqrt, _sqrt where T: SquareRoot }
+    
+    fn apply_reduce_contiguous_flat<T: TensorValue>(
+        &self, 
+        src: &Self::Buf<T>, 
+        dst: &mut Self::Buf<T>, 
+        start: usize, 
+        len: usize, 
+        op: crate::ops::reduction::ReductionOpTypes
+    ) -> Result<(), TensorError> {
+        todo!()
+    }
+    
+    fn apply_reduce_contiguous_nd<T: TensorValue>(
+        &self, 
+        src: (&Self::Buf<T>, &MetaTensor), 
+        dst: (&mut Self::Buf<T>, &MetaTensor), 
+        dim: crate::core::Dim,
+        op: crate::ops::reduction::ReductionOpTypes
+    ) -> Result<(), TensorError> {
+        todo!()
+    }
 
 }
 
@@ -306,6 +327,16 @@ fn _tanh<T: TensorValue + InvExp + Exp>(x: &mut T) -> T {
     let a = x.apply_exp();
     let b = x.apply_invexp();
     (a - b) / (a + b)
+}
+
+#[inline]
+fn _abs<T: TensorValue>(x: &mut T) -> T {
+    x.absolute()
+}
+
+#[inline]
+fn _sqrt<T: TensorValue + SquareRoot>(x: &mut T) -> T {
+    x.apply_sqrt()
 }
 
 

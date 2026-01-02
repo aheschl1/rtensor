@@ -3,6 +3,7 @@ pub mod scalar;
 pub mod unary;
 pub mod broadcast;
 pub mod linalg;
+pub mod reduction;
 
 #[cfg(test)]
 mod tests {

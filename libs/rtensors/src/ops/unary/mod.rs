@@ -1,14 +1,18 @@
-use crate::{backend::Backend, core::{primitives::TensorBase, primops::{Exp, InvExp}, tensor::{AsTensor, AsViewMut}, value::TensorValue}};
+use crate::{backend::Backend, core::{primitives::TensorBase, primops::{Exp, InvExp, SquareRoot}, tensor::{AsTensor, AsViewMut}, value::TensorValue}};
 
 pub mod neg;
 pub mod relu;
 mod sigmoid;
 mod tanh;
+mod abs;
+mod sqrt;
 
 pub use neg::Negate;
 pub use relu::Relu;
 pub use sigmoid::Sigmoid;
 pub use tanh::Tanh;
+pub use abs::Abs;
+pub use sqrt::Sqrt;
 
 pub trait InplaceUnaryOp<T: TensorValue, B: Backend> {
     fn apply_relu(
@@ -25,6 +29,12 @@ pub trait InplaceUnaryOp<T: TensorValue, B: Backend> {
     )
     where 
         T: Exp + InvExp;
+    fn apply_sqrt(
+        &mut self
+    )
+    where 
+        T: SquareRoot;
+    fn apply_abs(&mut self);
 }
 
 pub trait UnaryOp<T: TensorValue, B: Backend> {
@@ -41,6 +51,7 @@ pub trait UnaryOp<T: TensorValue, B: Backend> {
     ) -> TensorBase<T, B>
     where 
         T: Exp + InvExp;
+    fn abs(&self) -> TensorBase<T, B>;
 }
 
 
@@ -67,6 +78,17 @@ impl<T: TensorValue, B: Backend, V: AsViewMut<T, B>> InplaceUnaryOp<T, B> for V 
         T: Exp + InvExp
     {
         self.tanh_inplace();
+    }
+    fn apply_abs(&mut self) {
+        self.abs_inplace();
+    }
+    
+    fn apply_sqrt(
+        &mut self
+    )
+    where 
+        T: SquareRoot {
+        self.sqrt_inplace();
     }
 }
 
@@ -101,41 +123,46 @@ impl<T: TensorValue, B: Backend, V: AsTensor<T, B>> UnaryOp<T, B> for V {
         result.apply_tanh();
         result
     }
+    fn abs(&self) -> TensorBase<T, B> {
+        let mut result = self.owned();
+        result.apply_abs();
+        result
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{backend::cpu::Cpu, ops::unary::{Negate, Relu, Sigmoid, Tanh}, testing::{unary_assert_1d_strided, unary_assert_contiguous, unary_assert_nd_strided}};
+    use crate::{backend::cpu::Cpu, ops::unary::{Negate, Relu, Sigmoid, Sqrt, Tanh}, testing::{unary_assert_1d_strided, unary_assert_contiguous, unary_assert_nd_strided}};
 
     #[test]
-    fn test_negate_contiguous() {
+    fn test_unary_negate_contiguous() {
         unary_assert_contiguous::<f64, _, _, Cpu>([1.0, 1.0], std::ops::Neg::neg, |f| f.neg_inplace());
         
        
     }
 
     #[test]
-    fn test_negate_1d_strided() {
+    fn test_unary_negate_1d_strided() {
         unary_assert_1d_strided::<f64, _, _, Cpu>([1.0, 1.0, 1.0], std::ops::Neg::neg, |f| f.neg_inplace());
     }
 
     #[test]
-    fn test_negate_nd_strided() {
+    fn test_unary_negate_nd_strided() {
          unary_assert_nd_strided::<f64, _, _, Cpu>([1.0; 16], std::ops::Neg::neg, |f| f.neg_inplace());
     }
 
      #[test]
-    fn test_relu_contiguous() {
+    fn test_unary_relu_contiguous() {
         unary_assert_contiguous::<f64, _, _, Cpu>([-1.0, 1.0], |f| f.max(0.0), Relu::relu_inplace);
     }
 
     #[test]
-    fn test_relu_1d_strided() {
+    fn test_unary_relu_1d_strided() {
         unary_assert_1d_strided::<f64, _, _, Cpu>([-1.0, 1.0, -1.0], |f| f.max(0.0), |f| f.relu_inplace());
     }
 
     #[test]
-    fn test_relu_nd_strided() {
+    fn test_unary_relu_nd_strided() {
          unary_assert_nd_strided::<f64, _, _, Cpu>([
             -1.0, 1.0, 0.0, 2.0,
             1.0, 2.3, -0.3, 0.4,
@@ -146,71 +173,105 @@ mod tests {
 
   
     #[test]
-    fn test_sigmoid_contiguous() {
+    fn test_unary_sigmoid_contiguous() {
         unary_assert_contiguous::<f64, _, _, Cpu>([1.0, 1.0], |f| 1. / (1. + (-f).exp()), |f| f.sigmoid_inplace());
     }
 
     #[test]
-    fn test_sigmoid_1d_strided() {
+    fn test_unary_sigmoid_1d_strided() {
         unary_assert_1d_strided::<f64, _, _, Cpu>([1.0, 1.0, 1.0], |f| 1. / (1. + (-f).exp()), |f| f.sigmoid_inplace());
     }
 
     #[test]
-    fn test_sigmoid_nd_strided() {
+    fn test_unary_sigmoid_nd_strided() {
         unary_assert_nd_strided::<f64, _, _, Cpu>([1.0; 16], |f| 1. / (1. + (-f).exp()), |f| f.sigmoid_inplace());
     }
 
 
     #[test]
-    fn test_tanh_contiguous() {
+    fn test_unary_tanh_contiguous() {
         unary_assert_contiguous::<f64, _, _, Cpu>([1.0, 1.0], |f| (f.exp() - (-f).exp()) / (f.exp() + (-f).exp()), |f| f.tanh_inplace());
     }
 
     #[test]
-    fn test_tanh_1d_strided() {
+    fn test_unary_tanh_1d_strided() {
         unary_assert_1d_strided::<f64, _, _, Cpu>([1.0, 1.0, 1.0], |f| (f.exp() - (-f).exp()) / (f.exp() + (-f).exp()), |f| f.tanh_inplace());
     }
 
     #[test]
-    fn test_tanh_nd_strided() {
+    fn test_unary_tanh_nd_strided() {
         unary_assert_nd_strided::<f64, _, _, Cpu>([1.0; 16], |f| (f.exp() - (-f).exp()) / (f.exp() + (-f).exp()), |f| f.tanh_inplace());
     }
+
+    #[test]
+    fn test_unary_sqrt_nd_strided() {
+        unary_assert_nd_strided::<f64, _, _, Cpu>([1.0; 16], |f| f.sqrt(), |f| f.sqrt_inplace());
+    }
+
+    #[test]
+    fn test_unary_sqrt_1d_strided() {
+        unary_assert_1d_strided::<f64, _, _, Cpu>([1.0, 1.0, 1.0], |f| f.sqrt(), |f| f.sqrt_inplace());
+    }
+
+    #[test]
+    fn test_unary_sqrt_contiguous() {
+        unary_assert_contiguous::<f64, _, _, Cpu>([1.0; 2], |f| f.sqrt(), |f| f.sqrt_inplace());
+    }
+
 }
 
 #[cfg(all(test, feature = "cuda"))]
 mod cuda_tests {
-    use crate::{backend::cuda::Cuda, core::{Tensor, primitives::{CudaTensor, TensorBase}, tensor::{AsTensor, TensorAccess, TensorAccessMut}}, ops::unary::{Negate, Relu, Sigmoid, Tanh}, testing::{test_with_contiguous_2_elem_tensor, unary_assert_1d_strided, unary_assert_contiguous, unary_assert_nd_strided}};
+    use crate::{backend::cuda::Cuda, core::{primitives::{CudaTensor, TensorBase}, tensor::{AsTensor, TensorAccess, TensorAccessMut}, Tensor}, ops::unary::{Abs, Negate, Relu, Sigmoid, Sqrt as _, Tanh}, testing::{test_with_contiguous_2_elem_tensor, unary_assert_1d_strided, unary_assert_contiguous, unary_assert_nd_strided}};
 
 
 
 
     #[test]
-    fn test_negate_continous_cuda() {
+    fn test_unary_negate_continous_cuda() {
         unary_assert_contiguous::<f64, _, _, Cuda>([1.0, 1.0], std::ops::Neg::neg, |f| f.neg_inplace());
     }
 
     #[test]
-    fn test_negate_1d_strided_cuda() {
+    fn test_unary_negate_1d_strided_cuda() {
         unary_assert_1d_strided::<f64, _, _, Cuda>([1.0, 1.0, 1.0], std::ops::Neg::neg, |f| f.neg_inplace());
     }
 
     #[test]
-    fn test_negate_nd_strided() {
+    fn test_unary_negate_nd_strided() {
         unary_assert_nd_strided::<f64, _, _, Cuda>([1.0; 16], std::ops::Neg::neg, |f| f.neg_inplace());
     }
 
+
+    
     #[test]
-    fn test_relu_contiguous_cuda() {
+    fn test_unary_abs_continous_cuda() {
+        unary_assert_contiguous::<f64, _, _, Cuda>([-1.0, 1.3], |f| f.abs(), |f| f.abs_inplace());
+    }
+
+    #[test]
+    fn test_unary_abs_1d_strided_cuda() {
+        unary_assert_1d_strided::<f64, _, _, Cuda>([1.0, -1.0, 3.0], |f| f.abs(), |f| f.abs_inplace());
+    }
+
+    #[test]
+    fn test_unary_abs_nd_strided() {
+        unary_assert_nd_strided::<f64, _, _, Cuda>([-1.0; 16], |f| f.abs(), |f| f.abs_inplace());
+    }
+
+
+    #[test]
+    fn test_unary_relu_contiguous_cuda() {
         unary_assert_contiguous::<f64, _, _, Cuda>([-1.0, 1.0], |f| f.max(0.0), Relu::relu_inplace);
     }
 
     #[test]
-    fn test_relu_1d_strided_cuda() {
+    fn test_unary_relu_1d_strided_cuda() {
         unary_assert_1d_strided::<f64, _, _, Cuda>([-1.0, 1.0, -1.0], |f| f.max(0.0), |f| f.relu_inplace());
     }
 
     #[test]
-    fn test_relu_nd_strided_cuda() {
+    fn test_unary_relu_nd_strided_cuda() {
          unary_assert_nd_strided::<f64, _, _, Cuda>([
             -1.0, 1.0, 0.0, 2.0,
             1.0, 2.3, -0.3, 0.4,
@@ -220,34 +281,65 @@ mod cuda_tests {
     }
 
     #[test]
-    fn test_sigmoid_contiguous_cuda() {
+    fn test_unary_sigmoid_contiguous_cuda() {
         unary_assert_contiguous::<f64, _, _, Cuda>([1.0, 1.0], |f| 1. / (1. + (-f).exp()), |f| f.sigmoid_inplace());
     }
 
     #[test]
-    fn test_sigmoid_1d_strided_cuda() {
+    fn test_unary_sigmoid_1d_strided_cuda() {
         unary_assert_1d_strided::<f64, _, _, Cuda>([1.0, 1.0, 1.0], |f| 1. / (1. + (-f).exp()), |f| f.sigmoid_inplace());
     }
 
     #[test]
-    fn test_sigmoid_nd_strided_cuda() {
+    fn test_unary_sigmoid_nd_strided_cuda() {
         unary_assert_nd_strided::<f64, _, _, Cuda>([1.0; 16], |f| 1. / (1. + (-f).exp()), |f| f.sigmoid_inplace());
     }
 
     #[test]
-    fn test_tanh_contiguous_cuda() {
+    fn test_unary_tanh_contiguous_cuda() {
         unary_assert_contiguous::<f64, _, _, Cuda>([1.0, 1.0], |f| (f.exp() - (-f).exp()) / (f.exp() + (-f).exp()), |f| f.tanh_inplace());
     }
 
     #[test]
-    fn test_tanh_1d_strided_cuda() {
+    fn test_unary_tanh_1d_strided_cuda() {
         unary_assert_1d_strided::<f64, _, _, Cuda>([1.0, 1.0, 1.0], |f| (f.exp() - (-f).exp()) / (f.exp() + (-f).exp()), |f| f.tanh_inplace());
     }
 
     #[test]
-    fn test_tanh_nd_strided_cuda() {
+    fn test_unary_tanh_nd_strided_cuda() {
         unary_assert_nd_strided::<f64, _, _, Cuda>([1.0; 16], |f| (f.exp() - (-f).exp()) / (f.exp() + (-f).exp()), |f| f.tanh_inplace());
     }
+
+    #[test]
+    fn test_unary_sqrt_nd_strided() {
+        unary_assert_nd_strided::<f64, _, _, Cuda>([1.0; 16], |f| f.sqrt(), |f| f.sqrt_inplace());
+    }
+
+    #[test]
+    fn test_unary_sqrt_1d_strided() {
+        unary_assert_1d_strided::<f64, _, _, Cuda>([1.0, 1.0, 1.0], |f| f.sqrt(), |f| f.sqrt_inplace());
+    }
+
+    #[test]
+    fn test_unary_sqrt_contiguous() {
+        unary_assert_contiguous::<f64, _, _, Cuda>([1.0; 2], |f| f.sqrt(), |f| f.sqrt_inplace());
+    }
+
+    #[test]
+    fn test_unary_sqrt_nd_strided_f32() {
+        unary_assert_nd_strided::<f32, _, _, Cuda>([1.0; 16], |f| f.sqrt(), |f| f.sqrt_inplace());
+    }
+
+    #[test]
+    fn test_unary_sqrt_1d_strided_f32() {
+        unary_assert_1d_strided::<f32, _, _, Cuda>([1.0, 1.0, 1.0], |f| f.sqrt(), |f| f.sqrt_inplace());
+    }
+
+    #[test]
+    fn test_unary_sqrt_contiguous_f32() {
+        unary_assert_contiguous::<f32, _, _, Cuda>([1.0; 2], |f| f.sqrt(), |f| f.sqrt_inplace());
+    }
+
 
 }
 

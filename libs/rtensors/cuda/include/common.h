@@ -9,6 +9,23 @@ enum OpCode : uint8_t {
     OP_MUL = 2,
 };
 
+struct ReductionSettings {
+    bool unbiased;
+    bool is_std;
+    int norm_type;
+};
+
+enum ReductionOpCode: uint8_t {
+    OP_SUM = 1,
+    OP_PROD = 2,
+    OP_MAX = 3,
+    OP_MIN = 4,
+    OP_MEAN = 5,
+    OP_VARIANCE = 6,
+    OP_LOGSUMEXP = 7,
+    OP_NORM = 8
+};
+
 // Contiguity types for matrix layouts
 enum ContiguityType : uint8_t {
     ROW_MAJOR = 0,

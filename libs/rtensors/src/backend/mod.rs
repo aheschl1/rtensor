@@ -1,6 +1,6 @@
+use std::ops::Neg;
 
-
-use crate::{core::{meta::ContiguityTypes, primops::{Exp, InvExp}, tensor::TensorError, value::TensorValue, MetaTensor, MetaTensorView}, ops::base::BinaryOpType};
+use crate::{core::{meta::ContiguityTypes, primops::{Exp, InvExp, SquareRoot}, tensor::TensorError, value::TensorValue, Dim, MetaTensor, MetaTensorView}, ops::{base::BinaryOpType, reduction::ReductionOpTypes}};
 
 pub mod cpu;
 
@@ -209,6 +209,62 @@ pub trait Backend: Send + Sync + 'static + Clone {
     specify_trait_unary_cabal!{relu}
     specify_trait_unary_cabal!{sigmoid where T: InvExp}
     specify_trait_unary_cabal!{tanh where T: Exp + InvExp}
+    specify_trait_unary_cabal!{abs}
+    specify_trait_unary_cabal!{sqrt where T: SquareRoot}
+
+    fn apply_reduce_contiguous_flat<T: TensorValue>(
+        &self, 
+        src: &Self::Buf<T>, 
+        dst: &mut Self::Buf<T>, 
+        start: usize, 
+        len: usize, 
+        op: ReductionOpTypes
+    ) -> Result<(), TensorError>;
+
+    fn apply_reduce_contiguous_nd<T: TensorValue>(
+        &self, 
+        src: (&Self::Buf<T>, &MetaTensor), 
+        dst: (&mut Self::Buf<T>, &MetaTensor), 
+        dim: Dim,
+        op: ReductionOpTypes
+    ) -> Result<(), TensorError>;
+
+    /// currently assuming that the tensor is contiguous
+    fn apply_reduce<T: TensorValue>(
+        &self, 
+        src: (&Self::Buf<T>, &MetaTensor), 
+        dst: (&mut Self::Buf<T>, &MetaTensor), 
+        dim: Dim,
+        op: ReductionOpTypes
+    ) -> Result<(), TensorError>{
+
+        let (src_buf, src_meta) = src;
+        let (dst_buf, dst_meta) = dst;
+
+        if !src_meta.is_contiguous(){
+            return Err(TensorError::WrongDims(
+                "Reduction over non-contiguous tensors is not implemented yet.".to_string(),
+            ));
+        }
+
+        if src_meta.rank() == 1 {
+            return self.apply_reduce_contiguous_flat(
+                src_buf,
+                dst_buf,
+                src_meta.offset,
+                src_meta.size(),
+                op
+            );
+        }else{
+            return self.apply_reduce_contiguous_nd(
+                (src_buf, src_meta),
+                (dst_buf, dst_meta),
+                dim,
+                op
+            );
+        }
+
+    }
 }
 
 pub trait BackendMatMul<T: TensorValue>: Backend {

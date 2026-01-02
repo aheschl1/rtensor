@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Debug, io::{Read, Write}, net::IpAddr, sync::{atomic::{AtomicBool, AtomicU32, Ordering}, Arc, Condvar, Mutex, RwLock}};
 
-use crate::{backend::{remote::{get_backend_default, protocol::{Messages, Request, Response, TypelessBuf}}, Backend, BackendMatMul}, core::{primitives::DeviceType, primops::{Exp, InvExp}, tensor::TensorError, value::{DType, TensorValue}}};
+use crate::{backend::{remote::{get_backend_default, protocol::{Messages, Request, Response, TypelessBuf}}, Backend, BackendMatMul}, core::{primitives::DeviceType, primops::{Exp, InvExp}, tensor::TensorError, value::{DType, TensorValue}}, ops::reduction::ReductionOpTypes};
 use flume;
 
 
@@ -310,6 +310,16 @@ impl Backend for RemoteBackend {
     fn apply_tanh_nd<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,shape: &[usize],stride: &[isize],) -> Result<(),TensorError>where T:Exp {unreachable!("Macro implmented")}
     fn apply_tanh_1d_strided<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,stride:isize,len:usize) -> Result<(),TensorError>where T:Exp {unreachable!("Macro implmented")}
     fn apply_tanh_contiguous<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,len:usize) -> Result<(),TensorError>where T:Exp {unreachable!("Macro implmented")}
+
+    fn apply_reduce_contiguous_flat<T: TensorValue>(
+        &self, 
+        src: &Self::Buf<T>, 
+        dst: &mut Self::Buf<T>, 
+        start: usize, 
+        len: usize, 
+        op: ReductionOpTypes
+    ) -> Result<(), TensorError>{unreachable!("Macro implmented")}
+
 }
 
 #[rpc_proc::routines(Messages)]
