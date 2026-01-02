@@ -35,6 +35,17 @@ struct NegateOp {
     }
 };
 
+struct AbsOp {
+    template<typename T>
+    __device__ __forceinline__ T operator()(T x) const {
+        if(x < (T) 0) {
+            return -x;
+        } else {
+            return x;
+        }
+    }
+};
+
 /*
     KERNELS
 */
@@ -210,6 +221,8 @@ DECLARE_UNARY_LAUNCHERS(relu, ReluOp, __int128_t, i128)
 DECLARE_UNARY_LAUNCHERS(tanh, TanhOp, float,  f32)
 DECLARE_UNARY_LAUNCHERS(tanh, TanhOp, double, f64)
 
+DECLARE_UNARY_LAUNCHERS(abs, AbsOp, float,  f32)
+DECLARE_UNARY_LAUNCHERS(abs, AbsOp, double, f64)
 
 
 // extern "C" void launch_test_summy(double *data, size_t start, size_t len, unsigned int block_size)

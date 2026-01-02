@@ -4,11 +4,13 @@ pub mod neg;
 pub mod relu;
 mod sigmoid;
 mod tanh;
+mod abs;
 
 pub use neg::Negate;
 pub use relu::Relu;
 pub use sigmoid::Sigmoid;
 pub use tanh::Tanh;
+pub use abs::Abs;
 
 pub trait InplaceUnaryOp<T: TensorValue, B: Backend> {
     fn apply_relu(
@@ -25,6 +27,7 @@ pub trait InplaceUnaryOp<T: TensorValue, B: Backend> {
     )
     where 
         T: Exp + InvExp;
+    fn apply_abs(&mut self);
 }
 
 pub trait UnaryOp<T: TensorValue, B: Backend> {
@@ -41,6 +44,7 @@ pub trait UnaryOp<T: TensorValue, B: Backend> {
     ) -> TensorBase<T, B>
     where 
         T: Exp + InvExp;
+    fn abs(&self) -> TensorBase<T, B>;
 }
 
 
@@ -67,6 +71,9 @@ impl<T: TensorValue, B: Backend, V: AsViewMut<T, B>> InplaceUnaryOp<T, B> for V 
         T: Exp + InvExp
     {
         self.tanh_inplace();
+    }
+    fn apply_abs(&mut self) {
+        self.abs_inplace();
     }
 }
 
@@ -99,6 +106,11 @@ impl<T: TensorValue, B: Backend, V: AsTensor<T, B>> UnaryOp<T, B> for V {
     {
         let mut result = self.owned();
         result.apply_tanh();
+        result
+    }
+    fn abs(&self) -> TensorBase<T, B> {
+        let mut result = self.owned();
+        result.apply_abs();
         result
     }
 }
@@ -179,7 +191,7 @@ mod tests {
 
 #[cfg(all(test, feature = "cuda"))]
 mod cuda_tests {
-    use crate::{backend::cuda::Cuda, core::{Tensor, primitives::{CudaTensor, TensorBase}, tensor::{AsTensor, TensorAccess, TensorAccessMut}}, ops::unary::{Negate, Relu, Sigmoid, Tanh}, testing::{test_with_contiguous_2_elem_tensor, unary_assert_1d_strided, unary_assert_contiguous, unary_assert_nd_strided}};
+    use crate::{backend::cuda::Cuda, core::{Tensor, primitives::{CudaTensor, TensorBase}, tensor::{AsTensor, TensorAccess, TensorAccessMut}}, ops::unary::{Abs, Negate, Relu, Sigmoid, Tanh}, testing::{test_with_contiguous_2_elem_tensor, unary_assert_1d_strided, unary_assert_contiguous, unary_assert_nd_strided}};
 
 
 
@@ -198,6 +210,24 @@ mod cuda_tests {
     fn test_unary_negate_nd_strided() {
         unary_assert_nd_strided::<f64, _, _, Cuda>([1.0; 16], std::ops::Neg::neg, |f| f.neg_inplace());
     }
+
+
+    
+    #[test]
+    fn test_unary_abs_continous_cuda() {
+        unary_assert_contiguous::<f64, _, _, Cuda>([-1.0, 1.3], |f| f.abs(), |f| f.abs_inplace());
+    }
+
+    #[test]
+    fn test_unary_abs_1d_strided_cuda() {
+        unary_assert_1d_strided::<f64, _, _, Cuda>([1.0, -1.0, 3.0], |f| f.abs(), |f| f.abs_inplace());
+    }
+
+    #[test]
+    fn test_unary_abs_nd_strided() {
+        unary_assert_nd_strided::<f64, _, _, Cuda>([-1.0; 16], |f| f.abs(), |f| f.abs_inplace());
+    }
+
 
     #[test]
     fn test_unary_relu_contiguous_cuda() {

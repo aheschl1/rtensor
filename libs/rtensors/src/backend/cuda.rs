@@ -140,6 +140,151 @@ macro_rules! impl_cpu_unary {
     };
 }
 
+// Put this somewhere visible (module scope), then invoke it inside your impl block.
+
+// Cargo.toml:
+// paste = "1"
+
+macro_rules! specify_trait_unary_cabal {
+    // ===== entry: no extra bounds =====
+    { $op:ident } => {
+        specify_trait_unary_cabal! { @impl $op where T: }
+    };
+
+    // ===== entry: with extra bounds =====
+    { $op:ident where T: $($extra:tt)+ } => {
+        specify_trait_unary_cabal! { @impl $op where T: $($extra)+ }
+    };
+
+    // ===== implementation =====
+    ( @impl $op:ident where T: $($extra_bounds:tt)* ) => {
+        paste::paste! {
+            fn [<apply_ $op _contiguous>]<T: TensorValue $($extra_bounds)*>(
+                &self,
+                buf: &mut Self::Buf<T>,
+                start: usize,
+                len: usize,
+            ) -> Result<(), TensorError> {
+                let stream = self.stream();
+
+                macro_rules! launch {
+                    ($launch_fn:ident, $t:ty) => {{
+                        let (raw_ptr, _) = buf.ptr.device_ptr(&stream);
+                        let data_ptr = raw_ptr as *mut $t;
+                        unsafe { $launch_fn(data_ptr, start, len, DEFAULT_BLOCK_SIZE); }
+                        self.dirty();
+                        Ok(())
+                    }};
+                }
+
+                paste::paste! {
+                    match std::any::TypeId::of::<T>() {
+                        id if id == std::any::TypeId::of::<f32>() =>
+                            launch!([<launch_ $op _contiguous_f32>], f32),
+                        id if id == std::any::TypeId::of::<f64>() =>
+                            launch!([<launch_ $op _contiguous_f64>], f64),
+                        _ => Err(TensorError::CudaError(format!(
+                            "Unsupported type for CUDA {} operation (float-only for now)",
+                            stringify!($op),
+                        ))),
+                    }
+                }
+            }
+
+            fn [<apply_ $op _1d_strided>]<T: TensorValue $($extra_bounds)*>(
+                &self,
+                buf: &mut Self::Buf<T>,
+                offset: usize,
+                stride: isize,
+                len: usize,
+            ) -> Result<(), TensorError> {
+                let stream = self.stream();
+
+                macro_rules! launch {
+                    ($launch_fn:ident, $t:ty) => {{
+                        let (raw_ptr, _) = buf.ptr.device_ptr(&stream);
+                        let data_ptr = raw_ptr as *mut $t;
+                        unsafe { $launch_fn(data_ptr, offset, stride, len, DEFAULT_BLOCK_SIZE); }
+                        self.dirty();
+                        Ok(())
+                    }};
+                }
+
+                paste::paste! {
+                    match std::any::TypeId::of::<T>() {
+                        id if id == std::any::TypeId::of::<f32>() =>
+                            launch!([<launch_ $op _strided_f32>], f32),
+                        id if id == std::any::TypeId::of::<f64>() =>
+                            launch!([<launch_ $op _strided_f64>], f64),
+                        _ => Err(TensorError::CudaError(format!(
+                            "Unsupported type for CUDA {} operation (float-only for now)",
+                            stringify!($op),
+                        ))),
+                    }
+                }
+            }
+
+            fn [<apply_ $op _nd>]<T: TensorValue $($extra_bounds)*>(
+                &self,
+                buf: &mut Self::Buf<T>,
+                offset: usize,
+                shape: &[usize],
+                stride: &[isize],
+            ) -> Result<(), TensorError> {
+                let stream = self.stream();
+                let rank = shape.len();
+                let size = shape.iter().product::<usize>();
+
+                // allocate device memory for shape/stride
+                let shape_buf = self.alloc_from_slice(
+                    shape.iter().copied().map(|x| x as u64).collect::<Vec<u64>>().into_boxed_slice()
+                )?;
+                let stride_buf = self.alloc_from_slice(
+                    stride.iter().copied().map(|x| x as i64).collect::<Vec<i64>>().into_boxed_slice()
+                )?;
+
+                let (stride_ptr, _) = stride_buf.ptr.device_ptr(&stream);
+                let (shape_ptr,  _) = shape_buf.ptr.device_ptr(&stream);
+
+                macro_rules! launch {
+                    ($launch_fn:ident, $t:ty) => {{
+                        let (raw_ptr, _) = buf.ptr.device_ptr(&stream);
+                        let data_ptr = raw_ptr as *mut $t;
+                        unsafe {
+                            $launch_fn(
+                                data_ptr,
+                                offset,
+                                stride_ptr as *const isize,
+                                shape_ptr  as *const usize,
+                                rank,
+                                size,
+                                DEFAULT_BLOCK_SIZE,
+                            );
+                        }
+                        self.dirty();
+                        Ok(())
+                    }};
+                }
+
+                paste::paste! {
+                    match std::any::TypeId::of::<T>() {
+                        id if id == std::any::TypeId::of::<f32>() =>
+                            launch!([<launch_ $op _nd_affine_f32>], f32),
+                        id if id == std::any::TypeId::of::<f64>() =>
+                            launch!([<launch_ $op _nd_affine_f64>], f64),
+                        _ => Err(TensorError::CudaError(format!(
+                            "Unsupported type for CUDA {} operation (float-only for now)",
+                            stringify!($op),
+                        ))),
+                    }
+                }
+            }
+        }
+    };
+}
+
+
+
 impl Backend for Cuda {
     type Buf<T: TensorValue> = CudaBuf<T>;
 
@@ -897,179 +1042,181 @@ impl Backend for Cuda {
 
     
 
-    fn apply_relu_contiguous<T: TensorValue>(
-        &self,
-        buf: &mut Self::Buf<T>,
-        start: usize,
-        len: usize,
-    ) -> Result<(), TensorError> {
-        let stream = self.stream();
+    // fn apply_relu_contiguous<T: TensorValue>(
+    //     &self,
+    //     buf: &mut Self::Buf<T>,
+    //     start: usize,
+    //     len: usize,
+    // ) -> Result<(), TensorError> {
+    //     let stream = self.stream();
 
-        macro_rules! launch_negate {
-            ($launch_fn:ident, $t:ty) => {{
-                let (raw_ptr, _) = buf.ptr.device_ptr(&stream);
-                let data_ptr = raw_ptr as *mut $t;
+    //     macro_rules! launch_negate {
+    //         ($launch_fn:ident, $t:ty) => {{
+    //             let (raw_ptr, _) = buf.ptr.device_ptr(&stream);
+    //             let data_ptr = raw_ptr as *mut $t;
 
-                unsafe {
-                    $launch_fn(data_ptr as *mut $t, start, len, DEFAULT_BLOCK_SIZE);
-                }
-                self.dirty();
-                Ok(())
-            }};
-        }
+    //             unsafe {
+    //                 $launch_fn(data_ptr as *mut $t, start, len, DEFAULT_BLOCK_SIZE);
+    //             }
+    //             self.dirty();
+    //             Ok(())
+    //         }};
+    //     }
 
-        // Dispatch based on type - only signed types support negation
-        match std::any::TypeId::of::<T>() {
-            id if id == std::any::TypeId::of::<f32>() => {
-                launch_negate!(launch_relu_contiguous_f32, f32)
-            }
-            id if id == std::any::TypeId::of::<f64>() => {
-                launch_negate!(launch_relu_contiguous_f64, f64)
-            }
-            id if id == std::any::TypeId::of::<i8>() => {
-                launch_negate!(launch_relu_contiguous_i8, i8)
-            }
-            id if id == std::any::TypeId::of::<i16>() => {
-                launch_negate!(launch_relu_contiguous_i16, i16)
-            }
-            id if id == std::any::TypeId::of::<i32>() => {
-                launch_negate!(launch_relu_contiguous_i32, i32)
-            }
-            id if id == std::any::TypeId::of::<i64>() => {
-                launch_negate!(launch_relu_contiguous_i64, i64)
-            }
-            id if id == std::any::TypeId::of::<i128>() => {
-                launch_negate!(launch_relu_contiguous_i128, i128)
-            }
-            _ => Err(TensorError::CudaError(
-                "Unsupported type for CUDA negation operation".to_string(),
-            )),
-        }
-    }
+    //     // Dispatch based on type - only signed types support negation
+    //     match std::any::TypeId::of::<T>() {
+    //         id if id == std::any::TypeId::of::<f32>() => {
+    //             launch_negate!(launch_relu_contiguous_f32, f32)
+    //         }
+    //         id if id == std::any::TypeId::of::<f64>() => {
+    //             launch_negate!(launch_relu_contiguous_f64, f64)
+    //         }
+    //         id if id == std::any::TypeId::of::<i8>() => {
+    //             launch_negate!(launch_relu_contiguous_i8, i8)
+    //         }
+    //         id if id == std::any::TypeId::of::<i16>() => {
+    //             launch_negate!(launch_relu_contiguous_i16, i16)
+    //         }
+    //         id if id == std::any::TypeId::of::<i32>() => {
+    //             launch_negate!(launch_relu_contiguous_i32, i32)
+    //         }
+    //         id if id == std::any::TypeId::of::<i64>() => {
+    //             launch_negate!(launch_relu_contiguous_i64, i64)
+    //         }
+    //         id if id == std::any::TypeId::of::<i128>() => {
+    //             launch_negate!(launch_relu_contiguous_i128, i128)
+    //         }
+    //         _ => Err(TensorError::CudaError(
+    //             "Unsupported type for CUDA negation operation".to_string(),
+    //         )),
+    //     }
+    // }
 
-    fn apply_relu_1d_strided<T: TensorValue>(
-        &self,
-        buf: &mut Self::Buf<T>,
-        offset: usize,
-        stride: isize,
-        len: usize,
-    ) -> Result<(), TensorError> {
-        // todo!()
-        println!("Strided.");
-        let stream = self.stream();
+    // fn apply_relu_1d_strided<T: TensorValue>(
+    //     &self,
+    //     buf: &mut Self::Buf<T>,
+    //     offset: usize,
+    //     stride: isize,
+    //     len: usize,
+    // ) -> Result<(), TensorError> {
+    //     // todo!()
+    //     let stream = self.stream();
 
-        macro_rules! launch_relu {
-            ($launch_fn:ident, $t:ty) => {{
-                let (raw_ptr, _) = buf.ptr.device_ptr(&stream);
-                let data_ptr = raw_ptr as *mut $t;
+    //     macro_rules! launch_relu {
+    //         ($launch_fn:ident, $t:ty) => {{
+    //             let (raw_ptr, _) = buf.ptr.device_ptr(&stream);
+    //             let data_ptr = raw_ptr as *mut $t;
 
-                unsafe {
-                    $launch_fn(data_ptr as *mut $t, offset, stride, len, DEFAULT_BLOCK_SIZE);
-                }
-                self.dirty();
-                Ok(())
-            }};
-        }
+    //             unsafe {
+    //                 $launch_fn(data_ptr as *mut $t, offset, stride, len, DEFAULT_BLOCK_SIZE);
+    //             }
+    //             self.dirty();
+    //             Ok(())
+    //         }};
+    //     }
 
-        // Dispatch based on type - only signed types support negation
-        match std::any::TypeId::of::<T>() {
-            id if id == std::any::TypeId::of::<f32>() => launch_relu!(launch_relu_strided_f32, f32),
-            id if id == std::any::TypeId::of::<f64>() => launch_relu!(launch_relu_strided_f64, f64),
-            id if id == std::any::TypeId::of::<i8>() => launch_relu!(launch_relu_strided_i8, i8),
-            id if id == std::any::TypeId::of::<i16>() => launch_relu!(launch_relu_strided_i16, i16),
-            id if id == std::any::TypeId::of::<i32>() => launch_relu!(launch_relu_strided_i32, i32),
-            id if id == std::any::TypeId::of::<i64>() => launch_relu!(launch_relu_strided_i64, i64),
-            id if id == std::any::TypeId::of::<i128>() => {
-                launch_relu!(launch_relu_strided_i128, i128)
-            }
-            _ => Err(TensorError::CudaError(
-                "Unsupported type for CUDA negation operation".to_string(),
-            )),
-        }
-    }
+    //     // Dispatch based on type - only signed types support negation
+    //     match std::any::TypeId::of::<T>() {
+    //         id if id == std::any::TypeId::of::<f32>() => launch_relu!(launch_relu_strided_f32, f32),
+    //         id if id == std::any::TypeId::of::<f64>() => launch_relu!(launch_relu_strided_f64, f64),
+    //         id if id == std::any::TypeId::of::<i8>() => launch_relu!(launch_relu_strided_i8, i8),
+    //         id if id == std::any::TypeId::of::<i16>() => launch_relu!(launch_relu_strided_i16, i16),
+    //         id if id == std::any::TypeId::of::<i32>() => launch_relu!(launch_relu_strided_i32, i32),
+    //         id if id == std::any::TypeId::of::<i64>() => launch_relu!(launch_relu_strided_i64, i64),
+    //         id if id == std::any::TypeId::of::<i128>() => {
+    //             launch_relu!(launch_relu_strided_i128, i128)
+    //         }
+    //         _ => Err(TensorError::CudaError(
+    //             "Unsupported type for CUDA negation operation".to_string(),
+    //         )),
+    //     }
+    // }
 
-    fn apply_relu_nd<T: TensorValue>(
-        &self,
-        buf: &mut Self::Buf<T>,
-        offset: usize,
-        shape: &[usize],
-        stride: &[isize],
-    ) -> Result<(), TensorError> {
-        // todo!()
-        let stream = self.stream();
-        let rank = shape.len();
-        let size = shape.iter().product::<usize>();
+    // fn apply_relu_nd<T: TensorValue>(
+    //     &self,
+    //     buf: &mut Self::Buf<T>,
+    //     offset: usize,
+    //     shape: &[usize],
+    //     stride: &[isize],
+    // ) -> Result<(), TensorError> {
+    //     // todo!()
+    //     let stream = self.stream();
+    //     let rank = shape.len();
+    //     let size = shape.iter().product::<usize>();
 
-        // Allocate device memory for strides and shapes
-        let shape_buf = self.alloc_from_slice(
-            shape
-                .to_vec()
-                .into_iter()
-                .map(|x| x as u64)
-                .collect::<Vec<u64>>()
-                .into_boxed_slice(),
-        )?;
-        let stride_buf = self.alloc_from_slice(
-            stride
-                .to_vec()
-                .into_iter()
-                .map(|x| x as i64)
-                .collect::<Vec<i64>>()
-                .into_boxed_slice(),
-        )?;
+    //     // Allocate device memory for strides and shapes
+    //     let shape_buf = self.alloc_from_slice(
+    //         shape
+    //             .to_vec()
+    //             .into_iter()
+    //             .map(|x| x as u64)
+    //             .collect::<Vec<u64>>()
+    //             .into_boxed_slice(),
+    //     )?;
+    //     let stride_buf = self.alloc_from_slice(
+    //         stride
+    //             .to_vec()
+    //             .into_iter()
+    //             .map(|x| x as i64)
+    //             .collect::<Vec<i64>>()
+    //             .into_boxed_slice(),
+    //     )?;
 
-        let (stride_ptr, _) = stride_buf.ptr.device_ptr(&stream);
-        let (shape_ptr, _) = shape_buf.ptr.device_ptr(&stream);
+    //     let (stride_ptr, _) = stride_buf.ptr.device_ptr(&stream);
+    //     let (shape_ptr, _) = shape_buf.ptr.device_ptr(&stream);
 
-        macro_rules! launch_negate {
-            ($launch_fn:ident, $t:ty) => {{
-                let (raw_ptr, _) = buf.ptr.device_ptr(&stream);
-                let data_ptr = raw_ptr as *mut $t;
+    //     macro_rules! launch_negate {
+    //         ($launch_fn:ident, $t:ty) => {{
+    //             let (raw_ptr, _) = buf.ptr.device_ptr(&stream);
+    //             let data_ptr = raw_ptr as *mut $t;
 
-                unsafe {
-                    $launch_fn(
-                        data_ptr as *mut $t,
-                        offset,
-                        stride_ptr as *const isize,
-                        shape_ptr as *const usize,
-                        rank,
-                        size,
-                        DEFAULT_BLOCK_SIZE,
-                    );
-                }
-                self.dirty();
-                Ok(())
-            }};
-        }
+    //             unsafe {
+    //                 $launch_fn(
+    //                     data_ptr as *mut $t,
+    //                     offset,
+    //                     stride_ptr as *const isize,
+    //                     shape_ptr as *const usize,
+    //                     rank,
+    //                     size,
+    //                     DEFAULT_BLOCK_SIZE,
+    //                 );
+    //             }
+    //             self.dirty();
+    //             Ok(())
+    //         }};
+    //     }
 
-        // Dispatch based on type - only signed types support negation
-        match std::any::TypeId::of::<T>() {
-            id if id == std::any::TypeId::of::<f32>() => {
-                launch_negate!(launch_relu_nd_affine_f32, f32)
-            }
-            id if id == std::any::TypeId::of::<f64>() => {
-                launch_negate!(launch_relu_nd_affine_f64, f64)
-            }
-            id if id == std::any::TypeId::of::<i8>() => {
-                launch_negate!(launch_relu_nd_affine_i8, i8)
-            }
-            id if id == std::any::TypeId::of::<i16>() => {
-                launch_negate!(launch_relu_nd_affine_i16, i16)
-            }
-            id if id == std::any::TypeId::of::<i32>() => {
-                launch_negate!(launch_relu_nd_affine_i32, i32)
-            }
-            id if id == std::any::TypeId::of::<i64>() => {
-                launch_negate!(launch_relu_nd_affine_i64, i64)
-            }
-            id if id == std::any::TypeId::of::<i128>() => {
-                launch_negate!(launch_relu_nd_affine_i128, i128)
-            }
-            _ => Err(TensorError::CudaError(
-                "Unsupported type for CUDA negation operation".to_string(),
-            )),
-        }
-    }
+    //     // Dispatch based on type - only signed types support negation
+    //     match std::any::TypeId::of::<T>() {
+    //         id if id == std::any::TypeId::of::<f32>() => {
+    //             launch_negate!(launch_relu_nd_affine_f32, f32)
+    //         }
+    //         id if id == std::any::TypeId::of::<f64>() => {
+    //             launch_negate!(launch_relu_nd_affine_f64, f64)
+    //         }
+    //         id if id == std::any::TypeId::of::<i8>() => {
+    //             launch_negate!(launch_relu_nd_affine_i8, i8)
+    //         }
+    //         id if id == std::any::TypeId::of::<i16>() => {
+    //             launch_negate!(launch_relu_nd_affine_i16, i16)
+    //         }
+    //         id if id == std::any::TypeId::of::<i32>() => {
+    //             launch_negate!(launch_relu_nd_affine_i32, i32)
+    //         }
+    //         id if id == std::any::TypeId::of::<i64>() => {
+    //             launch_negate!(launch_relu_nd_affine_i64, i64)
+    //         }
+    //         id if id == std::any::TypeId::of::<i128>() => {
+    //             launch_negate!(launch_relu_nd_affine_i128, i128)
+    //         }
+    //         _ => Err(TensorError::CudaError(
+    //             "Unsupported type for CUDA negation operation".to_string(),
+    //         )),
+    //     }
+    // }
+
+    specify_trait_unary_cabal!{relu}
+    specify_trait_unary_cabal!{abs}
 
     fn apply_sigmoid_contiguous<T: TensorValue + InvExp>(
         &self,
@@ -1389,17 +1536,6 @@ impl Backend for Cuda {
 
 
 
-// impl Cuda {
-//     pub fn _test_apply_sum_flat_contiguous<T: TensorValue>(
-//         backend: &Cuda,
-//         buf: &mut <Cuda as Backend>::Buf<T>,
-//         out: &mut <Cuda as Backend>::Buf<T>,
-//         start: usize,
-//         len: usize,
-//     ) {
-//         apply_reduction_contiguous_single_elem(backend, buf, out, start, len);
-//     }
-// }
 
 #[inline]
 fn populate_reduction_settings(

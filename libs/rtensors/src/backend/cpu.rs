@@ -330,6 +330,20 @@ impl Backend for Cpu {
         todo!()
     }
 
+ 
+
+    fn apply_abs_1d_strided<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,stride:isize,len:usize) -> Result<(),TensorError> {
+        todo!()
+    }
+
+    fn apply_abs_contiguous<T:TensorValue>(&self,buf: &mut Self::Buf<T>,start:usize,len:usize) -> Result<(),TensorError> {
+        todo!()
+    }
+
+    fn apply_abs_nd<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,shape: &[usize],stride: &[isize],) -> Result<(),TensorError> {
+        todo!()
+    }
+
 }
 
 #[inline]
