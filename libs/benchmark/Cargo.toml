@@ -8,4 +8,5 @@ default = []
 cuda = []
 
 [dependencies]
+pyo3 = { version = "0.27.2", features = ["auto-initialize"] }
 rtensors = {path="../rtensors", features=["cuda"]}

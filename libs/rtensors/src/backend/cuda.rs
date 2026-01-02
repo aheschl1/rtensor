@@ -1669,7 +1669,6 @@ macro_rules! cublas_impl {
                     stride_c,
                 };
                 // let mut res = self.alloc(b*n*m)?;
-
                 unsafe {
                     // Note: operands are swapped (B, A instead of A, B)
                     self.cublas
@@ -1708,9 +1707,9 @@ mod tests {
     use std::error::Error;
 
     use crate::{
-        backend::cuda::{apply_nd_reduction_contiguous, Cuda},
-        core::{MetaTensorView, Tensor, idx::Idx, primitives::CudaTensor, tensor::{AsTensor, TensorAccess}},
-        ops::{reduction::{ReductionOp, TotalReductionOp}, unary::{InplaceUnaryOp, Tanh}},
+        backend::cuda::Cuda,
+        core::{idx::Idx, primitives::CudaTensor, tensor::TensorAccess},
+        ops::reduction::{ReductionOp, TotalReductionOp},
     };
 
     #[test]
