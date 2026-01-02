@@ -320,15 +320,15 @@ impl Backend for Cpu {
         todo!()
     }
 
-    fn apply_reduce_total<T: TensorValue>(
-            &self, 
-            src: (&Self::Buf<T>, &MetaTensor), 
-            dst: (&mut Self::Buf<T>, &MetaTensor), 
-            dim: crate::core::Dim,
-            op: crate::ops::reduction::ReductionOpTypes
-        ) -> Result<(), TensorError> {
-        todo!()
-    }
+    // fn apply_reduce_total<T: TensorValue>(
+    //         &self, 
+    //         src: (&Self::Buf<T>, &MetaTensor), 
+    //         dst: (&mut Self::Buf<T>, &MetaTensor), 
+    //         dim: crate::core::Dim,
+    //         op: crate::ops::reduction::ReductionOpTypes
+    //     ) -> Result<(), TensorError> {
+    //     todo!()
+    // }
 
  
 

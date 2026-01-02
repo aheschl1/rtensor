@@ -124,6 +124,7 @@ __host__ __device__ __forceinline__ WelfordState<T> welford_combine(WelfordState
     return result;
 }
 
+/// only ever launched with one element to be processed
 template <typename T, typename PostOp>
 __global__ void post_transform_kernel(T *out, size_t n, PostOp post)
 {
@@ -179,138 +180,9 @@ void launch_flat_contiguous_reduce(
 
     // Free the temporary storage allocation.
     cudaFree(&d_temp_storage);
-
-    post_transform_kernel<<<1, block_size>>>(d_out, num_items, post);
-}
-
-template <typename T>
-struct ToWelfordState
-{
-    __host__ __device__ __forceinline__
-        WelfordState<T>
-        operator()(T x) const
-    {
-        return WelfordState<T>{x, T(0), 1};
-    }
-};
-
-template <typename T>
-struct WelfordCombine
-{
-    __host__ __device__ __forceinline__
-        WelfordState<T>
-        operator()(WelfordState<T> a, WelfordState<T> b) const
-    {
-        return welford_combine(a, b);
-    }
-};
-
-template <typename T>
-__global__ void finalize_var_kernel(
-    T *out_var,
-    WelfordState<T> state,
-    bool unbiased)
-{
-    if (threadIdx.x == 0)
-    {
-        int n = state.count;
-        if (n <= 1)
-        {
-            out_var[0] = T(0);
-            return;
-        }
-        T denom = unbiased ? (T)(n - 1) : (T)n;
-        out_var[0] = state.m2 / denom;
-    }
-}
-
-template <typename T>
-__host__ __device__ __forceinline__ WelfordState<T> welford_from_value(T x)
-{
-    return WelfordState<T>{x, T(0), 1};
-}
-
-template <typename T>
-__global__ void to_welford_state_kernel(const T *__restrict__ in,
-                                        WelfordState<T> *__restrict__ out,
-                                        size_t n)
-{
-    size_t idx = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < n)
-        out[idx] = welford_from_value<T>(in[idx]);
-}
-
-template <typename T>
-__global__ void finalize_var_kernel_ptr(
-    T *out_var,
-    const WelfordState<T>* state,
-    bool unbiased,
-    bool should_sqrt
-) {
-    if (threadIdx.x == 0) {
-        int n = state->count;
-        if (n <= 1) { out_var[0] = T(0); return; }
-        T denom = unbiased ? (T)(n - 1) : (T)n;
-        out_var[0] = state->m2 / denom;
-        if(should_sqrt) {
-            out_var[0] = sqrt(out_var[0]);
-        }
-    }
-}
-
-template <typename T>
-void launch_flat_contiguous_reduce_variance(
-    const T *data,
-    T *d_out,
-    size_t start,
-    size_t num_items,
-    const ReductionSettings *settings,
-    unsigned int block_size)
-{
-
-    using State = WelfordState<T>;
-
-    State *d_states = nullptr;
-    cudaMalloc(&d_states, num_items * sizeof(State));
-
-    int threads = 256;
-    int blocks = (int)((num_items + threads - 1) / threads);
-    to_welford_state_kernel<<<blocks, threads>>>(&data[start], d_states, num_items);
-
-    // Allocate the output, we only need one.
-    State *d_states_out = nullptr;
-    cudaMalloc(&d_states_out, sizeof(State));
-
-    // Determine temporary device storage requirements
-    void *d_temp_storage = nullptr;
-    size_t temp_storage_bytes = 0;
-    cub::DeviceReduce::Reduce(
-        nullptr, temp_storage_bytes,
-        d_states, d_states_out, num_items,
-        WelfordCombine<T>{}, welford_init<T>());
-
-    // Allocate temporary storage
-    cudaMalloc(&d_temp_storage, temp_storage_bytes);
-
-    // Run reduction
-    cub::DeviceReduce::Reduce(
-        d_temp_storage, temp_storage_bytes,
-        d_states, d_states_out, num_items, WelfordCombine<T> {}, welford_init<T>());
-
-
     
-
-    finalize_var_kernel_ptr<<<1,1>>>(d_out, d_states_out, settings->unbiased, settings->is_std);
-
-
-    // Free the temporary storage allocation.
-    cudaFree(d_temp_storage);
-    cudaFree(d_states_out);
-    cudaFree(d_states);
-
-
-
-    // post_transform_kernel<<<1, block_size>>>(d_out, num_items, post);
+    // only ever one element so this is okay
+    post_transform_kernel<<<1, block_size>>>(d_out, num_items, post);
 }
 
 template <typename T, typename Op, typename PostOp>
