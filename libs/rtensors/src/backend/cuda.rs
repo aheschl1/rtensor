@@ -1516,17 +1516,6 @@ impl Backend for Cuda {
     ) -> Result<(), TensorError> {
         apply_nd_reduction_contiguous(self, src, dst, dim, op)
     }
-    
-
-    fn apply_reduce_total<T: TensorValue>(
-            &self, 
-            src: (&Self::Buf<T>, &MetaTensor), 
-            mut dst: (&mut Self::Buf<T>, &MetaTensor), 
-            dim: crate::core::Dim,
-            op: crate::ops::reduction::ReductionOpTypes
-        ) -> Result<(), TensorError> {
-        apply_reduction_contiguous_single_elem(self, &src.0, &mut dst.0, src.1.offset(), src.1.size(), op)
-    }
 
     // impl_cpu_unary!{ relu, _temp }
     // impl_cpu_unary! { neg, _temp }
@@ -1972,7 +1961,7 @@ mod tests {
          let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
             CudaTensor::<f64>::from_buf(vec![1., 2., 3., 4., 5., 6., 7., 8.], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.norm(NormType::L1, &Idx::Item).unwrap().item().unwrap(), 36.);
+        assert_eq!(cuda.norm(&Idx::Item, NormType::L1).unwrap().item().unwrap(), 36.);
     }
 
     #[test]
@@ -1980,7 +1969,7 @@ mod tests {
          let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
             CudaTensor::<f64>::from_buf(vec![1., 2., 3., 4., 5., 6., 7., 8.], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.norm(NormType::L2, &Idx::Item).unwrap().item().unwrap(), 14.2828568570857);
+        assert_eq!(cuda.norm(&Idx::Item, NormType::L2).unwrap().item().unwrap(), 14.2828568570857);
     }
 
     #[test]
@@ -2090,16 +2079,16 @@ mod tests {
         let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
             CudaTensor::<f64>::from_buf(vec![1.,  2., 3., 4., 5., 6., 7., 8.], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.norm(NormType::L1, &Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![10.0, 26.0], (1, 2))?.cpu()?);
+        assert_eq!(cuda.norm(&Idx::At(0), NormType::L1)?.cpu()?, CudaTensor::from_buf(vec![10.0, 26.0], (1, 2))?.cpu()?);
         Ok(())
     }
 
     #[test]
     pub fn test_reduce_norm_l2() -> Result<(), Box<dyn Error>> {
-        let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
+        let cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
             CudaTensor::<f64>::from_buf(vec![1.,  2., 3., 4., 5., 6., 7., 8.], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.norm(NormType::L2, &Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![5.477225575051661, 13.19090595827292], (1, 2))?.cpu()?);
+        assert_eq!(cuda.norm(&Idx::At(0), NormType::L2)?.cpu()?, CudaTensor::from_buf(vec![5.477225575051661, 13.19090595827292], (1, 2))?.cpu()?);
         Ok(())
     }
 
