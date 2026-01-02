@@ -1,16 +1,18 @@
-use crate::{backend::Backend, core::{primitives::TensorBase, primops::{Exp, InvExp}, tensor::{AsTensor, AsViewMut}, value::TensorValue}};
+use crate::{backend::Backend, core::{primitives::TensorBase, primops::{Exp, InvExp, SquareRoot}, tensor::{AsTensor, AsViewMut}, value::TensorValue}};
 
 pub mod neg;
 pub mod relu;
 mod sigmoid;
 mod tanh;
 mod abs;
+mod sqrt;
 
 pub use neg::Negate;
 pub use relu::Relu;
 pub use sigmoid::Sigmoid;
 pub use tanh::Tanh;
 pub use abs::Abs;
+pub use sqrt::Sqrt;
 
 pub trait InplaceUnaryOp<T: TensorValue, B: Backend> {
     fn apply_relu(
@@ -27,6 +29,11 @@ pub trait InplaceUnaryOp<T: TensorValue, B: Backend> {
     )
     where 
         T: Exp + InvExp;
+    fn apply_sqrt(
+        &mut self
+    )
+    where 
+        T: SquareRoot;
     fn apply_abs(&mut self);
 }
 
@@ -75,6 +82,14 @@ impl<T: TensorValue, B: Backend, V: AsViewMut<T, B>> InplaceUnaryOp<T, B> for V 
     fn apply_abs(&mut self) {
         self.abs_inplace();
     }
+    
+    fn apply_sqrt(
+        &mut self
+    )
+    where 
+        T: SquareRoot {
+        self.sqrt_inplace();
+    }
 }
 
 
@@ -117,7 +132,7 @@ impl<T: TensorValue, B: Backend, V: AsTensor<T, B>> UnaryOp<T, B> for V {
 
 #[cfg(test)]
 mod tests {
-    use crate::{backend::cpu::Cpu, ops::unary::{Negate, Relu, Sigmoid, Tanh}, testing::{unary_assert_1d_strided, unary_assert_contiguous, unary_assert_nd_strided}};
+    use crate::{backend::cpu::Cpu, ops::unary::{Negate, Relu, Sigmoid, Sqrt, Tanh}, testing::{unary_assert_1d_strided, unary_assert_contiguous, unary_assert_nd_strided}};
 
     #[test]
     fn test_unary_negate_contiguous() {
@@ -187,11 +202,27 @@ mod tests {
     fn test_unary_tanh_nd_strided() {
         unary_assert_nd_strided::<f64, _, _, Cpu>([1.0; 16], |f| (f.exp() - (-f).exp()) / (f.exp() + (-f).exp()), |f| f.tanh_inplace());
     }
+
+    #[test]
+    fn test_unary_sqrt_nd_strided() {
+        unary_assert_nd_strided::<f64, _, _, Cpu>([1.0; 16], |f| f.sqrt(), |f| f.sqrt_inplace());
+    }
+
+    #[test]
+    fn test_unary_sqrt_1d_strided() {
+        unary_assert_1d_strided::<f64, _, _, Cpu>([1.0, 1.0, 1.0], |f| f.sqrt(), |f| f.sqrt_inplace());
+    }
+
+    #[test]
+    fn test_unary_sqrt_contiguous() {
+        unary_assert_contiguous::<f64, _, _, Cpu>([1.0; 2], |f| f.sqrt(), |f| f.sqrt_inplace());
+    }
+
 }
 
 #[cfg(all(test, feature = "cuda"))]
 mod cuda_tests {
-    use crate::{backend::cuda::Cuda, core::{Tensor, primitives::{CudaTensor, TensorBase}, tensor::{AsTensor, TensorAccess, TensorAccessMut}}, ops::unary::{Abs, Negate, Relu, Sigmoid, Tanh}, testing::{test_with_contiguous_2_elem_tensor, unary_assert_1d_strided, unary_assert_contiguous, unary_assert_nd_strided}};
+    use crate::{backend::cuda::Cuda, core::{primitives::{CudaTensor, TensorBase}, tensor::{AsTensor, TensorAccess, TensorAccessMut}, Tensor}, ops::unary::{Abs, Negate, Relu, Sigmoid, Sqrt as _, Tanh}, testing::{test_with_contiguous_2_elem_tensor, unary_assert_1d_strided, unary_assert_contiguous, unary_assert_nd_strided}};
 
 
 
@@ -278,6 +309,37 @@ mod cuda_tests {
     fn test_unary_tanh_nd_strided_cuda() {
         unary_assert_nd_strided::<f64, _, _, Cuda>([1.0; 16], |f| (f.exp() - (-f).exp()) / (f.exp() + (-f).exp()), |f| f.tanh_inplace());
     }
+
+    #[test]
+    fn test_unary_sqrt_nd_strided() {
+        unary_assert_nd_strided::<f64, _, _, Cuda>([1.0; 16], |f| f.sqrt(), |f| f.sqrt_inplace());
+    }
+
+    #[test]
+    fn test_unary_sqrt_1d_strided() {
+        unary_assert_1d_strided::<f64, _, _, Cuda>([1.0, 1.0, 1.0], |f| f.sqrt(), |f| f.sqrt_inplace());
+    }
+
+    #[test]
+    fn test_unary_sqrt_contiguous() {
+        unary_assert_contiguous::<f64, _, _, Cuda>([1.0; 2], |f| f.sqrt(), |f| f.sqrt_inplace());
+    }
+
+    #[test]
+    fn test_unary_sqrt_nd_strided_f32() {
+        unary_assert_nd_strided::<f32, _, _, Cuda>([1.0; 16], |f| f.sqrt(), |f| f.sqrt_inplace());
+    }
+
+    #[test]
+    fn test_unary_sqrt_1d_strided_f32() {
+        unary_assert_1d_strided::<f32, _, _, Cuda>([1.0, 1.0, 1.0], |f| f.sqrt(), |f| f.sqrt_inplace());
+    }
+
+    #[test]
+    fn test_unary_sqrt_contiguous_f32() {
+        unary_assert_contiguous::<f32, _, _, Cuda>([1.0; 2], |f| f.sqrt(), |f| f.sqrt_inplace());
+    }
+
 
 }
 

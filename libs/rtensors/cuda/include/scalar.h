@@ -134,6 +134,7 @@ void launch_tanh_nd_affine_f64(double* data, size_t offset, const ptrdiff_t* str
 
 
 DECLARE_UNARY_FLOAT_OP_HEADERS(abs)
+DECLARE_UNARY_FLOAT_OP_HEADERS(sqrt)
 
 void launch_flat_contiguous_reduce_f64(const double *data, double *out, size_t start, size_t len, ReductionOpCode code, const ReductionSettings *settings, unsigned int block_size);
 void launch_nd_reduce_contiguous_f64(double *data, double *out, size_t offset, size_t outer, size_t r, size_t inner, ReductionOpCode code, const ReductionSettings *settings, unsigned int block_size);

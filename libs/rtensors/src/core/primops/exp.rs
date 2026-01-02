@@ -22,5 +22,3 @@ impl<V: WeightValue> InvExp for V {
         (-*self).vexp()
     }
 }
-
-// TODO: Apply for other types.

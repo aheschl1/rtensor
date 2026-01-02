@@ -8,7 +8,7 @@ use cudarc::{
     driver::{CudaContext, CudaSlice, DevicePtr},
 };
 
-use crate::{backend::ContiguityTypes, ops::reduction::{NormType, ReductionOpTypes}};
+use crate::{backend::ContiguityTypes, core::primops::SquareRoot, ops::reduction::{NormType, ReductionOpTypes}};
 use crate::{
     backend::{cpu::Cpu, Backend, BackendMatMul},
     core::{
@@ -100,50 +100,6 @@ impl Cuda {
         self.dirty.store(true, Ordering::Release);
     }
 }
-
-macro_rules! impl_cpu_unary {
-    ($name:ident, $func:ident $( where $($extra:tt)+ )?) => {
-        paste::paste! {
-            fn [<apply_ $name _1d_strided>]<T: TensorValue>(
-                &self, buf: &mut Self::Buf<T>,
-                    offset: usize,
-                    stride: isize,
-                    len: usize
-                ) -> Result<(), TensorError>
-                $( where $($extra)+ )?
-                {
-                todo!()
-            }
-
-            fn [<apply_ $name _contiguous>]<T: TensorValue>(
-                &self, buf: &mut Self::Buf<T>,
-                    start: usize,
-                    len: usize
-                ) -> Result<(), TensorError>
-                $( where $($extra)+ )?
-                {
-                todo!()
-            }
-
-            fn [<apply_ $name _nd>]<T: TensorValue>(
-                    &self,
-                    buf: &mut Self::Buf<T>,
-                    offset: usize,
-                    shape: &[usize],
-                    stride: &[isize],
-                ) -> Result<(), TensorError>
-                $( where $($extra)+ )?
-                {
-                todo!()
-            }
-        }
-    };
-}
-
-// Put this somewhere visible (module scope), then invoke it inside your impl block.
-
-// Cargo.toml:
-// paste = "1"
 
 macro_rules! specify_trait_unary_cabal {
     // ===== entry: no extra bounds =====
@@ -1042,6 +998,7 @@ impl Backend for Cuda {
 
     specify_trait_unary_cabal!{relu}
     specify_trait_unary_cabal!{abs}
+    specify_trait_unary_cabal!{sqrt}
 
     fn apply_sigmoid_contiguous<T: TensorValue + InvExp>(
         &self,
@@ -1342,6 +1299,7 @@ impl Backend for Cuda {
         apply_nd_reduction_contiguous(self, src, dst, dim, op)
     }
 
+    
     // impl_cpu_unary!{ relu, _temp }
     // impl_cpu_unary! { neg, _temp }
     // impl_cpu_unary! { sigmoid, _temp }

@@ -1,6 +1,6 @@
 use std::ops::Neg;
 
-use crate::{core::{meta::ContiguityTypes, primops::{Exp, InvExp}, tensor::TensorError, value::TensorValue, Dim, MetaTensor, MetaTensorView}, ops::{base::BinaryOpType, reduction::ReductionOpTypes}};
+use crate::{core::{meta::ContiguityTypes, primops::{Exp, InvExp, SquareRoot}, tensor::TensorError, value::TensorValue, Dim, MetaTensor, MetaTensorView}, ops::{base::BinaryOpType, reduction::ReductionOpTypes}};
 
 pub mod cpu;
 
@@ -210,6 +210,7 @@ pub trait Backend: Send + Sync + 'static + Clone {
     specify_trait_unary_cabal!{sigmoid where T: InvExp}
     specify_trait_unary_cabal!{tanh where T: Exp + InvExp}
     specify_trait_unary_cabal!{abs}
+    specify_trait_unary_cabal!{sqrt where T: SquareRoot}
 
     fn apply_reduce_contiguous_flat<T: TensorValue>(
         &self, 

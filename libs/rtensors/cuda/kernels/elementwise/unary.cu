@@ -19,6 +19,13 @@ struct ReluOp {
     }
 };
 
+struct SqrtOp {
+    template<typename T>
+    __device__ __forceinline__ T operator()(T x) const {
+        return sqrt(x);
+    }
+};
+
 struct TanhOp {
     template<typename T>
     __device__ __forceinline__ T operator()(T x) const {
@@ -223,6 +230,9 @@ DECLARE_UNARY_LAUNCHERS(tanh, TanhOp, double, f64)
 
 DECLARE_UNARY_LAUNCHERS(abs, AbsOp, float,  f32)
 DECLARE_UNARY_LAUNCHERS(abs, AbsOp, double, f64)
+
+DECLARE_UNARY_LAUNCHERS(sqrt, SqrtOp, float,  f32)
+DECLARE_UNARY_LAUNCHERS(sqrt, SqrtOp, double, f64)
 
 
 // extern "C" void launch_test_summy(double *data, size_t start, size_t len, unsigned int block_size)

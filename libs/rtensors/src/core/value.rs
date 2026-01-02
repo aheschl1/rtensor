@@ -33,6 +33,7 @@ pub trait WeightValue :
 {
     fn from_f32(value: f32) -> Self;
     fn vexp(&self) -> Self;
+    fn square_root(&self) -> Self;
 }
 
 // FROM f32 IS A PLACEHOLDER FOR ADVANCED RANDOMNESS LOGIC LATER
@@ -45,6 +46,10 @@ impl WeightValue for f32 {
     fn vexp(&self) -> Self {
         self.exp()
     }
+    
+    fn square_root(&self) -> Self {
+        self.sqrt()
+    }
 }
 
 impl WeightValue for f64 {
@@ -55,6 +60,10 @@ impl WeightValue for f64 {
     
     fn vexp(&self) -> Self {
         self.exp()
+    }
+    
+    fn square_root(&self) -> Self {
+        self.sqrt()
     }
 }
 
