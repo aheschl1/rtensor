@@ -34,6 +34,9 @@ pub trait WeightValue :
     fn from_f32(value: f32) -> Self;
     fn vexp(&self) -> Self;
     fn square_root(&self) -> Self;
+    fn from_usize(value: usize) -> Self {
+        Self::from_f32(value as f32)
+    }
 }
 
 // FROM f32 IS A PLACEHOLDER FOR ADVANCED RANDOMNESS LOGIC LATER

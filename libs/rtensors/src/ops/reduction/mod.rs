@@ -1,5 +1,140 @@
 use crate::{backend::Backend, core::{idx::Idx, primitives::TensorBase, shape_to_stride, tensor::{AsTensor, AsView, TensorError}, value::{TensorValue, WeightValue}, MetaTensor, MetaTensorView, Shape}};
 
+pub trait Accumulator<T: WeightValue> {
+    fn initialize() -> Self;
+    fn accumulate(&mut self, value: T);
+    fn finalize(&self, count: usize) -> T;
+}
+
+pub struct AddAccumulator<T: WeightValue> {
+    sum: T,
+}
+
+impl<T: WeightValue> Accumulator<T> for AddAccumulator<T> {
+    #[inline(always)]
+    fn initialize() -> Self { Self { sum: T::ZERO } }
+
+    #[inline(always)]
+    fn accumulate(&mut self, value: T) { self.sum = self.sum + value;}
+
+    #[inline(always)]
+    fn finalize(&self, _: usize) -> T {
+        self.sum
+    }
+}
+
+pub struct ProdAccumulator<T: WeightValue> {
+    prod: T,
+}
+
+impl<T: WeightValue> Accumulator<T> for ProdAccumulator<T> {
+    #[inline(always)]
+    fn initialize() -> Self { Self { prod: T::ONE } }
+
+    #[inline(always)]
+    fn accumulate(&mut self, value: T) { self.prod = self.prod * value;}
+
+    #[inline(always)]
+    fn finalize(&self, _: usize) -> T {
+        self.prod
+    }
+}
+
+pub struct MaxAccumulator<T: WeightValue> {
+    max: T,
+}
+
+impl<T: WeightValue> Accumulator<T> for MaxAccumulator<T> {
+    #[inline(always)]
+    fn initialize() -> Self { Self { max: T::MIN } }
+
+    #[inline(always)]
+    fn accumulate(&mut self, value: T) {
+        if value > self.max {
+            self.max = value;
+        }
+    }
+
+    #[inline(always)]
+    fn finalize(&self, _: usize) -> T {
+        self.max
+    }
+}
+
+pub enum Accum<T: WeightValue> {
+    Sum(AddAccumulator<T>),
+    Prod(ProdAccumulator<T>),
+    Max(MaxAccumulator<T>),
+    Min(MinAccumulator<T>),
+    Mean(MeanAccumulator<T>),
+}
+
+impl<T: WeightValue> Accumulator<T> for Accum<T> {
+    #[inline(always)]
+    fn accumulate(&mut self, value: T) {
+        match self {
+            Accum::Sum(acc) => acc.accumulate(value),
+            Accum::Prod(acc) => acc.accumulate(value),
+            Accum::Max(acc) => acc.accumulate(value),
+            Accum::Min(acc) => acc.accumulate(value),
+            Accum::Mean(acc) => acc.accumulate(value),
+        }
+    }
+
+    #[inline(always)]
+    fn finalize(&self, count: usize) -> T {
+        match self {
+            Accum::Sum(acc) => acc.finalize(count),
+            Accum::Prod(acc) => acc.finalize(count),
+            Accum::Max(acc) => acc.finalize(count),
+            Accum::Min(acc) => acc.finalize(count),
+            Accum::Mean(acc) => acc.finalize(count),
+        }
+    }
+
+    #[inline(always)]
+    fn initialize() -> Self {
+        panic!("Cannot initialize Accum directly. Use specific accumulator types.")
+    }
+}
+
+pub struct MinAccumulator<T: WeightValue> {
+    min: T,
+}
+
+impl<T: WeightValue> Accumulator<T> for MinAccumulator<T> {
+    #[inline(always)]
+    fn initialize() -> Self { Self { min: T::MAX } }
+
+    #[inline(always)]
+    fn accumulate(&mut self, value: T) {
+        if value < self.min {
+            self.min = value;
+        }
+    }
+
+    #[inline(always)]
+    fn finalize(&self, _: usize) -> T {
+        self.min
+    }
+}
+
+pub struct MeanAccumulator<T: WeightValue> {
+    sum: T,
+}
+
+impl<T: WeightValue> Accumulator<T> for MeanAccumulator<T> {
+    #[inline(always)]
+    fn initialize() -> Self { Self { sum: T::ZERO } }
+
+    #[inline(always)]
+    fn accumulate(&mut self, value: T) { self.sum = self.sum + value;}
+
+    #[inline(always)]
+    fn finalize(&self, count: usize) -> T {
+        self.sum / T::from_usize(count)
+    }
+}
 
 pub enum ReductionOpTypes {
     Sum,
@@ -34,13 +169,14 @@ impl ReductionOpTypes {
     }
 
     #[inline(always)]
-    pub fn fold<T: TensorValue>(&self, a: T, b: T) -> T {
+    pub fn get_accumulator<T: WeightValue>(&self) -> Accum<T> {
         match self {
-            Self::Sum => a + b,
-            Self::Prod => a * b,
-            Self::Max => if a > b { a } else { b },
-            Self::Min => if a < b { a } else { b },
-            _ => panic!("Fold not implemented for this reduction type.")
+            Self::Sum => Accum::Sum(AddAccumulator::<T>::initialize()),
+            Self::Prod => Accum::Prod(ProdAccumulator::<T>::initialize()),
+            Self::Max => Accum::Max(MaxAccumulator::<T>::initialize()),
+            Self::Min => Accum::Min(MinAccumulator::<T>::initialize()),
+            Self::Mean => Accum::Mean(MeanAccumulator::<T>::initialize()),
+            _ => panic!("Accumulator not implemented for this reduction type.")
         }
     }
 
