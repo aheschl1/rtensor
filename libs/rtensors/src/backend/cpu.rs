@@ -329,7 +329,7 @@ impl Backend for Cpu {
         let inner = in_d_meta.inner_dimensions(dim);
         let outer = in_d_meta.outer_dimensions(dim);
 
-        panic!()
+        panic!();
     }
 
 }
