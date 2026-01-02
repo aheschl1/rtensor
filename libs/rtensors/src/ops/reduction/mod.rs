@@ -50,6 +50,12 @@ pub trait TotalReductionOp<T: TensorValue, B: Backend>: Sized + ReductionOp<T, B
     fn total_std(&self, unbiased: bool) -> Result<TensorBase<T, B>, TensorError>{self.std(Idx::Item, unbiased)}
     fn total_norm(&self, norm: NormType) -> Result<TensorBase<T, B>, TensorError>{self.norm(Idx::Item, norm)}
     fn total_logsumexp(&self) -> Result<TensorBase<T, B>, TensorError>{self.logsumexp(Idx::Item)}
+    fn total_l1_norm(&self) -> Result<TensorBase<T, B>, TensorError> {
+        self.norm(Idx::Item, NormType::L1)
+    }
+    fn total_l2_norm(&self) -> Result<TensorBase<T, B>, TensorError> {
+        self.norm(Idx::Item, NormType::L2)
+    }
 }
 
 pub trait ReductionOp<T: TensorValue, B: Backend> : Sized {
@@ -64,6 +70,14 @@ pub trait ReductionOp<T: TensorValue, B: Backend> : Sized {
     fn std(&self, axes: impl Into<Idx>, unbiased: bool) -> Result<TensorBase<T, B>, TensorError>;
     fn norm(&self, axes: impl Into<Idx>, norm: NormType) -> Result<TensorBase<T, B>, TensorError>;
     fn logsumexp(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError>;
+
+    fn l1_norm(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError> {
+        self.norm(axes, NormType::L1)
+    }
+
+    fn l2_norm(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError> {
+        self.norm(axes, NormType::L2)
+    }
 }
 
 impl<T: TensorValue, B: Backend, V> TotalReductionOp<T, B> for V where V: ReductionOp<T, B>{}

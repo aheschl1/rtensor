@@ -320,6 +320,7 @@ fn cuda_matmul_benchmark() -> Result<(), pyo3::PyErr> {
         {
             let kwargs = PyDict::new(py);
             kwargs.set_item("device", "cuda")?;
+            kwargs.set_item("dtype", torch.getattr("float32")?)?;
             let a = torch.call_method("ones", ((100, 100),), Some(&kwargs))?;
             let b = torch.call_method("ones", ((100, 100),), Some(&kwargs))?;
             let _result = torch.call_method1("matmul", (a, b))?;
@@ -339,6 +340,7 @@ fn cuda_matmul_benchmark() -> Result<(), pyo3::PyErr> {
         {
             let kwargs = PyDict::new(py);
             kwargs.set_item("device", "cuda")?;
+            kwargs.set_item("dtype", torch.getattr("float32")?)?;
             let a = torch.call_method("ones", ((500, 500),), Some(&kwargs))?;
             let b = torch.call_method("ones", ((500, 500),), Some(&kwargs))?;
             let _result = torch.call_method1("matmul", (a, b))?;
@@ -358,6 +360,7 @@ fn cuda_matmul_benchmark() -> Result<(), pyo3::PyErr> {
         {
             let kwargs = PyDict::new(py);
             kwargs.set_item("device", "cuda")?;
+            kwargs.set_item("dtype", torch.getattr("float32")?)?;
             let a = torch.call_method("ones", ((1000, 1000),), Some(&kwargs))?;
             let b = torch.call_method("ones", ((1000, 1000),), Some(&kwargs))?;
             let _result = torch.call_method1("matmul", (a, b))?;
@@ -373,6 +376,78 @@ fn cuda_matmul_benchmark() -> Result<(), pyo3::PyErr> {
     Ok(())
 }
 
+#[cfg(feature = "cuda")]
+fn cuda_mean_reduction_benchmark() -> Result<(), pyo3::PyErr> {
+    use rtensors::ops::reduction::TotalReductionOp;
+
+    let session = BenchmarkSession::new("cuda_mean_reduction_benchmark");
+    
+    println!("Running benchmarks...\n");
+    
+    // Benchmark 1: MatMul 100x100
+    run_compare!(
+        &session,
+        "MeanReduction_100x100",
+        {
+            let a = CudaTensor::<f64>::ones((100, 100));
+            a.total_mean().unwrap()
+        },
+        |py, torch|,
+        {
+            let kwargs = PyDict::new(py);
+            kwargs.set_item("device", "cuda")?;
+            kwargs.set_item("dtype", torch.getattr("float64")?)?;
+            let a = torch.call_method("ones", ((100, 100),), Some(&kwargs))?;
+            let _result = a.call_method0("mean")?;
+        }
+    )?;
+    
+    // Benchmark 2: MatMul 500x500
+    run_compare!(
+        &session,
+        "MeanReduction_500x500",
+        {
+            let a = CudaTensor::<f64>::ones((500, 500));
+            a.total_mean().unwrap()
+        },
+        |py, torch|,
+        {
+            let kwargs = PyDict::new(py);
+            kwargs.set_item("device", "cuda")?;
+            kwargs.set_item("dtype", torch.getattr("float64")?)?;
+            let a = torch.call_method("ones", ((500, 500),), Some(&kwargs))?;
+            let _result = a.call_method0("mean")?;
+        }
+    )?;
+    
+    // Benchmark 3: MatMul 1000x1000
+    run_compare!(
+        &session,
+        "MeanReduction_1000x1000",
+        {
+            let a = CudaTensor::<f64>::ones((1000, 1000));
+            a.total_mean().unwrap()
+        },
+        |py, torch|,
+        {
+            let kwargs = PyDict::new(py);
+            kwargs.set_item("device", "cuda")?;
+            kwargs.set_item("dtype", torch.getattr("float64")?)?;
+            let a = torch.call_method("ones", ((1000, 1000),), Some(&kwargs))?;
+            let _result = a.call_method0("mean")?;
+        }
+    )?;
+    
+    println!("\nAll benchmarks completed! Results saved to {}", session.csv_path);
+    println!("Generating visualizations...");
+    
+    // Generate visualizations from the session
+    session.generate_visualizations()?;
+
+    Ok(())
+}
+
+
 fn main() -> PyResult<()> {
     // Start a new benchmark session with a unique name
     // Each session creates its own CSV file and visualization outputs
@@ -384,6 +459,8 @@ fn main() -> PyResult<()> {
     cpu_matmul_benchmark()?;
     #[cfg(feature = "cuda")]
     cuda_matmul_benchmark()?;
+    #[cfg(feature = "cuda")]
+    cuda_mean_reduction_benchmark()?;
     
     Ok(())
 }

@@ -1,4 +1,4 @@
 benchmark_name,rtensors_time_us,pytorch_time_us,speedup
-MatMul_100x100,1650968,41881,0.0254
-MatMul_500x500,1211,331,0.2734
-MatMul_1000x1000,3283,115,0.0353
+MatMul_100x100,1640053,39147,0.0239
+MatMul_500x500,1299,326,0.2514
+MatMul_1000x1000,3307,179,0.0541
