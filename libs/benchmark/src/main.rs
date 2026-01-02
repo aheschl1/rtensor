@@ -1,3 +1,4 @@
+#[cfg(feature = "cuda")]
 use rtensors::core::primitives::CudaTensor;
 use rtensors::{core::Tensor, ops::linalg::MatMul};
 use pyo3::prelude::*;
@@ -300,6 +301,7 @@ fn cpu_matmul_benchmark() -> Result<(), pyo3::PyErr> {
     Ok(())
 }
 
+#[cfg(feature = "cuda")]
 fn cuda_matmul_benchmark() -> Result<(), pyo3::PyErr> {
     let session = BenchmarkSession::new("matmul_comparison_cuda");
     
@@ -380,6 +382,7 @@ fn main() -> PyResult<()> {
     // This will generate separate files for each session
     
     cpu_matmul_benchmark()?;
+    #[cfg(feature = "cuda")]
     cuda_matmul_benchmark()?;
     
     Ok(())
