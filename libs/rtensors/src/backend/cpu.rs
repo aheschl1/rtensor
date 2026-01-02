@@ -330,34 +330,24 @@ impl Backend for Cpu {
         let outer = in_meta.outer_dimensions(dim);
         let r = in_meta.shape()[dim];
 
-        let strides = &in_meta.strides().0;
-        let stride_dim = strides[dim];
-        let stride_inner = if dim + 1 < strides.len() {
-            strides[dim + 1]
-        } else {
-            1
-        };
+        let r_stride = in_meta.strides()[dim];
+            // let r_stride = inner;
+        let left_stride = r * inner;
 
-        let in_offset = in_meta.offset();
-        let out_offset = out_meta.offset();
-
-        for o in 0..outer {
-            for i in 0..inner {
-                let mut acc = op.get_accumulator::<T>();
-
-                // row-major contiguous base
-                let base =
-                    in_offset
-                    + o * (r * stride_dim as usize)
-                    + i * stride_inner as usize;
-
-                for k in 0..r {
-                    let idx = base + k * stride_dim as usize;
-                    acc.accumulate(in_d[idx]);
-                }
-
-                let out_idx = out_offset + o * inner + i;
-                out_d[out_idx] = acc.finalize(r);
+        for i in 0..inner {
+            for o in 0..outer {
+                // let base = 0; // the bottom of the  TODO row
+                let base = o * left_stride + i;
+                // let out_idx = 0; // TODO compute output index
+                let out_idx = o * inner + i;
+                let mut accum = op.get_accumulator::<T>();
+                for k in 0..r  {
+                    // iterate this rows elements
+                    let idx = base + k * r_stride as usize;
+                    accum.accumulate(in_d[idx]);
+                } 
+                // out_d[out_idx] = result;
+                out_d[out_idx as usize] = accum.finalize(r as usize);
             }
         }
 
@@ -911,45 +901,67 @@ mod tests {
     #[test]
     pub fn test_reduce_sum_case1() -> Result<(), Box<dyn Error>> {
         let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cpu::Cpu> =
-            Tensor::<f64>::from_buf(vec![1., 0., 1., 0., 1., 1., 1., 0.], (4, 2))
+            Tensor::<f64>::from_buf(vec![
+                1., 0., 
+                1., 0., 
+                1., 1., 
+                1., 0.
+            ], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.sum(&Idx::At(0))?, Tensor::from_buf(vec![2., 3.], (1, 2))?);
+        assert_eq!(cuda.sum(&Idx::At(0))?, Tensor::from_buf(vec![4., 1.], (1, 2))?);
         Ok(())
     }
 
     #[test]
     pub fn test_reduce_max_case1() -> Result<(), Box<dyn Error>> {
-        let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cpu::Cpu> =
-            Tensor::<f64>::from_buf(vec![3., 5., 6., 8., 1., 2., -1., 4.], (4, 2))
-                .unwrap();
-        assert_eq!(cuda.max(&Idx::At(0))?, Tensor::from_buf(vec![8., 4.], (1, 2))?);
+        let cuda: crate::core::primitives::TensorBase<f64, crate::backend::cpu::Cpu> =
+            Tensor::<f64>::from_buf(vec![
+                3., 5., 
+                6., 8., 
+                1., 2., 
+                -1., 4.
+            ], (4, 2)).unwrap();
+        assert_eq!(cuda.max(&Idx::At(0))?, Tensor::from_buf(vec![6., 8.], (1, 2))?);
         Ok(())
     }
 
     #[test]
     pub fn test_reduce_min_case1() -> Result<(), Box<dyn Error>> {
         let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cpu::Cpu> =
-            Tensor::<f64>::from_buf(vec![3., 5., 6., 8., 1., 2., -1., 4.], (4, 2))
+            Tensor::<f64>::from_buf(vec![
+                3., 5., 
+                6., 8., 
+                1., 2., 
+                -1., 4.
+            ], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.min(&Idx::At(0))?, Tensor::from_buf(vec![3., -1.], (1, 2))?);
+        assert_eq!(cuda.min(&Idx::At(0))?, Tensor::from_buf(vec![-1., 2.], (1, 2))?);
         Ok(())
     }
 
     #[test]
     pub fn test_reduce_prod_case1() -> Result<(), Box<dyn Error>> {
-        let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cpu::Cpu> =
-            Tensor::<f64>::from_buf(vec![3., 5., 6., 8., 1., 2., -1., 4.], (4, 2))
-                .unwrap();
-        assert_eq!(cuda.prod(&Idx::At(0))?, Tensor::from_buf(vec![720., -8.], (1, 2))?);
+        let cuda  = Tensor::<f64>::from_buf(vec![
+            3., 5., 
+            6., 8., 
+            1., 2.,
+            -1., 4.
+        ], (4, 2)).unwrap();
+        assert_eq!(cuda.prod(&Idx::At(0))?, Tensor::from_buf(vec![-18., 320.], (1, 2))?);
         Ok(())
     }
 
     #[test]
     pub fn test_reduce_mean_case1() -> Result<(), Box<dyn Error>> {
-        let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cpu::Cpu> =
-            Tensor::<f64>::from_buf(vec![1.,  2., 3., 4., 5., 6., 7., 8.], (4, 2))
+        let cuda=
+            Tensor::<f64>::from_buf(vec![
+                1.,  2., 
+                3., 4., 
+                5., 6., 
+                7., 8.
+            ], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.mean(&Idx::At(0))?, Tensor::from_buf(vec![2.5, 6.5], (1, 2))?);
+        assert_eq!(cuda.mean(&Idx::At(0))?, Tensor::from_buf(vec![4.0, 5.0], (1, 2))?);
         Ok(())
     }
 
@@ -957,9 +969,14 @@ mod tests {
     #[test]
     pub fn test_reduce_mean_case2() -> Result<(), Box<dyn Error>> {
         let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cpu::Cpu> =
-            Tensor::<f64>::from_buf(vec![1.,  2., 3., 4., 5., 6., 7., 8.], (4, 2))
+            Tensor::<f64>::from_buf(vec![
+                1.,  2., 
+                3., 4., 
+                5., 6., 
+                7., 8.
+            ], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.mean(&Idx::At(1))?, Tensor::from_buf(vec![3.0, 4.0, 5.0, 6.0], (4, 1))?);
+        assert_eq!(cuda.mean(&Idx::At(1))?, Tensor::from_buf(vec![1.5, 3.5, 5.5, 7.5], (4, 1))?);
         Ok(())
     }
 
