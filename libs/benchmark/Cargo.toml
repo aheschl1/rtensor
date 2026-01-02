@@ -5,8 +5,8 @@ edition = "2024"
 
 [features]
 default = []
-cuda = []
+cuda = ["rtensors/cuda"]
 
 [dependencies]
 pyo3 = { version = "0.27.2", features = ["auto-initialize"] }
-rtensors = {path="../rtensors", features=["cuda"]}
+rtensors = {path="../rtensors"}
