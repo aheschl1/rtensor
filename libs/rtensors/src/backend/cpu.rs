@@ -1,6 +1,6 @@
 
 
-use crate::{backend::{Backend, BackendMatMul}, core::{meta::TensorOffsetIterator, primops::{Exp, InvExp, SquareRoot}, tensor::TensorError, value::{types, TensorValue}, MetaTensor}, openblas::{blasint, cblas_dgemm, cblas_sgemm, CBLAS_ORDER, CBLAS_TRANSPOSE}, ops::base::BinaryOpType};
+use crate::{backend::{Backend, BackendMatMul}, core::{meta::TensorOffsetIterator, primops::{Exp, InvExp, SquareRoot}, tensor::TensorError, value::{types, TensorValue, WeightValue}, MetaTensor}, openblas::{blasint, cblas_dgemm, cblas_sgemm, CBLAS_ORDER, CBLAS_TRANSPOSE}, ops::base::BinaryOpType};
 use crate::backend::ContiguityTypes;
 use crate::core::value::TypeConstants;
 
@@ -299,7 +299,8 @@ impl Backend for Cpu {
     impl_cpu_unary!{ abs, _abs }
     impl_cpu_unary!{ sqrt, _sqrt where T: SquareRoot }
     
-    fn apply_reduce_contiguous_flat<T: TensorValue>(
+    /// go through entire buffer, take everything
+    fn apply_reduce_contiguous_flat<T: WeightValue>(
         &self, 
         src: &Self::Buf<T>, 
         dst: &mut Self::Buf<T>, 
@@ -307,10 +308,15 @@ impl Backend for Cpu {
         len: usize, 
         op: crate::ops::reduction::ReductionOpTypes
     ) -> Result<(), TensorError> {
-        todo!()
+        let mut folded: T = op.initial_value();
+        for i in src[start..start+len].iter() {
+            folded = op.fold(folded, *i);
+        }
+        dst[0] = folded;
+        Ok(())
     }
     
-    fn apply_reduce_contiguous_nd<T: TensorValue>(
+    fn apply_reduce_contiguous_nd<T: WeightValue>(
         &self, 
         src: (&Self::Buf<T>, &MetaTensor), 
         dst: (&mut Self::Buf<T>, &MetaTensor), 

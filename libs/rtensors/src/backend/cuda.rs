@@ -8,7 +8,7 @@ use cudarc::{
     driver::{CudaContext, CudaSlice, DevicePtr},
 };
 
-use crate::{backend::ContiguityTypes, ops::reduction::{NormType, ReductionOpTypes}};
+use crate::{backend::ContiguityTypes, core::value::WeightValue, ops::reduction::{NormType, ReductionOpTypes}};
 use crate::{
     backend::{Backend, BackendMatMul},
     core::{
@@ -1277,7 +1277,7 @@ impl Backend for Cuda {
         }
     }
     
-    fn apply_reduce_contiguous_flat<T: TensorValue>(
+    fn apply_reduce_contiguous_flat<T: WeightValue>(
         &self, 
         src: &Self::Buf<T>, 
         dst: &mut Self::Buf<T>, 
@@ -1288,7 +1288,7 @@ impl Backend for Cuda {
         apply_reduction_contiguous_single_elem(self, src, dst, start, len, op)
     }
     
-    fn apply_reduce_contiguous_nd<T: TensorValue>(
+    fn apply_reduce_contiguous_nd<T: WeightValue>(
         &self, 
         src: (&Self::Buf<T>, &MetaTensor), 
         dst: (&mut Self::Buf<T>, &MetaTensor), 
@@ -1336,7 +1336,7 @@ fn populate_reduction_settings(
 }
 
 
-fn apply_reduction_contiguous_single_elem<T: TensorValue>(
+fn apply_reduction_contiguous_single_elem<T: WeightValue>(
     backend: &Cuda,
     buf: &<Cuda as Backend>::Buf<T>,
     out: &mut <Cuda as Backend>::Buf<T>,
@@ -1390,7 +1390,7 @@ fn apply_reduction_contiguous_single_elem<T: TensorValue>(
 
 
 /// This assumes a  contiguous tensor.
-fn apply_nd_reduction_contiguous<T: TensorValue>(
+fn apply_nd_reduction_contiguous<T: WeightValue>(
     backend: &Cuda,
     (in_d, in_d_meta): (&<Cuda as Backend>::Buf<T>, &MetaTensor),
     (out_d, _): (&mut <Cuda as Backend>::Buf<T>, &MetaTensor),
@@ -1455,7 +1455,10 @@ fn apply_nd_reduction_contiguous<T: TensorValue>(
         // id if id == std::any::TypeId::of::<f32>() => launch_negate!(launch_tanh_contiguous_f32, f32),
         id if id == std::any::TypeId::of::<f64>() => {
             launch_negate!(launch_nd_reduce_contiguous_f64, f64)
-        }
+        },
+        id if id == std::any::TypeId::of::<f32>() => {
+            launch_negate!(launch_nd_reduce_contiguous_f32, f32)
+        },
         _ => Err(TensorError::CudaError(
             "Unsupported type for CUDA negation operation".to_string(),
         )),
@@ -1660,9 +1663,9 @@ mod tests {
     use std::error::Error;
 
     use crate::{
-        backend::cuda::{Cuda, apply_nd_reduction_contiguous},
-        core::{MetaTensorView, Tensor, idx::Idx, primitives::CudaTensor, tensor::{AsTensor, TensorAccess}, value::TensorValue},
-        ops::{reduction::{NormType, ReductionOp, TotalReductionOp}, unary::{InplaceUnaryOp, Tanh}},
+        backend::cuda::Cuda,
+        core::{idx::Idx, primitives::CudaTensor, tensor::TensorAccess},
+        ops::reduction::{NormType, ReductionOp, TotalReductionOp},
     };
 
     #[test]
@@ -1869,6 +1872,15 @@ mod tests {
     pub fn test_reduce_norm_l2() -> Result<(), Box<dyn Error>> {
         let cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
             CudaTensor::<f64>::from_buf(vec![1.,  2., 3., 4., 5., 6., 7., 8.], (4, 2))
+                .unwrap();
+        assert_eq!(cuda.norm(&Idx::At(0), NormType::L2)?.cpu()?, CudaTensor::from_buf(vec![5.477225575051661, 13.19090595827292], (1, 2))?.cpu()?);
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_reduce_norm_l2_f32() -> Result<(), Box<dyn Error>> {
+        let cuda: crate::core::primitives::TensorBase<f32, crate::backend::cuda::Cuda> =
+            CudaTensor::<f32>::from_buf(vec![1.,  2., 3., 4., 5., 6., 7., 8.], (4, 2))
                 .unwrap();
         assert_eq!(cuda.norm(&Idx::At(0), NormType::L2)?.cpu()?, CudaTensor::from_buf(vec![5.477225575051661, 13.19090595827292], (1, 2))?.cpu()?);
         Ok(())

@@ -1,4 +1,4 @@
-use crate::{backend::Backend, core::{idx::Idx, primitives::TensorBase, shape_to_stride, tensor::{AsTensor, AsView, TensorError}, value::TensorValue, MetaTensor, MetaTensorView, Shape}};
+use crate::{backend::Backend, core::{idx::Idx, primitives::TensorBase, shape_to_stride, tensor::{AsTensor, AsView, TensorError}, value::{TensorValue, WeightValue}, MetaTensor, MetaTensorView, Shape}};
 
 
 pub enum ReductionOpTypes {
@@ -30,6 +30,28 @@ impl ReductionOpTypes {
             Self::LogSumExp => 7,
             Self::Norm(_) => 8
             
+        }
+    }
+
+    #[inline(always)]
+    pub fn fold<T: TensorValue>(&self, a: T, b: T) -> T {
+        match self {
+            Self::Sum => a + b,
+            Self::Prod => a * b,
+            Self::Max => if a > b { a } else { b },
+            Self::Min => if a < b { a } else { b },
+            _ => panic!("Fold not implemented for this reduction type.")
+        }
+    }
+
+    #[inline(always)]
+    pub const fn initial_value<T: TensorValue>(&self) -> T {
+        match self {
+            Self::Sum => T::ZERO,
+            Self::Prod => T::ONE,
+            Self::Max => T::MIN,
+            Self::Min => T::MAX,
+            _ => panic!("Initial value not implemented for this reduction type.")
         }
     }
 }
@@ -89,7 +111,7 @@ pub fn do_reduce<T, B>(
     tensor: &impl AsView<T, B>,
 ) -> Result<TensorBase<T, B>, TensorError>
 where
-    T: TensorValue,
+    T: WeightValue,
     B: Backend,
 {
     let tensor = tensor.view();
@@ -123,7 +145,7 @@ where
 }
 
 
-impl<T: TensorValue, B: Backend, V> ReductionOp<T, B> for V
+impl<T: WeightValue, B: Backend, V> ReductionOp<T, B> for V
 where
     V: AsView<T, B>,
 {

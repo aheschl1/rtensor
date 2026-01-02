@@ -1,5 +1,5 @@
 
-use crate::{core::{meta::ContiguityTypes, primops::{Exp, InvExp, SquareRoot}, tensor::TensorError, value::TensorValue, Dim, MetaTensor, MetaTensorView}, ops::{base::BinaryOpType, reduction::ReductionOpTypes}};
+use crate::{core::{meta::ContiguityTypes, primops::{Exp, InvExp, SquareRoot}, tensor::TensorError, value::{TensorValue, WeightValue}, Dim, MetaTensor, MetaTensorView}, ops::{base::BinaryOpType, reduction::ReductionOpTypes}};
 
 pub mod cpu;
 
@@ -211,7 +211,7 @@ pub trait Backend: Send + Sync + 'static + Clone {
     specify_trait_unary_cabal!{abs}
     specify_trait_unary_cabal!{sqrt where T: SquareRoot}
 
-    fn apply_reduce_contiguous_flat<T: TensorValue>(
+    fn apply_reduce_contiguous_flat<T: WeightValue>(
         &self, 
         src: &Self::Buf<T>, 
         dst: &mut Self::Buf<T>, 
@@ -220,7 +220,7 @@ pub trait Backend: Send + Sync + 'static + Clone {
         op: ReductionOpTypes
     ) -> Result<(), TensorError>;
 
-    fn apply_reduce_contiguous_nd<T: TensorValue>(
+    fn apply_reduce_contiguous_nd<T: WeightValue>(
         &self, 
         src: (&Self::Buf<T>, &MetaTensor), 
         dst: (&mut Self::Buf<T>, &MetaTensor), 
@@ -229,7 +229,7 @@ pub trait Backend: Send + Sync + 'static + Clone {
     ) -> Result<(), TensorError>;
 
     /// currently assuming that the tensor is contiguous
-    fn apply_reduce<T: TensorValue>(
+    fn apply_reduce<T: WeightValue>(
         &self, 
         src: (&Self::Buf<T>, &MetaTensor), 
         dst: (&mut Self::Buf<T>, &MetaTensor), 

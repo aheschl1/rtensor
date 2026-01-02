@@ -136,8 +136,34 @@ void launch_tanh_nd_affine_f64(double* data, size_t offset, const ptrdiff_t* str
 DECLARE_UNARY_FLOAT_OP_HEADERS(abs)
 DECLARE_UNARY_FLOAT_OP_HEADERS(sqrt)
 
-void launch_flat_contiguous_reduce_f64(const double *data, double *out, size_t start, size_t len, ReductionOpCode code, const ReductionSettings *settings, unsigned int block_size);
-void launch_nd_reduce_contiguous_f64(double *data, double *out, size_t offset, size_t outer, size_t r, size_t inner, ReductionOpCode code, const ReductionSettings *settings, unsigned int block_size);
+// Reduction operations
+#define DECLARE_REDUCTION_OP_HEADERS(TYPE, SUFFIX)                                                \
+    void launch_flat_contiguous_reduce_##SUFFIX(                                                  \
+        const TYPE *data, TYPE *out, size_t start, size_t len,                                    \
+        ReductionOpCode code, const ReductionSettings *settings, unsigned int block_size);        \
+    void launch_nd_reduce_contiguous_##SUFFIX(                                                    \
+        TYPE *data, TYPE *out, size_t offset, size_t outer, size_t r, size_t inner,              \
+        ReductionOpCode code, const ReductionSettings *settings, unsigned int block_size);
+
+// Float types
+DECLARE_REDUCTION_OP_HEADERS(float,  f32)
+DECLARE_REDUCTION_OP_HEADERS(double, f64)
+
+// // Unsigned integer types
+// DECLARE_REDUCTION_OP_HEADERS(uint8_t,  u8)
+// DECLARE_REDUCTION_OP_HEADERS(uint16_t, u16)
+// DECLARE_REDUCTION_OP_HEADERS(uint32_t, u32)
+// DECLARE_REDUCTION_OP_HEADERS(uint64_t, u64)
+// DECLARE_REDUCTION_OP_HEADERS(__uint128_t, u128)
+
+// // Signed integer types
+// DECLARE_REDUCTION_OP_HEADERS(int8_t,  i8)
+// DECLARE_REDUCTION_OP_HEADERS(int16_t, i16)
+// DECLARE_REDUCTION_OP_HEADERS(int32_t, i32)
+// DECLARE_REDUCTION_OP_HEADERS(int64_t, i64)
+// DECLARE_REDUCTION_OP_HEADERS(__int128_t, i128)
+
+
 // void launch_elementwise_scattered_f32(float* data, const size_t* offsets, size_t n, uint8_t op, float value, unsigned int block_size);
 // void launch_elementwise_scattered_f64(double* data, const size_t* offsets, size_t n, uint8_t op, double value, unsigned int block_size);
 // void launch_elementwise_scattered_u8(uint8_t* data, const size_t* offsets, size_t n, uint8_t op, uint8_t value, unsigned int block_size);
