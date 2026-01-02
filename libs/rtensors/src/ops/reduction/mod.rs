@@ -2,13 +2,28 @@ use crate::{backend::Backend, core::{idx::Idx, primitives::TensorBase, shape_to_
 
 
 pub enum ReductionOpTypes {
-    Sum = 1,
-    Prod = 2,
-    Max = 3,
-    Min = 4,
-    Mean = 5,
-    PopVariance = 6,
-    UnbiasedVariance = 7
+    Sum,
+    Prod,
+    Max,
+    Min,
+    Mean,
+    Variance {
+        unbiased: bool
+    }
+}
+
+impl ReductionOpTypes {
+    #[inline(always)]
+    pub const fn get_code(&self) -> u8 {
+        match self {
+            Self::Sum => 1,
+            Self::Prod => 2,
+            Self::Max => 3,
+            Self::Min => 4,
+            Self::Mean => 5,
+            Self::Variance {..} => 6
+        }
+    }
 }
 
 pub trait TotalReductionOp: Sized {
@@ -122,19 +137,21 @@ where
         }
     }
     fn var(&self, axes: &Idx) -> Result<Self, TensorError> {
+        let code = ReductionOpTypes::Variance { unbiased: true };
         if !self.is_contiguous() {
             let a = self.contiguous();
-            do_reduce!(ReductionOpTypes::UnbiasedVariance, axes, a)
+            do_reduce!(code, axes, a)
         }else {
-            do_reduce!(ReductionOpTypes::UnbiasedVariance, axes, self)
+            do_reduce!(code, axes, self)
         }
     }
     fn pop_var(&self, axes: &Idx) -> Result<Self, TensorError> {
+        let code = ReductionOpTypes::Variance { unbiased: false };
         if !self.is_contiguous() {
             let a = self.contiguous();
-            do_reduce!(ReductionOpTypes::PopVariance, axes, a)
+            do_reduce!(code, axes, a)
         }else {
-            do_reduce!(ReductionOpTypes::PopVariance, axes, self)
+            do_reduce!(code, axes, self)
         }
     }
 }

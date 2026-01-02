@@ -230,7 +230,7 @@ pub trait Backend: Send + Sync + 'static + Clone {
         src: (&Self::Buf<T>, &MetaTensor), 
         dst: (&mut Self::Buf<T>, &MetaTensor), 
         dim: Dim,
-        op: ReductionOpTypes
+        op: ReductionOpTypes,
     ) -> Result<(), TensorError>;
 
     /// currently assuming that the tensor is contiguous

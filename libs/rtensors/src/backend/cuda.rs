@@ -1386,6 +1386,9 @@ impl Backend for Cuda {
     // impl_cpu_unary! { sigmoid, _temp }
 }
 
+
+
+
 // impl Cuda {
 //     pub fn _test_apply_sum_flat_contiguous<T: TensorValue>(
 //         backend: &Cuda,
@@ -1398,15 +1401,39 @@ impl Backend for Cuda {
 //     }
 // }
 
+#[inline]
+fn populate_reduction_settings(
+    op: &ReductionOpTypes
+) -> ReductionSettings {
+    let mut settings = ReductionSettings {
+        is_std: false,
+        unbiased: false
+    };
+
+    match &op {
+        ReductionOpTypes::Variance { unbiased } => {
+            settings.unbiased = *unbiased;
+        }
+        _ => {}
+    }
+    settings
+}
+
+
 fn apply_reduction_contiguous_single_elem<T: TensorValue>(
     backend: &Cuda,
     buf: &<Cuda as Backend>::Buf<T>,
     out: &mut <Cuda as Backend>::Buf<T>,
     start: usize,
     len: usize,
-    op: ReductionOpTypes
+    op: ReductionOpTypes,
+    // settings: &ReductionSettings
+
 ) -> Result<(), TensorError> {
     let stream = backend.stream();
+
+
+    let settings = populate_reduction_settings(&op);
 
     macro_rules! launch_negate {
         ($launch_fn:ident, $t:ty) => {{
@@ -1422,7 +1449,8 @@ fn apply_reduction_contiguous_single_elem<T: TensorValue>(
                     out_ptr as *mut $t,
                     start,
                     len,
-                    op as u8,
+                    op.get_code(),
+                    &settings as *const ReductionSettings,
                     DEFAULT_BLOCK_SIZE,
                 );
             }
@@ -1455,11 +1483,19 @@ fn apply_nd_reduction_contiguous<T: TensorValue>(
 ) -> Result<(), TensorError> {
 
 
+    let settings = populate_reduction_settings(&code);
+
+
     // This is a temporary limitation of the system.
     assert!(in_d_meta.is_contiguous(), "Currently the library only accepts contiguous tensors.");
     
 
     let stream = backend.stream();
+
+    // let settings = unsafe {
+    //     stream
+    //         .alloc::<ReductionSettings>(size_of::<ReductionSettings>())?
+    // };
 
 
     // Calculate the reduction length.
@@ -1488,7 +1524,8 @@ fn apply_nd_reduction_contiguous<T: TensorValue>(
                     inner,
                     red_len,
                     outer,
-                    code as u8,
+                    code.get_code(),
+                    &settings as *const ReductionSettings,
                     DEFAULT_BLOCK_SIZE
                 );
             }
@@ -1755,11 +1792,19 @@ mod tests {
     }
 
     #[test]
-    pub fn test_reduce_total_variance() {
+    pub fn test_reduce_total_variance_unbiased() {
          let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
             CudaTensor::<f64>::from_buf(vec![1., 2., 3., 4., 5., 6., 7., 8.], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.mean(&Idx::Item).unwrap().item().unwrap(), 4.5);
+        assert_eq!(cuda.var(&Idx::Item).unwrap().item().unwrap(), 6.0);
+    }
+
+    #[test]
+    pub fn test_reduce_total_variance_biased() {
+         let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
+            CudaTensor::<f64>::from_buf(vec![1., 2., 3., 4., 5., 6., 7., 8.], (4, 2))
+                .unwrap();
+        assert_eq!(cuda.pop_var(&Idx::Item).unwrap().item().unwrap(), 5.25);
     }
 
     #[test]
