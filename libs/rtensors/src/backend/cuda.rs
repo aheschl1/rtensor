@@ -1528,6 +1528,29 @@ impl Backend for Cuda {
         apply_reduction_contiguous_single_elem(self, &src.0, &mut dst.0, src.1.offset(), src.1.size(), op)
     }
 
+
+    fn apply_argmax_contiguous_flat<T: TensorValue>(
+            &self, 
+            src: &Self::Buf<T>, 
+            dst: &mut Self::Buf<u64>, 
+            start: usize, 
+            len: usize, 
+            op: ReductionOpTypes
+        ) -> Result<(), TensorError> {
+        todo!()
+    }
+    fn apply_argmax_contiguous_nd<T: TensorValue>(
+            &self, 
+            src: (&Self::Buf<T>, &MetaTensor), 
+            dst: (&mut Self::Buf<u64>, &MetaTensor), 
+            dim: crate::core::Dim,
+            op: ReductionOpTypes
+        ) -> Result<(), TensorError> {
+        todo!()
+    }
+
+
+
     // impl_cpu_unary!{ relu, _temp }
     // impl_cpu_unary! { neg, _temp }
     // impl_cpu_unary! { sigmoid, _temp }
@@ -1544,7 +1567,8 @@ fn populate_reduction_settings(
     let mut settings = ReductionSettings {
         is_std: false,
         unbiased: false,
-        norm_type: 0
+        norm_type: 0,
+        index: 0
     };
 
     match &op {
@@ -1572,13 +1596,12 @@ fn apply_reduction_contiguous_single_elem<T: TensorValue>(
     start: usize,
     len: usize,
     op: ReductionOpTypes,
-    // settings: &ReductionSettings
-
 ) -> Result<(), TensorError> {
     let stream = backend.stream();
 
 
-    let settings = populate_reduction_settings(&op);
+    let mut settings = Box::new(populate_reduction_settings(&op));
+    let settings_mut_ptr = (&mut *settings) as *mut _;
 
     macro_rules! launch_negate {
         ($launch_fn:ident, $t:ty) => {{
@@ -1595,7 +1618,7 @@ fn apply_reduction_contiguous_single_elem<T: TensorValue>(
                     start,
                     len,
                     op.get_code(),
-                    &settings as *const ReductionSettings,
+                    settings_mut_ptr,
                     DEFAULT_BLOCK_SIZE,
                 );
             }
@@ -1604,16 +1627,75 @@ fn apply_reduction_contiguous_single_elem<T: TensorValue>(
         }};
     }
 
+    
     // Dispatch based on type - only signed types support negation
     match std::any::TypeId::of::<T>() {
-        // id if id == std::any::TypeId::of::<f32>() => launch_negate!(launch_tanh_contiguous_f32, f32),
         id if id == std::any::TypeId::of::<f64>() => {
             launch_negate!(launch_flat_contiguous_reduce_f64, f64)
         }
         _ => Err(TensorError::CudaError(
             "Unsupported type for CUDA negation operation".to_string(),
         )),
+    };
+
+   
+
+    Ok(())
+}
+
+
+fn apply_argmax_contiguous_single_elem<T: TensorValue>(
+    backend: &Cuda,
+    buf: &<Cuda as Backend>::Buf<T>,
+    out: &mut <Cuda as Backend>::Buf<u64>,
+    start: usize,
+    len: usize,
+    op: ReductionOpTypes,
+) -> Result<(), TensorError> {
+    let stream = backend.stream();
+
+
+    let mut settings = Box::new(populate_reduction_settings(&op));
+    let settings_mut_ptr = (&mut *settings) as *mut _;
+
+    macro_rules! launch_negate {
+        ($launch_fn:ident, $t:ty) => {{
+            let (raw_ptr, _) = buf.ptr.device_ptr(&stream);
+            let data_ptr = raw_ptr as *mut $t;
+
+            let (raw_output_ptr, _) = out.ptr.device_ptr(&stream);
+            let out_ptr = raw_output_ptr as *mut $t;
+
+            unsafe {
+                $launch_fn(
+                    data_ptr as *mut $t,
+                    out_ptr as *mut $t,
+                    start,
+                    len,
+                    op.get_code(),
+                    settings_mut_ptr,
+                    DEFAULT_BLOCK_SIZE,
+                );
+            }
+            backend.dirty();
+            Ok(())
+        }};
     }
+
+    
+    // Dispatch based on type - only signed types support negation
+    match std::any::TypeId::of::<T>() {
+        id if id == std::any::TypeId::of::<f64>() => {
+            launch_negate!(launch_flat_contiguous_reduce_f64, f64)
+        }
+        _ => Err(TensorError::CudaError(
+            "Unsupported type for CUDA negation operation".to_string(),
+        )),
+    };
+
+   
+
+    Ok(())
 }
 
 
@@ -1982,6 +2064,14 @@ mod tests {
             CudaTensor::<f64>::from_buf(vec![1., 2., 3., 4., 5., 6., 7., 8.], (4, 2))
                 .unwrap();
         assert_eq!(cuda.norm(NormType::L2, &Idx::Item).unwrap().item().unwrap(), 14.2828568570857);
+    }
+
+     #[test]
+    pub fn test_reduce_total_argmax() {
+         let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
+            CudaTensor::<f64>::from_buf(vec![1., 2., 3., 4., 5., 6., 7., 8.], (4, 2))
+                .unwrap();
+        assert_eq!(cuda.argmax(&Idx::Item).unwrap().item().unwrap(), 14.2828568570857);
     }
 
     #[test]

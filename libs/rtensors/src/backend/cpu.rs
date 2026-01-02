@@ -344,6 +344,28 @@ impl Backend for Cpu {
         todo!()
     }
 
+
+
+    fn apply_argmax_contiguous_flat<T: TensorValue>(
+            &self, 
+            src: &Self::Buf<T>, 
+            dst: &mut Self::Buf<u64>, 
+            start: usize, 
+            len: usize, 
+            op: crate::ops::reduction::ReductionOpTypes
+        ) -> Result<(), TensorError> {
+        todo!()
+    }
+
+    fn apply_argmax_contiguous_nd<T: TensorValue>(
+            &self, 
+            src: (&Self::Buf<T>, &MetaTensor), 
+            dst: (&mut Self::Buf<u64>, &MetaTensor), 
+            dim: crate::core::Dim,
+            op: crate::ops::reduction::ReductionOpTypes
+        ) -> Result<(), TensorError> {
+        todo!()
+    }
 }
 
 #[inline]

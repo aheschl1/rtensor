@@ -135,6 +135,8 @@ void launch_tanh_nd_affine_f64(double* data, size_t offset, const ptrdiff_t* str
 
 DECLARE_UNARY_FLOAT_OP_HEADERS(abs)
 
+void launch_flat_contiguous_reduce_argmax_f64(const double *data, uint32_t *out, size_t start, size_t len, ReductionOpCode code, ReductionSettings *settings, unsigned int block_size);
+
 void launch_flat_contiguous_reduce_f64(const double *data, double *out, size_t start, size_t len, ReductionOpCode code, const ReductionSettings *settings, unsigned int block_size);
 void launch_nd_reduce_contiguous_f64(double *data, double *out, size_t offset, size_t outer, size_t r, size_t inner, ReductionOpCode code, const ReductionSettings *settings, unsigned int block_size);
 // void launch_elementwise_scattered_f32(float* data, const size_t* offsets, size_t n, uint8_t op, float value, unsigned int block_size);

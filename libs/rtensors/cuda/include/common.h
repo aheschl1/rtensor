@@ -13,6 +13,7 @@ struct ReductionSettings {
     bool unbiased;
     bool is_std;
     int norm_type;
+    uint32_t index;
 };
 
 enum ReductionOpCode: uint8_t {
@@ -23,7 +24,8 @@ enum ReductionOpCode: uint8_t {
     OP_MEAN = 5,
     OP_VARIANCE = 6,
     OP_LOGSUMEXP = 7,
-    OP_NORM = 8
+    OP_NORM = 8,
+    OP_ARGMAX = 9
 };
 
 // Contiguity types for matrix layouts
