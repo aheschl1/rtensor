@@ -18,6 +18,43 @@ struct SumOp
     }
 };
 
+struct L1SumOp
+{
+    template <typename T>
+    __device__ __forceinline__
+        T
+        operator()(const T &a, const T &b) const
+    {
+        return a + abs(b);
+    }
+};
+
+
+
+struct SquareUnaryOp
+{
+    template <typename T>
+    __device__ __forceinline__
+        T
+        operator()(const T &a) const
+    {
+        return a*a;
+    }
+};
+
+
+
+struct L2SumOp
+{
+    template <typename T>
+    __device__ __forceinline__
+        T
+        operator()(const T &a, const T &b) const
+    {
+        return a + (b * b);
+    }
+};
+
 struct ProdOp
 {
     template <typename T>
@@ -59,6 +96,17 @@ struct PostNothing
         operator()(T out, size_t n) const
     {
         return out;
+    }
+};
+
+struct PostSqrt
+{
+    template <typename T>
+    __device__ __forceinline__
+        T
+        operator()(T out, size_t n) const
+    {
+        return sqrt(out);
     }
 };
 
@@ -180,7 +228,53 @@ void launch_flat_contiguous_reduce(
     // Free the temporary storage allocation.
     cudaFree(&d_temp_storage);
 
-    post_transform_kernel<<<1, block_size>>>(d_out, num_items, post);
+    post_transform_kernel<<<1, 1>>>(d_out, num_items, post);
+}
+
+template <typename T>
+__global__ void square_kernel(
+    const T* __restrict__ in,
+    T* __restrict__ out,
+    size_t n
+) {
+    size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n) {
+        T x = in[i];
+        out[i] = x * x;
+    }
+}
+
+template <typename T>
+void launch_flat_contiguous_l2norm(
+    const T* data,
+    T* d_out,
+    size_t start,
+    size_t num_items,
+    unsigned int block_size
+) {
+    // 1) allocate temp for squares
+    T* d_tmp = nullptr;
+    cudaMalloc(&d_tmp, num_items * sizeof(T));
+
+    // 2) map: tmp[i] = data[start+i]^2
+    const T* d_in = data + start;
+    int threads = 256;
+    int blocks = (int)((num_items + threads - 1) / threads);
+    square_kernel<<<blocks, threads>>>(d_in, d_tmp, num_items);
+
+    // 3) reduce sum(tmp) + sqrt
+    launch_flat_contiguous_reduce<T, SumOp, PostSqrt>(
+        d_tmp,
+        d_out,
+        /*start=*/0,
+        num_items,
+        block_size,
+        SumOp{},
+        (T)0,
+        PostSqrt{}
+    );
+
+    cudaFree(d_tmp);
 }
 
 template <typename T>
@@ -365,6 +459,60 @@ __global__ void sum_axis_contig_kernel(
     }
 }
 
+
+template <typename T, typename Op, typename PostOp, typename MapOp>
+__global__ void map_axis_contig_kernel(
+    const T *__restrict__ in,
+    T *__restrict__ out,
+    size_t offset,
+    size_t outer,
+    size_t R,
+    size_t inner,
+    MapOp map,
+    Op op,
+    T init,
+    PostOp post)
+{
+    size_t out_linear = (size_t)blockIdx.x;
+    size_t out_elems = outer * inner;
+    if (out_linear >= out_elems)
+        return;
+
+    // Map linear output index -> (o, i)
+    size_t o = out_linear / inner;
+    size_t i = out_linear - o * inner;
+
+    // Base pointer for this output element: in[o, 0, i]
+    const T *base = in + offset + o * (R * inner) + i;
+
+    // Each thread accumulates a partial sum over k = threadIdx.x, threadIdx.x+blockDim.x, ...
+    T thread_sum = init;
+    for (size_t k = threadIdx.x; k < R; k += (size_t)blockDim.x)
+    {
+        thread_sum = op(thread_sum, map(base[k * inner]));
+    }
+
+    // Reduce thread_sum across the block (simple shared-memory reduction)
+    __shared__ T smem[256]; // assumes blockDim.x <= 256; adjust if you want bigger
+    smem[threadIdx.x] = thread_sum;
+    __syncthreads();
+
+    // power-of-two reduction
+    for (unsigned s = blockDim.x / 2; s > 0; s >>= 1)
+    {
+        if (threadIdx.x < s)
+        {
+            smem[threadIdx.x] = op(smem[threadIdx.x], smem[threadIdx.x + s]);
+        }
+        __syncthreads();
+    }
+
+    if (threadIdx.x == 0)
+    {
+        out[out_linear] = post((T)smem[0], R);
+    }
+}
+
 template <typename T, typename PostOp>
 __global__ void var_axis_contig_kernel(
     const T *__restrict__ in,
@@ -426,16 +574,87 @@ __global__ void var_axis_contig_kernel(
             denom = (reso.count > 0) ? (T)(reso.count) : (T)1;
         }
 
-        //
-
+        
         if(is_std) {
             out[out_linear] = sqrt(reso.m2 / denom);
         } else {
             out[out_linear] = reso.m2 / denom;
         }
-        
-        // out[out_linear] = (T) smem[0];
-        // out[out_linear] = post((T)smem[0], R);
+    }
+}
+
+template <typename T>
+struct LogSumExpState {
+    T m;   // max
+    T s;   // sum exp(x - m)
+};
+
+template <typename T>
+__device__ __forceinline__ LogSumExpState<T> lse_init() {
+    // m = -inf, s = 0
+    return LogSumExpState<T>{ -INFINITY, (T)0 };
+}
+
+template <typename T>
+__device__ __forceinline__ LogSumExpState<T> lse_from_value(T x) {
+    // for a single value: m=x, s=1
+    return LogSumExpState<T>{ x, (T)1 };
+}
+
+template <typename T>
+__device__ __forceinline__ LogSumExpState<T> lse_combine(LogSumExpState<T> a, LogSumExpState<T> b) {
+    if (a.s == (T)0) return b;
+    if (b.s == (T)0) return a;
+
+    T m = (a.m > b.m) ? a.m : b.m;
+    // rescale both sums into the new max frame
+    T s = a.s * exp(a.m - m) + b.s * exp(b.m - m);
+    return LogSumExpState<T>{ m, s };
+}
+
+template <typename T>
+__global__ void logsumexp_axis_contig_kernel(
+    const T* __restrict__ in,
+    T* __restrict__ out,
+    size_t offset,
+    size_t outer,
+    size_t R,
+    size_t inner
+) {
+    size_t out_linear = (size_t)blockIdx.x;
+    size_t out_elems  = outer * inner;
+    if (out_linear >= out_elems) return;
+
+    // Map linear output index -> (o, i)
+    size_t o = out_linear / inner;
+    size_t i = out_linear - o * inner;
+
+    // Base pointer for this output element: in[o, 0, i]
+    const T* base = in + offset + o * (R * inner) + i;
+
+    // Each thread accumulates a partial LSE state over k
+    LogSumExpState<T> st = lse_init<T>();
+    for (size_t k = threadIdx.x; k < R; k += (size_t)blockDim.x) {
+        T x = base[k * inner];
+        st = lse_combine(st, lse_from_value<T>(x));
+    }
+
+    // Reduce across the block
+    __shared__ LogSumExpState<T> smem[256]; // assumes blockDim.x <= 256
+    smem[threadIdx.x] = st;
+    __syncthreads();
+
+    for (unsigned s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (threadIdx.x < s) {
+            smem[threadIdx.x] = lse_combine(smem[threadIdx.x], smem[threadIdx.x + s]);
+        }
+        __syncthreads();
+    }
+
+    if (threadIdx.x == 0) {
+        LogSumExpState<T> r0 = smem[0];
+        // If R==0 (shouldn't happen), keep sane output
+        out[out_linear] = (R == 0) ? (T)-INFINITY : (r0.m + log(r0.s));
     }
 }
 
@@ -481,6 +700,17 @@ void sum_axis_strided_fast_launch(
         break;
     case OP_VARIANCE:
         var_axis_contig_kernel<T, PostDivTotal><<<grid, block>>>(d_in, d_out, offset, outer, r, inner, PostDivTotal{}, settings->unbiased, settings->is_std);
+        break;
+    case OP_LOGSUMEXP:
+        logsumexp_axis_contig_kernel<T><<<grid, block>>>(d_in, d_out, offset, outer, r, inner);
+        break;
+    case OP_NORM:
+        if(settings->norm_type == 1) {
+            sum_axis_contig_kernel<T, L1SumOp, PostNothing><<<grid, block>>>(d_in, d_out, offset, outer, r, inner, L1SumOp{}, (T)0, PostNothing{});
+        } else if(settings->norm_type == 2) {
+            map_axis_contig_kernel<T, SumOp, PostSqrt, SquareUnaryOp><<<grid, block>>>(d_in, d_out, offset, outer, r, inner, SquareUnaryOp {}, SumOp{}, (T)0, PostSqrt {});
+        }
+        
         break;
     // case OP_VARIANCE_UNBIASED:
     //     var_axis_contig_kernel<T, PostDivTotal, true><<<grid, block>>>(d_in, d_out, offset, outer, r, inner, PostDivTotal{});
@@ -528,7 +758,13 @@ void dispatch_flat_contiguous_reduce(
     case OP_VARIANCE:
         launch_flat_contiguous_reduce_variance<T>(data, out, start, len, settings, block_size);
         break;
-
+    case OP_NORM:
+        if(settings->norm_type == 1) {
+            launch_flat_contiguous_reduce<T, L1SumOp, PostNothing>(data, out, start, len, block_size, L1SumOp{}, (T)0, PostNothing{});
+        } else {
+            launch_flat_contiguous_l2norm(data, out,start,len, block_size);
+        }
+        break;
     default:
         return;
     }

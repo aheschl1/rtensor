@@ -12,7 +12,9 @@ pub enum ReductionOpTypes {
     },
     Stdev {
         unbiased: bool
-    }
+    },
+    LogSumExp,
+    Norm(NormType)
 }
 
 impl ReductionOpTypes {
@@ -24,10 +26,17 @@ impl ReductionOpTypes {
             Self::Max => 3,
             Self::Min => 4,
             Self::Mean => 5,
-            Self::Variance {..} | Self::Stdev { .. } => 6
+            Self::Variance {..} | Self::Stdev { .. } => 6,
+            Self::LogSumExp => 7,
+            Self::Norm(_) => 8
             
         }
     }
+}
+
+pub enum NormType {
+    L1,
+    L2
 }
 
 pub trait TotalReductionOp: Sized {
@@ -44,6 +53,8 @@ pub trait ReductionOp : Sized {
     fn var(&self, axes: &Idx) -> Result<Self, TensorError>;
     fn pop_var(&self, axes: &Idx) -> Result<Self, TensorError>;
     fn std(&self, axes: &Idx, unbiased: bool) -> Result<Self, TensorError>;
+    fn norm(&self, norm: NormType, axes: &Idx) -> Result<Self, TensorError>;
+    fn logsumexp(&self, axes: &Idx) -> Result<Self, TensorError>;
 }
 
 macro_rules! do_reduce {
@@ -161,6 +172,23 @@ where
     }
      fn std(&self, axes: &Idx, unbiased: bool) -> Result<Self, TensorError> {
         let code = ReductionOpTypes::Stdev { unbiased };
+        if !self.is_contiguous() {
+            let a = self.contiguous();
+            do_reduce!(code, axes, a)
+        }else {
+            do_reduce!(code, axes, self)
+        }
+    }
+    fn logsumexp(&self, axes: &Idx) -> Result<Self, TensorError> {
+        if !self.is_contiguous() {
+            let a = self.contiguous();
+            do_reduce!(ReductionOpTypes::LogSumExp, axes, a)
+        }else {
+            do_reduce!(ReductionOpTypes::LogSumExp, axes, self)
+        }
+    }
+    fn norm(&self, norm: NormType, axes: &Idx) -> Result<Self, TensorError> {
+        let code = ReductionOpTypes::Norm(norm);
         if !self.is_contiguous() {
             let a = self.contiguous();
             do_reduce!(code, axes, a)

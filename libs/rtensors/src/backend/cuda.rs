@@ -8,7 +8,7 @@ use cudarc::{
     driver::{CudaContext, CudaSlice, DevicePtr},
 };
 
-use crate::{backend::ContiguityTypes, ops::reduction::ReductionOpTypes};
+use crate::{backend::ContiguityTypes, ops::reduction::{NormType, ReductionOpTypes}};
 use crate::{
     backend::{cpu::Cpu, Backend, BackendMatMul},
     core::{
@@ -1543,7 +1543,8 @@ fn populate_reduction_settings(
 ) -> ReductionSettings {
     let mut settings = ReductionSettings {
         is_std: false,
-        unbiased: false
+        unbiased: false,
+        norm_type: 0
     };
 
     match &op {
@@ -1553,6 +1554,10 @@ fn populate_reduction_settings(
         ReductionOpTypes::Stdev { unbiased } => {
             settings.unbiased = *unbiased;
             settings.is_std = true;
+        }
+        ReductionOpTypes::Norm(ntype) => match ntype {
+            NormType::L1 => settings.norm_type = 1,
+            NormType::L2 => settings.norm_type = 2
         }
         _ => {}
     }
@@ -1887,7 +1892,7 @@ mod tests {
     use crate::{
         backend::cuda::{Cuda, apply_nd_reduction_contiguous},
         core::{MetaTensorView, Tensor, idx::Idx, primitives::CudaTensor, tensor::{AsTensor, TensorAccess}, value::TensorValue},
-        ops::{reduction::{ReductionOp, TotalReductionOp}, unary::{InplaceUnaryOp, Tanh}},
+        ops::{reduction::{NormType, ReductionOp, TotalReductionOp}, unary::{InplaceUnaryOp, Tanh}},
     };
 
     #[test]
@@ -1961,6 +1966,22 @@ mod tests {
             CudaTensor::<f64>::from_buf(vec![1., 2., 3., 4., 5., 6., 7., 8.], (4, 2))
                 .unwrap();
         assert_eq!(cuda.std(&Idx::Item, false).unwrap().item().unwrap(), 2.29128784747792);
+    }
+
+    #[test]
+    pub fn test_reduce_total_norm_l1() {
+         let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
+            CudaTensor::<f64>::from_buf(vec![1., 2., 3., 4., 5., 6., 7., 8.], (4, 2))
+                .unwrap();
+        assert_eq!(cuda.norm(NormType::L1, &Idx::Item).unwrap().item().unwrap(), 36.);
+    }
+
+    #[test]
+    pub fn test_reduce_total_norm_l2() {
+         let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
+            CudaTensor::<f64>::from_buf(vec![1., 2., 3., 4., 5., 6., 7., 8.], (4, 2))
+                .unwrap();
+        assert_eq!(cuda.norm(NormType::L2, &Idx::Item).unwrap().item().unwrap(), 14.2828568570857);
     }
 
     #[test]
@@ -2053,6 +2074,33 @@ mod tests {
             CudaTensor::<f64>::from_buf(vec![1.,  2., 3., 4., 5., 6., 7., 8.], (4, 2))
                 .unwrap();
         assert_eq!(cuda.std(&Idx::At(0), false)?.cpu()?, CudaTensor::from_buf(vec![1.118033988749895, 1.118033988749895], (1, 2))?.cpu()?);
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_reduce_logsumexp() -> Result<(), Box<dyn Error>> {
+        let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
+            CudaTensor::<f64>::from_buf(vec![1.,  2., 3., 4., 5., 6., 7., 8.], (4, 2))
+                .unwrap();
+        assert_eq!(cuda.logsumexp(&Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![4.440189698561196, 8.440189698561195], (1, 2))?.cpu()?);
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_reduce_norm_l1() -> Result<(), Box<dyn Error>> {
+        let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
+            CudaTensor::<f64>::from_buf(vec![1.,  2., 3., 4., 5., 6., 7., 8.], (4, 2))
+                .unwrap();
+        assert_eq!(cuda.norm(NormType::L1, &Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![10.0, 26.0], (1, 2))?.cpu()?);
+        Ok(())
+    }
+
+    #[test]
+    pub fn test_reduce_norm_l2() -> Result<(), Box<dyn Error>> {
+        let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
+            CudaTensor::<f64>::from_buf(vec![1.,  2., 3., 4., 5., 6., 7., 8.], (4, 2))
+                .unwrap();
+        assert_eq!(cuda.norm(NormType::L2, &Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![5.477225575051661, 13.19090595827292], (1, 2))?.cpu()?);
         Ok(())
     }
 
