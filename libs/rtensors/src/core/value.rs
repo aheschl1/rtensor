@@ -41,6 +41,8 @@ pub trait WeightValue :
     fn vceil(&self) -> Self;
     fn vround(&self) -> Self;
     fn vtrunc(&self) -> Self;
+    fn vlog(&self, base: Self) -> Self;
+    fn vlog1p(&self, base: Self) -> Self;
     fn from_usize(value: usize) -> Self {
         Self::from_f32(value as f32)
     }
@@ -97,6 +99,17 @@ impl WeightValue for f32 {
     fn vtrunc(&self) -> Self {
         self.trunc()
     }
+    
+    #[inline(always)]
+    fn vlog(&self, base: Self) -> Self {
+        self.log(base)
+    }
+
+    #[inline(always)]
+    fn vlog1p(&self, base: Self) -> Self {
+        // (self + Self::ONE).log(base)
+        self.ln_1p() / base.ln()
+    }
 }
 
 impl WeightValue for f64 {
@@ -148,6 +161,16 @@ impl WeightValue for f64 {
     #[inline(always)]
     fn vtrunc(&self) -> Self {
         self.trunc()
+    }
+
+    #[inline(always)]
+    fn vlog(&self, base: Self) -> Self {
+        self.log(base)
+    }
+
+    #[inline(always)]
+    fn vlog1p(&self, base: Self) -> Self {
+        self.ln_1p() / base.ln()
     }
 }
 

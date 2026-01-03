@@ -291,57 +291,6 @@ impl Backend for Cpu {
 
         Ok(())
     }
-
-    // fn apply_elementwise_binary_contiguous<T: TensorValue>(
-    //     &self, buf: &mut Self::Buf<T>, 
-    //     op: (BinaryOpType, T), 
-    //     start: usize,
-    //     len: usize
-    // ) -> Result<(), TensorError> {
-    //     let bufptr = buf.as_mut();
-    //     elemwise_contiguous_loop!(bufptr, start, len, |x| op.0.apply(*x, op.1));
-    //     Ok(())
-    // }
-    
-    // fn apply_elementwise_binary_1d_strided<T: TensorValue>(
-    //     &self, buf: &mut Self::Buf<T>, 
-    //     op: (BinaryOpType, T), 
-    //     offset: usize,
-    //     stride: isize,
-    //     len: usize
-    // ) -> Result<(), TensorError> {
-    //     let bufptr = buf.as_mut();
-
-    //     elemwise_1d_strided_loop!(
-    //         bufptr,
-    //         offset,
-    //         stride,
-    //         len,
-    //         |x| op.0.apply(*x, op.1)
-    //     );
-
-    //     Ok(())
-    // }
-    
-    // fn apply_elementwise_binary_nd<T: TensorValue>(
-    //     &self,
-    //     buf: &mut Self::Buf<T>,
-    //     op: (BinaryOpType, T),
-    //     offset: usize,
-    //     shape: &[usize],
-    //     stride: &[isize],
-    // ) -> Result<(), TensorError> {
-    //     let bufptr = buf.as_mut();
-    //     elemwise_nd_loop!(
-    //         bufptr,
-    //         offset,
-    //         shape,
-    //         stride,
-    //         |x| op.0.apply(*x, op.1)
-    //     );
-    //     Ok(())
-    // }
-    
     impl_cpu_unary!{ neg, _negate where T: std::ops::Neg<Output = T> }
     impl_cpu_unary!{ relu, _relu }
     impl_cpu_unary!{ sigmoid, _sigmoid where T: InvExp}
@@ -360,6 +309,9 @@ impl Backend for Cpu {
     impl_cpu_scalar!{ add, _scalar_add }
     impl_cpu_scalar!{ sub, _scalar_sub }
     impl_cpu_scalar!{ mul, _scalar_mul }
+    impl_cpu_scalar!{ log, _scalar_log where T: WeightValue }
+    impl_cpu_scalar!{ log1p, _scalar_log1p where T: WeightValue }
+    impl_cpu_scalar!{ leaky_relu, _scalar_leaky_relu }
     
     /// go through entire buffer, take everything
     fn apply_reduce_contiguous_flat<T: WeightValue>(
@@ -532,6 +484,25 @@ fn _scalar_sub<T: TensorValue>(x: &mut T, value: T) -> T {
 #[inline]
 fn _scalar_mul<T: TensorValue>(x: &mut T, value: T) -> T {
     *x * value
+}
+
+#[inline]
+fn _scalar_log<T: WeightValue>(x: &mut T, value: T) -> T {
+    x.vlog(value)
+}
+
+#[inline]
+fn _scalar_log1p<T: WeightValue>(x: &mut T, value: T) -> T {
+    x.vlog1p(value)
+}
+
+#[inline]
+fn _scalar_leaky_relu<T: TensorValue>(x: &mut T, slope: T) -> T {
+    if *x > T::ZERO {
+        *x
+    } else {
+        *x * slope
+    }
 }
 
 macro_rules! blas_impl {

@@ -239,18 +239,18 @@ macro_rules! specify_trait_unary_cabal {
 }
 
 macro_rules! specify_trait_scalar_cabal {
-    // ===== entry: no extra bounds =====
-    { $op:ident } => {
-        specify_trait_scalar_cabal! { @impl $op where T: }
+    // ===== entry: no extra bounds (all types) =====
+    ( $op:ident ) => {
+        specify_trait_scalar_cabal! { @impl_all_types $op, }
     };
 
-    // ===== entry: with extra bounds =====
-    { $op:ident where T: $($extra:tt)+ } => {
-        specify_trait_scalar_cabal! { @impl $op where T: $($extra)+ }
+    // ===== entry: with extra bounds (float-only) =====
+    ( $op:ident where T: $($extra:tt)+ ) => {
+        specify_trait_scalar_cabal! { @impl_float_only $op, + $($extra)+ }
     };
 
-    // ===== implementation =====
-    ( @impl $op:ident where T: $($extra_bounds:tt)* ) => {
+    // ===== implementation for all types =====
+    ( @impl_all_types $op:ident, $($extra_bounds:tt)* ) => {
         paste::paste! {
             fn [<scalar_apply_ $op _contiguous>]<T: TensorValue $($extra_bounds)*>(
                 &self,
@@ -436,6 +436,134 @@ macro_rules! specify_trait_scalar_cabal {
                         launch!([<launch_ $op _nd_affine_boolean>], bool),
                     _ => Err(TensorError::CudaError(format!(
                         "Unsupported type for CUDA {} operation",
+                        stringify!($op),
+                    ))),
+                }
+            }
+        }
+    };
+
+    // ===== implementation for float-only types =====
+    ( @impl_float_only $op:ident, $($extra_bounds:tt)* ) => {
+        paste::paste! {
+            fn [<scalar_apply_ $op _contiguous>]<T: TensorValue $($extra_bounds)*>(
+                &self,
+                buf: &mut Self::Buf<T>,
+                value: T,
+                start: usize,
+                len: usize,
+            ) -> Result<(), TensorError> {
+                let stream = self.stream();
+
+                macro_rules! launch {
+                    ($launch_fn:ident, $t:ty) => {{
+                        let concrete_value: $t = unsafe { std::mem::transmute_copy(&value) };
+                        let (raw_ptr, _) = buf.ptr.device_ptr(&stream);
+                        let data_ptr = raw_ptr as *mut $t;
+                        let data_ptr = unsafe { data_ptr.add(start) };
+                        unsafe { $launch_fn(data_ptr, len, concrete_value, DEFAULT_BLOCK_SIZE); }
+                        self.dirty();
+                        Ok(())
+                    }};
+                }
+
+                match std::any::TypeId::of::<T>() {
+                    id if id == std::any::TypeId::of::<f32>() =>
+                        launch!([<launch_ $op _contiguous_f32>], f32),
+                    id if id == std::any::TypeId::of::<f64>() =>
+                        launch!([<launch_ $op _contiguous_f64>], f64),
+                    _ => Err(TensorError::CudaError(format!(
+                        "Unsupported type for CUDA {} operation (float-only)",
+                        stringify!($op),
+                    ))),
+                }
+            }
+
+            fn [<scalar_apply_ $op _1d_strided>]<T: TensorValue $($extra_bounds)*>(
+                &self,
+                buf: &mut Self::Buf<T>,
+                value: T,
+                offset: usize,
+                stride: isize,
+                len: usize,
+            ) -> Result<(), TensorError> {
+                let stream = self.stream();
+
+                macro_rules! launch {
+                    ($launch_fn:ident, $t:ty) => {{
+                        let concrete_value: $t = unsafe { std::mem::transmute_copy(&value) };
+                        let (raw_ptr, _) = buf.ptr.device_ptr(&stream);
+                        let data_ptr = raw_ptr as *mut $t;
+                        unsafe { $launch_fn(data_ptr, offset, stride, len, concrete_value, DEFAULT_BLOCK_SIZE); }
+                        self.dirty();
+                        Ok(())
+                    }};
+                }
+
+                match std::any::TypeId::of::<T>() {
+                    id if id == std::any::TypeId::of::<f32>() =>
+                        launch!([<launch_ $op _strided_f32>], f32),
+                    id if id == std::any::TypeId::of::<f64>() =>
+                        launch!([<launch_ $op _strided_f64>], f64),
+                    _ => Err(TensorError::CudaError(format!(
+                        "Unsupported type for CUDA {} operation (float-only)",
+                        stringify!($op),
+                    ))),
+                }
+            }
+
+            fn [<scalar_apply_ $op _nd>]<T: TensorValue $($extra_bounds)*>(
+                &self,
+                buf: &mut Self::Buf<T>,
+                value: T,
+                offset: usize,
+                shape: &[usize],
+                stride: &[isize],
+            ) -> Result<(), TensorError> {
+                let stream = self.stream();
+                let rank = shape.len();
+                let size = shape.iter().product::<usize>();
+
+                // allocate device memory for shape/stride
+                let shape_buf = self.alloc_from_slice(
+                    shape.iter().copied().map(|x| x as u64).collect::<Vec<u64>>().into_boxed_slice()
+                )?;
+                let stride_buf = self.alloc_from_slice(
+                    stride.iter().copied().map(|x| x as i64).collect::<Vec<i64>>().into_boxed_slice()
+                )?;
+
+                let (stride_ptr, _) = stride_buf.ptr.device_ptr(&stream);
+                let (shape_ptr,  _) = shape_buf.ptr.device_ptr(&stream);
+
+                macro_rules! launch {
+                    ($launch_fn:ident, $t:ty) => {{
+                        let concrete_value: $t = unsafe { std::mem::transmute_copy(&value) };
+                        let (raw_ptr, _) = buf.ptr.device_ptr(&stream);
+                        let data_ptr = raw_ptr as *mut $t;
+                        unsafe {
+                            $launch_fn(
+                                data_ptr,
+                                offset,
+                                stride_ptr as *const isize,
+                                shape_ptr  as *const usize,
+                                rank,
+                                size,
+                                concrete_value,
+                                DEFAULT_BLOCK_SIZE,
+                            );
+                        }
+                        self.dirty();
+                        Ok(())
+                    }};
+                }
+
+                match std::any::TypeId::of::<T>() {
+                    id if id == std::any::TypeId::of::<f32>() =>
+                        launch!([<launch_ $op _nd_affine_f32>], f32),
+                    id if id == std::any::TypeId::of::<f64>() =>
+                        launch!([<launch_ $op _nd_affine_f64>], f64),
+                    _ => Err(TensorError::CudaError(format!(
+                        "Unsupported type for CUDA {} operation (float-only)",
                         stringify!($op),
                     ))),
                 }
@@ -1216,6 +1344,9 @@ impl Backend for Cuda {
     specify_trait_scalar_cabal!{add}
     specify_trait_scalar_cabal!{sub}
     specify_trait_scalar_cabal!{mul}
+    specify_trait_scalar_cabal!{log where T: WeightValue}
+    specify_trait_scalar_cabal!{log1p where T: WeightValue}
+    specify_trait_scalar_cabal!{leaky_relu}
 
     fn apply_sigmoid_contiguous<T: TensorValue + InvExp>(
         &self,

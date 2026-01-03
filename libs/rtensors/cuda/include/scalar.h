@@ -56,6 +56,26 @@ DECLARE_SCALAR_OP_HEADERS(mul, int64_t, i64)
 DECLARE_SCALAR_OP_HEADERS(mul, __int128_t, i128)
 DECLARE_SCALAR_OP_HEADERS(mul, bool, boolean)
 
+DECLARE_SCALAR_OP_HEADERS(log, float, f32)
+DECLARE_SCALAR_OP_HEADERS(log, double, f64)
+DECLARE_SCALAR_OP_HEADERS(log1p, float, f32)
+DECLARE_SCALAR_OP_HEADERS(log1p, double, f64)
+
+// Leaky ReLU operation - all types
+DECLARE_SCALAR_OP_HEADERS(leaky_relu, float, f32)
+DECLARE_SCALAR_OP_HEADERS(leaky_relu, double, f64)
+DECLARE_SCALAR_OP_HEADERS(leaky_relu, uint8_t, u8)
+DECLARE_SCALAR_OP_HEADERS(leaky_relu, uint16_t, u16)
+DECLARE_SCALAR_OP_HEADERS(leaky_relu, uint32_t, u32)
+DECLARE_SCALAR_OP_HEADERS(leaky_relu, uint64_t, u64)
+DECLARE_SCALAR_OP_HEADERS(leaky_relu, __uint128_t, u128)
+DECLARE_SCALAR_OP_HEADERS(leaky_relu, int8_t, i8)
+DECLARE_SCALAR_OP_HEADERS(leaky_relu, int16_t, i16)
+DECLARE_SCALAR_OP_HEADERS(leaky_relu, int32_t, i32)
+DECLARE_SCALAR_OP_HEADERS(leaky_relu, int64_t, i64)
+DECLARE_SCALAR_OP_HEADERS(leaky_relu, __int128_t, i128)
+DECLARE_SCALAR_OP_HEADERS(leaky_relu, bool, boolean)
+
 // Negation operations
 void launch_negate_contiguous_f32(float* data, size_t start, size_t len, unsigned int block_size);
 void launch_negate_contiguous_f64(double* data, size_t start, size_t len, unsigned int block_size);

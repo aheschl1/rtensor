@@ -11,6 +11,21 @@ struct AddOp {
     }
 };
 
+// log base n
+struct LogOp {
+    template<typename T>
+    __device__ __forceinline__ T operator()(T x, T value) const {
+        return log(x) / log(value);
+    }
+};
+
+struct Log1POp {
+    template<typename T>
+    __device__ __forceinline__ T operator()(T x, T value) const {
+        return log1p(x) / log(value);
+    }
+};
+
 struct SubOp {
     template<typename T>
     __device__ __forceinline__ T operator()(T x, T value) const {
@@ -22,6 +37,13 @@ struct MulOp {
     template<typename T>
     __device__ __forceinline__ T operator()(T x, T value) const {
         return x * value;
+    }
+};
+
+struct LeakyReluOp {
+    template<typename T>
+    __device__ __forceinline__ T operator()(T x, T slope) const {
+        return x > T(0) ? x : x * slope;
     }
 };
 
@@ -213,3 +235,24 @@ DECLARE_SCALAR_LAUNCHERS(mul, MulOp, int32_t, i32)
 DECLARE_SCALAR_LAUNCHERS(mul, MulOp, int64_t, i64)
 DECLARE_SCALAR_LAUNCHERS(mul, MulOp, __int128_t, i128)
 DECLARE_SCALAR_LAUNCHERS(mul, MulOp, bool, boolean)
+
+DECLARE_SCALAR_LAUNCHERS(log, LogOp, float,  f32)
+DECLARE_SCALAR_LAUNCHERS(log, LogOp, double,  f64)
+
+DECLARE_SCALAR_LAUNCHERS(log1p, Log1POp, float,  f32)
+DECLARE_SCALAR_LAUNCHERS(log1p, Log1POp, double,  f64)
+
+// leaky_relu: all types
+DECLARE_SCALAR_LAUNCHERS(leaky_relu, LeakyReluOp, float,  f32)
+DECLARE_SCALAR_LAUNCHERS(leaky_relu, LeakyReluOp, double, f64)
+DECLARE_SCALAR_LAUNCHERS(leaky_relu, LeakyReluOp, uint8_t,  u8)
+DECLARE_SCALAR_LAUNCHERS(leaky_relu, LeakyReluOp, uint16_t, u16)
+DECLARE_SCALAR_LAUNCHERS(leaky_relu, LeakyReluOp, uint32_t, u32)
+DECLARE_SCALAR_LAUNCHERS(leaky_relu, LeakyReluOp, uint64_t, u64)
+DECLARE_SCALAR_LAUNCHERS(leaky_relu, LeakyReluOp, __uint128_t, u128)
+DECLARE_SCALAR_LAUNCHERS(leaky_relu, LeakyReluOp, int8_t,  i8)
+DECLARE_SCALAR_LAUNCHERS(leaky_relu, LeakyReluOp, int16_t, i16)
+DECLARE_SCALAR_LAUNCHERS(leaky_relu, LeakyReluOp, int32_t, i32)
+DECLARE_SCALAR_LAUNCHERS(leaky_relu, LeakyReluOp, int64_t, i64)
+DECLARE_SCALAR_LAUNCHERS(leaky_relu, LeakyReluOp, __int128_t, i128)
+DECLARE_SCALAR_LAUNCHERS(leaky_relu, LeakyReluOp, bool, boolean)
