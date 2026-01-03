@@ -312,6 +312,7 @@ impl Backend for Cpu {
     impl_cpu_scalar!{ log, _scalar_log where T: WeightValue }
     impl_cpu_scalar!{ log1p, _scalar_log1p where T: WeightValue }
     impl_cpu_scalar!{ leaky_relu, _scalar_leaky_relu }
+    impl_cpu_scalar!{ elu, _scalar_elu where T: WeightValue }
     
     /// go through entire buffer, take everything
     fn apply_reduce_contiguous_flat<T: WeightValue>(
@@ -502,6 +503,15 @@ fn _scalar_leaky_relu<T: TensorValue>(x: &mut T, slope: T) -> T {
         *x
     } else {
         *x * slope
+    }
+}
+
+#[inline]
+fn _scalar_elu<T: WeightValue>(x: &mut T, alpha: T) -> T {
+    if *x >= T::ZERO {
+        *x
+    } else {
+        alpha * (x.apply_expm1())
     }
 }
 

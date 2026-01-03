@@ -109,11 +109,12 @@ specify_binary_scalar_op_template!(
     (LogOp) log where T: WeightValue;
     (Log1POp) log1p where T: WeightValue;
     (LeakyReluOp) leaky_relu;
+    (EluOp) elu where T: WeightValue;
 );
 
 #[cfg(test)]
 mod tests {
-    use crate::{backend::cpu::Cpu, ops::scalar::{LeakyReluOp, Log1POp, LogOp}, testing::{unary_assert_1d_strided, unary_assert_contiguous, unary_assert_nd_strided}};
+    use crate::{backend::cpu::Cpu, ops::scalar::{EluOp, LeakyReluOp, Log1POp, LogOp}, testing::{unary_assert_1d_strided, unary_assert_contiguous, unary_assert_nd_strided}};
 
     #[test]
     fn test_scalar_log_1d_strided_f32() {
@@ -183,6 +184,33 @@ mod tests {
     }
 
     #[test]
+    fn test_scalar_elu_1d_strided_f32() {
+        unary_assert_1d_strided::<f32, _, _, Cpu>(
+            [1.0, -2.0, 3.0],
+            |f| if f >= 0.0 { f } else { f.exp_m1() * 0.1 },
+            |f| f.elu_inplace(0.1),
+        );
+    }
+
+    #[test]
+    fn test_scalar_elu_contiguous_f32() {
+        unary_assert_contiguous::<f32, _, _, Cpu>(
+            [2.0, -1.5],
+            |f| if f >= 0.0 { f } else { f.exp_m1() * 0.1 },
+            |f| f.elu_inplace(0.1)
+        );
+    }
+
+    #[test]
+    fn test_scalar_elu_nd_strided_f32() {
+        unary_assert_nd_strided::<f32, _, _, Cpu>(
+            [-1.0, 2.0, -3.0, 4.0, -5.0, 6.0, -7.0, 8.0, -9.0, 10.0, -11.0, 12.0, -13.0, 14.0, -15.0, 16.0],
+            |f| if f >= 0.0 { f } else { f.exp_m1() * 0.2 },
+            |f| f.elu_inplace(0.2)
+        );
+    }
+
+    #[test]
     fn test_scalar_leaky_relu_1d_strided_i32() {
         unary_assert_1d_strided::<i32, _, _, Cpu>(
             [1, -2, 3],
@@ -213,7 +241,7 @@ mod tests {
 #[cfg(feature = "cuda")]
 #[cfg(test)]
 mod cuda_tests{
-    use crate::{backend::cuda::Cuda, ops::scalar::{LeakyReluOp, Log1POp, LogOp}, testing::{unary_assert_1d_strided, unary_assert_contiguous, unary_assert_nd_strided}};
+    use crate::{backend::cuda::Cuda, ops::scalar::{EluOp, LeakyReluOp, Log1POp, LogOp}, testing::{unary_assert_1d_strided, unary_assert_contiguous, unary_assert_nd_strided}};
 
     #[test]
     fn test_scalar_log_1d_strided_f32() {
@@ -328,6 +356,60 @@ mod cuda_tests{
             [1, -2, 3],
             |f| if f > 0 { f } else { f * 1 },
             |f| f.leaky_relu_inplace(1),
+        );
+    }
+
+    #[test]
+    fn test_scalar_elu_1d_strided_f32() {
+        unary_assert_1d_strided::<f32, _, _, Cuda>(
+            [1.0, -2.0, 3.0],
+            |f| if f >= 0.0 { f } else { f.exp_m1() * 0.1 },
+            |f| f.elu_inplace(0.1),
+        );
+    }
+
+    #[test]
+    fn test_scalar_elu_contiguous_f32() {
+        unary_assert_contiguous::<f32, _, _, Cuda>(
+            [2.0, -1.5],
+            |f| if f >= 0.0 { f } else { f.exp_m1() * 0.1 },
+            |f| f.elu_inplace(0.1)
+        );
+    }
+
+    #[test]
+    fn test_scalar_elu_nd_strided_f32() {
+        unary_assert_nd_strided::<f32, _, _, Cuda>(
+            [-1.0, 2.0, -3.0, 4.0, -5.0, 6.0, -7.0, 8.0, -9.0, 10.0, -11.0, 12.0, -13.0, 14.0, -15.0, 16.0],
+            |f| if f >= 0.0 { f } else { f.exp_m1() * 0.2 },
+            |f| f.elu_inplace(0.2)
+        );
+    }
+
+    #[test]
+    fn test_scalar_elu_1d_strided_f64() {
+        unary_assert_1d_strided::<f64, _, _, Cuda>(
+            [1.0, -2.0, 3.0],
+            |f| if f >= 0.0 { f } else { f.exp_m1() * 0.1 },
+            |f| f.elu_inplace(0.1),
+        );
+    }
+
+    #[test]
+    fn test_scalar_elu_contiguous_f64() {
+        unary_assert_contiguous::<f64, _, _, Cuda>(
+            [2.0, -1.5],
+            |f| if f >= 0.0 { f } else { f.exp_m1() * 0.1 },
+            |f| f.elu_inplace(0.1)
+        );
+    }
+
+    #[test]
+    fn test_scalar_elu_nd_strided_f64() {
+        unary_assert_nd_strided::<f64, _, _, Cuda>(
+            [-1.0, 2.0, -3.0, 4.0, -5.0, 6.0, -7.0, 8.0, -9.0, 10.0, -11.0, 12.0, -13.0, 14.0, -15.0, 16.0],
+            |f| if f >= 0.0 { f } else { f.exp_m1() * 0.2 },
+            |f| f.elu_inplace(0.2)
         );
     }
 

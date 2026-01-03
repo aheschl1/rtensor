@@ -297,6 +297,7 @@ pub trait Backend: Send + Sync + 'static + Clone {
     specify_trait_scalar_cabal!{log where T: WeightValue}
     specify_trait_scalar_cabal!{log1p where T: WeightValue}
     specify_trait_scalar_cabal!{leaky_relu}
+    specify_trait_scalar_cabal!{elu where T: WeightValue}
 
     fn apply_reduce_contiguous_flat<T: WeightValue>(
         &self, 
