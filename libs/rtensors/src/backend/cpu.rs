@@ -87,6 +87,56 @@ macro_rules! impl_cpu_unary {
     };
 }
 
+macro_rules! impl_cpu_scalar {
+    ($name:ident, $func:ident $( where $($extra:tt)+ )?) => {
+        paste::paste! {
+            fn [<scalar_apply_ $name _1d_strided>]<T: TensorValue>(
+                &self, 
+                buf: &mut Self::Buf<T>, 
+                value: T,
+                offset: usize,
+                stride: isize,
+                len: usize
+            ) -> Result<(), TensorError>
+            $( where $($extra)+ )?
+            {
+                let bufptr = buf.as_mut();
+                elemwise_1d_strided_loop!(bufptr, offset, stride, len, |x| $func(x, value));
+                Ok(())
+            }
+
+            fn [<scalar_apply_ $name _contiguous>]<T: TensorValue>(
+                &self, 
+                buf: &mut Self::Buf<T>, 
+                value: T,
+                start: usize,
+                len: usize
+            ) -> Result<(), TensorError>
+            $( where $($extra)+ )?
+            {
+                let bufptr = buf.as_mut();
+                elemwise_contiguous_loop!(bufptr, start, len, |x| $func(x, value));
+                Ok(())
+            }
+
+            fn [<scalar_apply_ $name _nd>]<T: TensorValue>(
+                &self,
+                buf: &mut Self::Buf<T>,
+                value: T,
+                offset: usize,
+                shape: &[usize],
+                stride: &[isize],
+            ) -> Result<(), TensorError>
+            $( where $($extra)+ )?
+            {
+                let bufptr = buf.as_mut();
+                elemwise_nd_loop!(bufptr, offset, shape, stride, |x| $func(x, value));
+                Ok(())
+            }
+        }
+    };
+}
+
 
 impl Backend for Cpu {
     type Buf<T: TensorValue> = Box<[T]>;
@@ -242,55 +292,55 @@ impl Backend for Cpu {
         Ok(())
     }
 
-    fn apply_elementwise_binary_contiguous<T: TensorValue>(
-        &self, buf: &mut Self::Buf<T>, 
-        op: (BinaryOpType, T), 
-        start: usize,
-        len: usize
-    ) -> Result<(), TensorError> {
-        let bufptr = buf.as_mut();
-        elemwise_contiguous_loop!(bufptr, start, len, |x| op.0.apply(*x, op.1));
-        Ok(())
-    }
+    // fn apply_elementwise_binary_contiguous<T: TensorValue>(
+    //     &self, buf: &mut Self::Buf<T>, 
+    //     op: (BinaryOpType, T), 
+    //     start: usize,
+    //     len: usize
+    // ) -> Result<(), TensorError> {
+    //     let bufptr = buf.as_mut();
+    //     elemwise_contiguous_loop!(bufptr, start, len, |x| op.0.apply(*x, op.1));
+    //     Ok(())
+    // }
     
-    fn apply_elementwise_binary_1d_strided<T: TensorValue>(
-        &self, buf: &mut Self::Buf<T>, 
-        op: (BinaryOpType, T), 
-        offset: usize,
-        stride: isize,
-        len: usize
-    ) -> Result<(), TensorError> {
-        let bufptr = buf.as_mut();
+    // fn apply_elementwise_binary_1d_strided<T: TensorValue>(
+    //     &self, buf: &mut Self::Buf<T>, 
+    //     op: (BinaryOpType, T), 
+    //     offset: usize,
+    //     stride: isize,
+    //     len: usize
+    // ) -> Result<(), TensorError> {
+    //     let bufptr = buf.as_mut();
 
-        elemwise_1d_strided_loop!(
-            bufptr,
-            offset,
-            stride,
-            len,
-            |x| op.0.apply(*x, op.1)
-        );
+    //     elemwise_1d_strided_loop!(
+    //         bufptr,
+    //         offset,
+    //         stride,
+    //         len,
+    //         |x| op.0.apply(*x, op.1)
+    //     );
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
     
-    fn apply_elementwise_binary_nd<T: TensorValue>(
-        &self,
-        buf: &mut Self::Buf<T>,
-        op: (BinaryOpType, T),
-        offset: usize,
-        shape: &[usize],
-        stride: &[isize],
-    ) -> Result<(), TensorError> {
-        let bufptr = buf.as_mut();
-        elemwise_nd_loop!(
-            bufptr,
-            offset,
-            shape,
-            stride,
-            |x| op.0.apply(*x, op.1)
-        );
-        Ok(())
-    }
+    // fn apply_elementwise_binary_nd<T: TensorValue>(
+    //     &self,
+    //     buf: &mut Self::Buf<T>,
+    //     op: (BinaryOpType, T),
+    //     offset: usize,
+    //     shape: &[usize],
+    //     stride: &[isize],
+    // ) -> Result<(), TensorError> {
+    //     let bufptr = buf.as_mut();
+    //     elemwise_nd_loop!(
+    //         bufptr,
+    //         offset,
+    //         shape,
+    //         stride,
+    //         |x| op.0.apply(*x, op.1)
+    //     );
+    //     Ok(())
+    // }
     
     impl_cpu_unary!{ neg, _negate where T: std::ops::Neg<Output = T> }
     impl_cpu_unary!{ relu, _relu }
@@ -298,6 +348,11 @@ impl Backend for Cpu {
     impl_cpu_unary!{ tanh, _tanh where T: Exp + InvExp }
     impl_cpu_unary!{ abs, _abs }
     impl_cpu_unary!{ sqrt, _sqrt where T: SquareRoot }
+    
+    // Scalar binary operations
+    impl_cpu_scalar!{ add, _scalar_add }
+    impl_cpu_scalar!{ sub, _scalar_sub }
+    impl_cpu_scalar!{ mul, _scalar_mul }
     
     /// go through entire buffer, take everything
     fn apply_reduce_contiguous_flat<T: WeightValue>(
@@ -419,6 +474,22 @@ where
     T: InvExp
 {
     T::ONE / (T::ONE + x.apply_invexp())
+}
+
+// Scalar binary operation helper functions
+#[inline]
+fn _scalar_add<T: TensorValue>(x: &mut T, value: T) -> T {
+    *x + value
+}
+
+#[inline]
+fn _scalar_sub<T: TensorValue>(x: &mut T, value: T) -> T {
+    *x - value
+}
+
+#[inline]
+fn _scalar_mul<T: TensorValue>(x: &mut T, value: T) -> T {
+    *x * value
 }
 
 macro_rules! blas_impl {

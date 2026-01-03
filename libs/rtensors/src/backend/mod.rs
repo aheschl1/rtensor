@@ -138,6 +138,78 @@ macro_rules! specify_trait_unary_cabal {
     };
 }
 
+macro_rules! specify_trait_scalar_cabal {
+    ($name:ident $( where $($extra:tt)+ )?) => {
+        paste! {
+            fn [<scalar_apply_ $name>]<T: TensorValue>(&self, buf: &mut Self::Buf<T>, value: T, meta: &MetaTensor) -> Result<(), TensorError>
+            $( where $($extra)+ )?
+            {
+                if meta.is_contiguous() {
+                    return self.[<scalar_apply_ $name _contiguous>](
+                        buf,
+                        value,
+                        meta.offset,
+                        meta.size(),
+                    );
+                }
+
+                let non_singleton_dims = meta.non_singleton_dims();
+                if non_singleton_dims.len() == 1 {
+                    let (_, dim_size, dim_stride) = non_singleton_dims[0];
+                    return self.[<scalar_apply_ $name _1d_strided>](
+                        buf,
+                        value,
+                        meta.offset,
+                        dim_stride,
+                        dim_size,
+                    );
+                }
+
+                self.[<scalar_apply_ $name _nd>](
+                    buf,
+                    value,
+                    meta.offset,
+                    meta.shape.as_slice(),
+                    meta.strides.as_ref(),
+                )
+            }
+        
+        
+
+            fn [<scalar_apply_ $name _nd>]<T: TensorValue>(
+                &self,
+                buf: &mut Self::Buf<T>,
+                value: T,
+                offset: usize,
+                shape: &[usize],
+                stride: &[isize],
+            ) -> Result<(), TensorError>
+            $( where $($extra)+ )?
+            ;
+
+            fn [<scalar_apply_ $name _1d_strided>]<T: TensorValue>(
+                &self, 
+                buf: &mut Self::Buf<T>, 
+                value: T,
+                offset: usize,
+                stride: isize,
+                len: usize
+            ) -> Result<(), TensorError>
+            $( where $($extra)+ )?
+            ;
+
+            fn [<scalar_apply_ $name _contiguous>]<T: TensorValue>(
+                &self, 
+                buf: &mut Self::Buf<T>, 
+                value: T,
+                start: usize,
+                len: usize
+            ) -> Result<(), TensorError>
+            $( where $($extra)+ )?;
+        }
+    };
+}
+
 
 pub trait Backend: Send + Sync + 'static + Clone {
     type Buf<T: TensorValue>: Send + Sync;
@@ -167,41 +239,41 @@ pub trait Backend: Send + Sync + 'static + Clone {
         dst: (*mut Self::Buf<T>, &MetaTensor),
         op: BinaryOpType
     ) -> Result<(), TensorError>;
-    fn apply_elementwise_binary_contiguous<T: TensorValue>(
-        &self, buf: &mut Self::Buf<T>, 
-        op: (BinaryOpType, T), 
-        start: usize,
-        len: usize
-    ) -> Result<(), TensorError>;
+    // fn apply_elementwise_binary_contiguous<T: TensorValue>(
+    //     &self, buf: &mut Self::Buf<T>, 
+    //     op: (BinaryOpType, T), 
+    //     start: usize,
+    //     len: usize
+    // ) -> Result<(), TensorError>;
 
-    fn apply_elementwise_binary_1d_strided<T: TensorValue>(
-        &self, buf: &mut Self::Buf<T>, 
-        op: (BinaryOpType, T), 
-        offset: usize,
-        stride: isize,
-        len: usize
-    ) -> Result<(), TensorError>;
+    // fn apply_elementwise_binary_1d_strided<T: TensorValue>(
+    //     &self, buf: &mut Self::Buf<T>, 
+    //     op: (BinaryOpType, T), 
+    //     offset: usize,
+    //     stride: isize,
+    //     len: usize
+    // ) -> Result<(), TensorError>;
 
-    fn apply_elementwise_binary_nd<T: TensorValue>(
-        &self,
-        buf: &mut Self::Buf<T>,
-        op: (BinaryOpType, T),
-        offset: usize,
-        shape: &[usize],
-        stride: &[isize],
-    ) -> Result<(), TensorError>;
+    // fn apply_elementwise_binary_nd<T: TensorValue>(
+    //     &self,
+    //     buf: &mut Self::Buf<T>,
+    //     op: (BinaryOpType, T),
+    //     offset: usize,
+    //     shape: &[usize],
+    //     stride: &[isize],
+    // ) -> Result<(), TensorError>;
 
-    fn apply_elementwise_binary<T: TensorValue>(&self, buf: &mut Self::Buf<T>, op: (BinaryOpType, T), meta: &MetaTensor) -> Result<(), TensorError> {
-        elementwise_binary_dispatch!(
-            self,
-            buf,
-            op,
-            meta,
-            contiguous = apply_elementwise_binary_contiguous,
-            strided1d  = apply_elementwise_binary_1d_strided,
-            nd         = apply_elementwise_binary_nd
-        )
-    }
+    // fn apply_elementwise_binary<T: TensorValue>(&self, buf: &mut Self::Buf<T>, op: (BinaryOpType, T), meta: &MetaTensor) -> Result<(), TensorError> {
+    //     elementwise_binary_dispatch!(
+    //         self,
+    //         buf,
+    //         op,
+    //         meta,
+    //         contiguous = apply_elementwise_binary_contiguous,
+    //         strided1d  = apply_elementwise_binary_1d_strided,
+    //         nd         = apply_elementwise_binary_nd
+    //     )
+    // }
 
     
     specify_trait_unary_cabal!{neg where T: std::ops::Neg<Output = T>}
@@ -210,6 +282,11 @@ pub trait Backend: Send + Sync + 'static + Clone {
     specify_trait_unary_cabal!{tanh where T: Exp + InvExp}
     specify_trait_unary_cabal!{abs}
     specify_trait_unary_cabal!{sqrt where T: SquareRoot}
+
+    // Scalar binary operations
+    specify_trait_scalar_cabal!{add}
+    specify_trait_scalar_cabal!{sub}
+    specify_trait_scalar_cabal!{mul}
 
     fn apply_reduce_contiguous_flat<T: WeightValue>(
         &self, 

@@ -5,47 +5,56 @@
 extern "C" {
 #endif
 
-void launch_elementwise_contiguous_f32(float* data, size_t n, uint8_t op, float value, unsigned int block_size);
-void launch_elementwise_contiguous_f64(double* data, size_t n, uint8_t op, double value, unsigned int block_size);
-void launch_elementwise_contiguous_u8(uint8_t* data, size_t n, uint8_t op, uint8_t value, unsigned int block_size);
-void launch_elementwise_contiguous_u16(uint16_t* data, size_t n, uint8_t op, uint16_t value, unsigned int block_size);
-void launch_elementwise_contiguous_u32(uint32_t* data, size_t n, uint8_t op, uint32_t value, unsigned int block_size);
-void launch_elementwise_contiguous_u64(uint64_t* data, size_t n, uint8_t op, uint64_t value, unsigned int block_size);
-void launch_elementwise_contiguous_u128(__uint128_t* data, size_t n, uint8_t op, __uint128_t value, unsigned int block_size);
-void launch_elementwise_contiguous_i8(int8_t* data, size_t n, uint8_t op, int8_t value, unsigned int block_size);
-void launch_elementwise_contiguous_i16(int16_t* data, size_t n, uint8_t op, int16_t value, unsigned int block_size);
-void launch_elementwise_contiguous_i32(int32_t* data, size_t n, uint8_t op, int32_t value, unsigned int block_size);
-void launch_elementwise_contiguous_i64(int64_t* data, size_t n, uint8_t op, int64_t value, unsigned int block_size);
-void launch_elementwise_contiguous_i128(__int128_t* data, size_t n, uint8_t op, __int128_t value, unsigned int block_size);
-void launch_elementwise_contiguous_boolean(bool* data, size_t n, uint8_t op, bool value, unsigned int block_size);
+// Scalar binary operations - Add
+#define DECLARE_SCALAR_OP_HEADERS(op, TYPE, SUFFIX) \
+    void launch_##op##_contiguous_##SUFFIX(TYPE* data, size_t n, TYPE value, unsigned int block_size); \
+    void launch_##op##_strided_##SUFFIX(TYPE* data, size_t start, ptrdiff_t stride, size_t len, TYPE value, unsigned int block_size); \
+    void launch_##op##_nd_affine_##SUFFIX(TYPE* data, size_t offset, const ptrdiff_t* stride, const size_t* shape, size_t rank, size_t size, TYPE value, unsigned int block_size);
 
-void launch_elementwise_strided_f32(float* data, size_t start, ptrdiff_t stride, size_t len, uint8_t op, float value, unsigned int block_size);
-void launch_elementwise_strided_f64(double* data, size_t start, ptrdiff_t stride, size_t len, uint8_t op, double value, unsigned int block_size);
-void launch_elementwise_strided_u8(uint8_t* data, size_t start, ptrdiff_t stride, size_t len, uint8_t op, uint8_t value, unsigned int block_size);
-void launch_elementwise_strided_u16(uint16_t* data, size_t start, ptrdiff_t stride, size_t len, uint8_t op, uint16_t value, unsigned int block_size);
-void launch_elementwise_strided_u32(uint32_t* data, size_t start, ptrdiff_t stride, size_t len, uint8_t op, uint32_t value, unsigned int block_size);
-void launch_elementwise_strided_u64(uint64_t* data, size_t start, ptrdiff_t stride, size_t len, uint8_t op, uint64_t value, unsigned int block_size);
-void launch_elementwise_strided_u128(__uint128_t* data, size_t start, ptrdiff_t stride, size_t len, uint8_t op, __uint128_t value, unsigned int block_size);
-void launch_elementwise_strided_i8(int8_t* data, size_t start, ptrdiff_t stride, size_t len, uint8_t op, int8_t value, unsigned int block_size);
-void launch_elementwise_strided_i16(int16_t* data, size_t start, ptrdiff_t stride, size_t len, uint8_t op, int16_t value, unsigned int block_size);
-void launch_elementwise_strided_i32(int32_t* data, size_t start, ptrdiff_t stride, size_t len, uint8_t op, int32_t value, unsigned int block_size);
-void launch_elementwise_strided_i64(int64_t* data, size_t start, ptrdiff_t stride, size_t len, uint8_t op, int64_t value, unsigned int block_size);
-void launch_elementwise_strided_i128(__int128_t* data, size_t start, ptrdiff_t stride, size_t len, uint8_t op, __int128_t value, unsigned int block_size);
-void launch_elementwise_strided_boolean(bool* data, size_t start, ptrdiff_t stride, size_t len, uint8_t op, bool value, unsigned int block_size);
+// Add operation - all types
+DECLARE_SCALAR_OP_HEADERS(add, float, f32)
+DECLARE_SCALAR_OP_HEADERS(add, double, f64)
+DECLARE_SCALAR_OP_HEADERS(add, uint8_t, u8)
+DECLARE_SCALAR_OP_HEADERS(add, uint16_t, u16)
+DECLARE_SCALAR_OP_HEADERS(add, uint32_t, u32)
+DECLARE_SCALAR_OP_HEADERS(add, uint64_t, u64)
+DECLARE_SCALAR_OP_HEADERS(add, __uint128_t, u128)
+DECLARE_SCALAR_OP_HEADERS(add, int8_t, i8)
+DECLARE_SCALAR_OP_HEADERS(add, int16_t, i16)
+DECLARE_SCALAR_OP_HEADERS(add, int32_t, i32)
+DECLARE_SCALAR_OP_HEADERS(add, int64_t, i64)
+DECLARE_SCALAR_OP_HEADERS(add, __int128_t, i128)
+DECLARE_SCALAR_OP_HEADERS(add, bool, boolean)
 
-void launch_elementwise_nd_affine_f32(float* data, size_t offset, const ptrdiff_t* stride, const size_t* shape, size_t rank, size_t size, uint8_t op, float value, unsigned int block_size);
-void launch_elementwise_nd_affine_f64(double* data, size_t offset, const ptrdiff_t* stride, const size_t* shape, size_t rank, size_t size, uint8_t op, double value, unsigned int block_size);
-void launch_elementwise_nd_affine_u8(uint8_t* data, size_t offset, const ptrdiff_t* stride, const size_t* shape, size_t rank, size_t size, uint8_t op, uint8_t value, unsigned int block_size);
-void launch_elementwise_nd_affine_u16(uint16_t* data, size_t offset, const ptrdiff_t* stride, const size_t* shape, size_t rank, size_t size, uint8_t op, uint16_t value, unsigned int block_size);
-void launch_elementwise_nd_affine_u32(uint32_t* data, size_t offset, const ptrdiff_t* stride, const size_t* shape, size_t rank, size_t size, uint8_t op, uint32_t value, unsigned int block_size);
-void launch_elementwise_nd_affine_u64(uint64_t* data, size_t offset, const ptrdiff_t* stride, const size_t* shape, size_t rank, size_t size, uint8_t op, uint64_t value, unsigned int block_size);
-void launch_elementwise_nd_affine_u128(__uint128_t* data, size_t offset, const ptrdiff_t* stride, const size_t* shape, size_t rank, size_t size, uint8_t op, __uint128_t value, unsigned int block_size);
-void launch_elementwise_nd_affine_i8(int8_t* data, size_t offset, const ptrdiff_t* stride, const size_t* shape, size_t rank, size_t size, uint8_t op, int8_t value, unsigned int block_size);
-void launch_elementwise_nd_affine_i16(int16_t* data, size_t offset, const ptrdiff_t* stride, const size_t* shape, size_t rank, size_t size, uint8_t op, int16_t value, unsigned int block_size);
-void launch_elementwise_nd_affine_i32(int32_t* data, size_t offset, const ptrdiff_t* stride, const size_t* shape, size_t rank, size_t size, uint8_t op, int32_t value, unsigned int block_size);
-void launch_elementwise_nd_affine_i64(int64_t* data, size_t offset, const ptrdiff_t* stride, const size_t* shape, size_t rank, size_t size, uint8_t op, int64_t value, unsigned int block_size);
-void launch_elementwise_nd_affine_i128(__int128_t* data, size_t offset, const ptrdiff_t* stride, const size_t* shape, size_t rank, size_t size, uint8_t op, __int128_t value, unsigned int block_size);
-void launch_elementwise_nd_affine_boolean(bool* data, size_t offset, const ptrdiff_t* stride, const size_t* shape, size_t rank, size_t size, uint8_t op, bool value, unsigned int block_size);
+// Sub operation - all types
+DECLARE_SCALAR_OP_HEADERS(sub, float, f32)
+DECLARE_SCALAR_OP_HEADERS(sub, double, f64)
+DECLARE_SCALAR_OP_HEADERS(sub, uint8_t, u8)
+DECLARE_SCALAR_OP_HEADERS(sub, uint16_t, u16)
+DECLARE_SCALAR_OP_HEADERS(sub, uint32_t, u32)
+DECLARE_SCALAR_OP_HEADERS(sub, uint64_t, u64)
+DECLARE_SCALAR_OP_HEADERS(sub, __uint128_t, u128)
+DECLARE_SCALAR_OP_HEADERS(sub, int8_t, i8)
+DECLARE_SCALAR_OP_HEADERS(sub, int16_t, i16)
+DECLARE_SCALAR_OP_HEADERS(sub, int32_t, i32)
+DECLARE_SCALAR_OP_HEADERS(sub, int64_t, i64)
+DECLARE_SCALAR_OP_HEADERS(sub, __int128_t, i128)
+DECLARE_SCALAR_OP_HEADERS(sub, bool, boolean)
+
+// Mul operation - all types
+DECLARE_SCALAR_OP_HEADERS(mul, float, f32)
+DECLARE_SCALAR_OP_HEADERS(mul, double, f64)
+DECLARE_SCALAR_OP_HEADERS(mul, uint8_t, u8)
+DECLARE_SCALAR_OP_HEADERS(mul, uint16_t, u16)
+DECLARE_SCALAR_OP_HEADERS(mul, uint32_t, u32)
+DECLARE_SCALAR_OP_HEADERS(mul, uint64_t, u64)
+DECLARE_SCALAR_OP_HEADERS(mul, __uint128_t, u128)
+DECLARE_SCALAR_OP_HEADERS(mul, int8_t, i8)
+DECLARE_SCALAR_OP_HEADERS(mul, int16_t, i16)
+DECLARE_SCALAR_OP_HEADERS(mul, int32_t, i32)
+DECLARE_SCALAR_OP_HEADERS(mul, int64_t, i64)
+DECLARE_SCALAR_OP_HEADERS(mul, __int128_t, i128)
+DECLARE_SCALAR_OP_HEADERS(mul, bool, boolean)
 
 // Negation operations
 void launch_negate_contiguous_f32(float* data, size_t start, size_t len, unsigned int block_size);
