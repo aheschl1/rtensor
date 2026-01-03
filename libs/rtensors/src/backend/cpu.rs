@@ -294,6 +294,7 @@ impl Backend for Cpu {
     impl_cpu_unary!{ neg, _negate where T: std::ops::Neg<Output = T> }
     impl_cpu_unary!{ relu, _relu }
     impl_cpu_unary!{ sigmoid, _sigmoid where T: InvExp}
+    impl_cpu_unary!{ silu, _silu where T: InvExp}
     impl_cpu_unary!{ tanh, _tanh where T: Exp + InvExp }
     impl_cpu_unary!{ abs, _abs }
     impl_cpu_unary!{ sqrt, _sqrt where T: SquareRoot }
@@ -312,6 +313,7 @@ impl Backend for Cpu {
     impl_cpu_scalar!{ log, _scalar_log where T: WeightValue }
     impl_cpu_scalar!{ log1p, _scalar_log1p where T: WeightValue }
     impl_cpu_scalar!{ leaky_relu, _scalar_leaky_relu }
+    impl_cpu_scalar!{ elu, _scalar_elu where T: WeightValue }
     
     /// go through entire buffer, take everything
     fn apply_reduce_contiguous_flat<T: WeightValue>(
@@ -470,6 +472,14 @@ where
     T::ONE / (T::ONE + x.apply_invexp())
 }
 
+#[inline]
+fn _silu<T: TensorValue>(x: &mut T) -> T
+where 
+    T: InvExp
+{
+    *x * _sigmoid(x)
+}
+
 // Scalar binary operation helper functions
 #[inline]
 fn _scalar_add<T: TensorValue>(x: &mut T, value: T) -> T {
@@ -502,6 +512,15 @@ fn _scalar_leaky_relu<T: TensorValue>(x: &mut T, slope: T) -> T {
         *x
     } else {
         *x * slope
+    }
+}
+
+#[inline]
+fn _scalar_elu<T: WeightValue>(x: &mut T, alpha: T) -> T {
+    if *x >= T::ZERO {
+        *x
+    } else {
+        alpha * (x.apply_expm1())
     }
 }
 

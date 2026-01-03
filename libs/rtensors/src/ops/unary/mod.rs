@@ -107,6 +107,7 @@ specify_unary_op_template! {
     (Abs) abs;
     (Relu) relu;
     (Sigmoid) sigmoid where T: InvExp;
+    (Silu) silu where T: InvExp;
     (Tanh) tanh where T: Exp, InvExp;
     (Sqrt) sqrt where T: SquareRoot;
     (Negate) neg where T: std::ops::Neg<Output = T>;
@@ -166,7 +167,7 @@ where
 mod tests {
     use crate::{
         backend::cpu::Cpu,
-        ops::unary::{Ceil, ExpM1, Floor, Ln1p, NatLog, Negate, Relu, Round, Sigmoid, Sqrt, Tanh, Trunc},
+        ops::unary::{Ceil, ExpM1, Floor, Ln1p, NatLog, Negate, Relu, Round, Sigmoid, Silu, Sqrt, Tanh, Trunc},
         testing::{unary_assert_1d_strided, unary_assert_contiguous, unary_assert_nd_strided},
     };
 
@@ -240,6 +241,33 @@ mod tests {
             [1.0; 16],
             |f| 1. / (1. + (-f).exp()),
             |f| f.sigmoid_inplace(),
+        );
+    }
+
+    #[test]
+    fn test_unary_silu_contiguous() {
+        unary_assert_contiguous::<f64, _, _, Cpu>(
+            [1.0, 1.0],
+            |f| f / (1. + (-f).exp()),
+            |f| f.silu_inplace(),
+        );
+    }
+
+    #[test]
+    fn test_unary_silu_1d_strided() {
+        unary_assert_1d_strided::<f64, _, _, Cpu>(
+            [1.0, 1.0, 1.0],
+            |f| f / (1. + (-f).exp()),
+            |f| f.silu_inplace(),
+        );
+    }
+
+    #[test]
+    fn test_unary_silu_nd_strided() {
+        unary_assert_nd_strided::<f64, _, _, Cpu>(
+            [1.0; 16],
+            |f| f / (1. + (-f).exp()),
+            |f| f.silu_inplace(),
         );
     }
 
@@ -451,7 +479,7 @@ mod cuda_tests {
             tensor::{AsTensor, TensorAccess, TensorAccessMut},
             Tensor,
         },
-        ops::unary::{Abs, Ceil, ExpM1, Floor, Ln1p, NatLog, Negate, Relu, Round, Sigmoid, Sqrt as _, Tanh, Trunc},
+        ops::unary::{Abs, Ceil, ExpM1, Floor, Ln1p, NatLog, Negate, Relu, Round, Sigmoid, Silu, Sqrt as _, Tanh, Trunc},
         testing::{
             test_with_contiguous_2_elem_tensor, unary_assert_1d_strided, unary_assert_contiguous,
             unary_assert_nd_strided,
@@ -547,6 +575,33 @@ mod cuda_tests {
             [1.0; 16],
             |f| 1. / (1. + (-f).exp()),
             |f| f.sigmoid_inplace(),
+        );
+    }
+
+    #[test]
+    fn test_unary_silu_contiguous_cuda() {
+        unary_assert_contiguous::<f64, _, _, Cuda>(
+            [1.0, 1.0],
+            |f| f / (1. + (-f).exp()),
+            |f| f.silu_inplace(),
+        );
+    }
+
+    #[test]
+    fn test_unary_silu_1d_strided_cuda() {
+        unary_assert_1d_strided::<f64, _, _, Cuda>(
+            [1.0, 1.0, 1.0],
+            |f| f / (1. + (-f).exp()),
+            |f| f.silu_inplace(),
+        );
+    }
+
+    #[test]
+    fn test_unary_silu_nd_strided_cuda() {
+        unary_assert_nd_strided::<f64, _, _, Cuda>(
+            [1.0; 16],
+            |f| f / (1. + (-f).exp()),
+            |f| f.silu_inplace(),
         );
     }
 

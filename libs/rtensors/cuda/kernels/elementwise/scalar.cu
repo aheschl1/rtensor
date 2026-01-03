@@ -11,6 +11,13 @@ struct AddOp {
     }
 };
 
+struct EluOp {
+    template<typename T>
+    __device__ __forceinline__ T operator()(T x, T value) const {
+        return x >= T(0) ? x : value * expm1(x);
+    }
+};
+
 // log base n
 struct LogOp {
     template<typename T>
@@ -241,6 +248,9 @@ DECLARE_SCALAR_LAUNCHERS(log, LogOp, double,  f64)
 
 DECLARE_SCALAR_LAUNCHERS(log1p, Log1POp, float,  f32)
 DECLARE_SCALAR_LAUNCHERS(log1p, Log1POp, double,  f64)
+
+DECLARE_SCALAR_LAUNCHERS(elu, EluOp, float,  f32)
+DECLARE_SCALAR_LAUNCHERS(elu, EluOp, double,  f64)
 
 // leaky_relu: all types
 DECLARE_SCALAR_LAUNCHERS(leaky_relu, LeakyReluOp, float,  f32)

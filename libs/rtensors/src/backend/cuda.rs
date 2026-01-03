@@ -1339,6 +1339,7 @@ impl Backend for Cuda {
     specify_trait_unary_cabal!{ceil}
     specify_trait_unary_cabal!{round}
     specify_trait_unary_cabal!{trunc}
+    specify_trait_unary_cabal!{silu}
 
     // Scalar binary operations
     specify_trait_scalar_cabal!{add}
@@ -1347,6 +1348,7 @@ impl Backend for Cuda {
     specify_trait_scalar_cabal!{log where T: WeightValue}
     specify_trait_scalar_cabal!{log1p where T: WeightValue}
     specify_trait_scalar_cabal!{leaky_relu}
+    specify_trait_scalar_cabal!{elu where T: WeightValue}
 
     fn apply_sigmoid_contiguous<T: TensorValue + InvExp>(
         &self,

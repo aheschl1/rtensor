@@ -12,6 +12,13 @@ struct SigmoidOp {
     }
 };
 
+struct SiluOp {
+    template<typename  T>
+    __device__ __forceinline__ T operator()(T x) const {
+         return x / ((T) 1 + exp(-x));
+    }
+};
+
 struct LnOp {
     template<typename  T>
     __device__ __forceinline__ T operator()(T x) const {
@@ -254,6 +261,9 @@ void launch_unary_strided_op(
 // sigmoid: float/double only
 DECLARE_UNARY_LAUNCHERS(sigmoid, SigmoidOp, float,  f32)
 DECLARE_UNARY_LAUNCHERS(sigmoid, SigmoidOp, double, f64)
+
+DECLARE_UNARY_LAUNCHERS(silu, SiluOp, float,  f32)
+DECLARE_UNARY_LAUNCHERS(silu, SiluOp, double, f64)
 
 // negate: all signed + floats
 DECLARE_UNARY_LAUNCHERS(negate, NegateOp, float,   f32)

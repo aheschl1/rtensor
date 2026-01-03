@@ -58,8 +58,12 @@ DECLARE_SCALAR_OP_HEADERS(mul, bool, boolean)
 
 DECLARE_SCALAR_OP_HEADERS(log, float, f32)
 DECLARE_SCALAR_OP_HEADERS(log, double, f64)
+
 DECLARE_SCALAR_OP_HEADERS(log1p, float, f32)
 DECLARE_SCALAR_OP_HEADERS(log1p, double, f64)
+
+DECLARE_SCALAR_OP_HEADERS(elu, float, f32)
+DECLARE_SCALAR_OP_HEADERS(elu, double, f64)
 
 // Leaky ReLU operation - all types
 DECLARE_SCALAR_OP_HEADERS(leaky_relu, float, f32)
@@ -171,7 +175,7 @@ DECLARE_UNARY_FLOAT_OP_HEADERS(ceil)
 DECLARE_UNARY_FLOAT_OP_HEADERS(round)
 DECLARE_UNARY_FLOAT_OP_HEADERS(trunc)
 DECLARE_UNARY_FLOAT_OP_HEADERS(expm1)
-DECLARE_UNARY_FLOAT_OP_HEADERS(expm1)
+DECLARE_UNARY_FLOAT_OP_HEADERS(silu)
 
 // Reduction operations
 #define DECLARE_REDUCTION_OP_HEADERS(TYPE, SUFFIX)                                                \
