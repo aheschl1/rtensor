@@ -7,9 +7,9 @@ impl<'a, T, B> SubAssign<T> for TensorViewMut<'a, T, B>
           B: Backend,
 {
     fn sub_assign(&mut self, rhs: T) {
-        self.backend.apply_elementwise_binary(
+        self.backend.scalar_apply_sub(
             self.buf, 
-            (BinaryOpType::Sub, rhs),
+            rhs,
             &self.meta
         ).unwrap();
     }
@@ -20,9 +20,9 @@ impl<'a, T, B> SubAssign<&T> for TensorViewMut<'a, T, B>
           B: Backend,
 {
     fn sub_assign(&mut self, rhs: &T) {
-        self.backend.apply_elementwise_binary(
+        self.backend.scalar_apply_sub(
             self.buf, 
-            (BinaryOpType::Sub, *rhs),
+            *rhs,
             &self.meta
         ).unwrap();
     }
@@ -33,9 +33,9 @@ impl<T, B> SubAssign<T> for TensorBase<T, B>
           B: Backend,
 {
     fn sub_assign(&mut self, rhs: T) {
-        self.backend.apply_elementwise_binary(
+        self.backend.scalar_apply_sub(
             &mut self.buf, 
-            (BinaryOpType::Sub, rhs),
+            rhs,
             &self.meta
         ).unwrap();
     }
@@ -46,9 +46,9 @@ impl<T, B> SubAssign<&T> for TensorBase<T, B>
           B: Backend,
 {
     fn sub_assign(&mut self, rhs: &T) {
-        self.backend.apply_elementwise_binary(
+        self.backend.scalar_apply_sub(
             &mut self.buf, 
-            (BinaryOpType::Sub, *rhs),
+            *rhs,
             &self.meta
         ).unwrap();
     }
