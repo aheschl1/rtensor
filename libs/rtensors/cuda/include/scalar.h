@@ -135,6 +135,14 @@ void launch_tanh_nd_affine_f64(double* data, size_t offset, const ptrdiff_t* str
 
 DECLARE_UNARY_FLOAT_OP_HEADERS(abs)
 DECLARE_UNARY_FLOAT_OP_HEADERS(sqrt)
+DECLARE_UNARY_FLOAT_OP_HEADERS(ln)
+DECLARE_UNARY_FLOAT_OP_HEADERS(ln1p)
+DECLARE_UNARY_FLOAT_OP_HEADERS(floor)
+DECLARE_UNARY_FLOAT_OP_HEADERS(ceil)
+DECLARE_UNARY_FLOAT_OP_HEADERS(round)
+DECLARE_UNARY_FLOAT_OP_HEADERS(trunc)
+DECLARE_UNARY_FLOAT_OP_HEADERS(expm1)
+DECLARE_UNARY_FLOAT_OP_HEADERS(expm1)
 
 // Reduction operations
 #define DECLARE_REDUCTION_OP_HEADERS(TYPE, SUFFIX)                                                \
@@ -163,33 +171,7 @@ DECLARE_REDUCTION_OP_HEADERS(double, f64)
 DECLARE_ARGMAX_OP_HEADERS(float,  f32)
 DECLARE_ARGMAX_OP_HEADERS(double, f64)
 
-// // Unsigned integer types
-// DECLARE_REDUCTION_OP_HEADERS(uint8_t,  u8)
-// DECLARE_REDUCTION_OP_HEADERS(uint16_t, u16)
-// DECLARE_REDUCTION_OP_HEADERS(uint32_t, u32)
-// DECLARE_REDUCTION_OP_HEADERS(uint64_t, u64)
-// DECLARE_REDUCTION_OP_HEADERS(__uint128_t, u128)
 
-// // Signed integer types
-// DECLARE_REDUCTION_OP_HEADERS(int8_t,  i8)
-// DECLARE_REDUCTION_OP_HEADERS(int16_t, i16)
-// DECLARE_REDUCTION_OP_HEADERS(int32_t, i32)
-// DECLARE_REDUCTION_OP_HEADERS(int64_t, i64)
-// DECLARE_REDUCTION_OP_HEADERS(__int128_t, i128)
-
-
-// void launch_elementwise_scattered_f32(float* data, const size_t* offsets, size_t n, uint8_t op, float value, unsigned int block_size);
-// void launch_elementwise_scattered_f64(double* data, const size_t* offsets, size_t n, uint8_t op, double value, unsigned int block_size);
-// void launch_elementwise_scattered_u8(uint8_t* data, const size_t* offsets, size_t n, uint8_t op, uint8_t value, unsigned int block_size);
-// void launch_elementwise_scattered_u16(uint16_t* data, const size_t* offsets, size_t n, uint8_t op, uint16_t value, unsigned int block_size);
-// void launch_elementwise_scattered_u32(uint32_t* data, const size_t* offsets, size_t n, uint8_t op, uint32_t value, unsigned int block_size);
-// void launch_elementwise_scattered_u64(uint64_t* data, const size_t* offsets, size_t n, uint8_t op, uint64_t value, unsigned int block_size);
-// void launch_elementwise_scattered_u128(__uint128_t* data, const size_t* offsets, size_t n, uint8_t op, __uint128_t value, unsigned int block_size);
-// void launch_elementwise_scattered_i8(int8_t* data, const size_t* offsets, size_t n, uint8_t op, int8_t value, unsigned int block_size);
-// void launch_elementwise_scattered_i16(int16_t* data, const size_t* offsets, size_t n, uint8_t op, int16_t value, unsigned int block_size);
-// void launch_elementwise_scattered_i32(int32_t* data, const size_t* offsets, size_t n, uint8_t op, int32_t value, unsigned int block_size);
-// void launch_elementwise_scattered_i64(int64_t* data, const size_t* offsets, size_t n, uint8_t op, int64_t value, unsigned int block_size);
-// void launch_elementwise_scattered_i128(__int128_t* data, const size_t* offsets, size_t n, uint8_t op, __int128_t value, unsigned int block_size);
 
 #ifdef __cplusplus
 }

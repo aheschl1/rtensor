@@ -210,6 +210,13 @@ pub trait Backend: Send + Sync + 'static + Clone {
     specify_trait_unary_cabal!{tanh where T: Exp + InvExp}
     specify_trait_unary_cabal!{abs}
     specify_trait_unary_cabal!{sqrt where T: SquareRoot}
+    specify_trait_unary_cabal!{ln where T: WeightValue}
+    specify_trait_unary_cabal!{expm1 where T: Exp}
+    specify_trait_unary_cabal!{ln1p where T: WeightValue}
+    specify_trait_unary_cabal!{floor where T: WeightValue}
+    specify_trait_unary_cabal!{ceil where T: WeightValue}
+    specify_trait_unary_cabal!{round where T: WeightValue}
+    specify_trait_unary_cabal!{trunc where T: WeightValue}
 
     fn apply_reduce_contiguous_flat<T: WeightValue>(
         &self, 

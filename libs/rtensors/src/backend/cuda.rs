@@ -998,6 +998,13 @@ impl Backend for Cuda {
     specify_trait_unary_cabal!{relu}
     specify_trait_unary_cabal!{abs}
     specify_trait_unary_cabal!{sqrt}
+    specify_trait_unary_cabal!{ln}
+    specify_trait_unary_cabal!{expm1}
+    specify_trait_unary_cabal!{ln1p}
+    specify_trait_unary_cabal!{floor}
+    specify_trait_unary_cabal!{ceil}
+    specify_trait_unary_cabal!{round}
+    specify_trait_unary_cabal!{trunc}
 
     fn apply_sigmoid_contiguous<T: TensorValue + InvExp>(
         &self,
