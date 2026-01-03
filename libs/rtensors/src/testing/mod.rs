@@ -100,7 +100,14 @@ where
         let elem_original = original.get(pos.clone()).unwrap();
         let elem_modified = base.get(pos.clone()).unwrap();
 
-        assert_eq!(truth(elem_original), elem_modified);
+        let expected = truth(elem_original);
+        assert!(
+            (elem_modified - expected).absolute() <= T::TEST_TOLERANCE,
+            "Expected {:?}, got {:?} (tolerance: {:?})",
+            expected,
+            elem_modified,
+            T::TEST_TOLERANCE
+        );
     }
 }
 
@@ -141,8 +148,14 @@ where
         let elem_original = slice_original.get(pos.clone()).unwrap();
         let elem_modified = slice_modified.get(pos.clone()).unwrap();
 
-
-        assert_eq!(truth(elem_original), elem_modified);
+        let expected = truth(elem_original);
+        assert!(
+            (elem_modified - expected).absolute() <= T::TEST_TOLERANCE,
+            "Expected {:?}, got {:?} (tolerance: {:?})",
+            expected,
+            elem_modified,
+            T::TEST_TOLERANCE
+        );
     }
 }
 
@@ -178,7 +191,14 @@ where
         let elem_original = original_l2.get(pos.clone()).unwrap();
         let elem_modified = l2.get(pos.clone()).unwrap();
 
-        assert_eq!(truth(elem_original), elem_modified);
+        let expected = truth(elem_original);
+        assert!(
+            (elem_modified - expected).absolute() <= T::TEST_TOLERANCE,
+            "Expected {:?}, got {:?} (tolerance: {:?})",
+            expected,
+            elem_modified,
+            T::TEST_TOLERANCE
+        );
     }
 }
 

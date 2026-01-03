@@ -298,6 +298,9 @@ impl Backend for Cpu {
     impl_cpu_unary!{ tanh, _tanh where T: Exp + InvExp }
     impl_cpu_unary!{ abs, _abs }
     impl_cpu_unary!{ sqrt, _sqrt where T: SquareRoot }
+    impl_cpu_unary!{ ln, _ln where T: WeightValue }
+    impl_cpu_unary!{ expm1, _expm1 where T: Exp }
+    impl_cpu_unary!{ ln1p, _ln1p where T: WeightValue }
     
     /// go through entire buffer, take everything
     fn apply_reduce_contiguous_flat<T: WeightValue>(
@@ -376,6 +379,21 @@ impl Backend for Cpu {
         todo!()
     }
 
+}
+
+#[inline]
+fn _ln<T: WeightValue>(x: &mut T) -> T {
+    x.nat_log()
+}
+
+#[inline]
+fn _ln1p<T: WeightValue>(x: &mut T) -> T {
+    x.nat_log1p()
+}
+
+#[inline]
+fn _expm1<T: Exp>(x: &mut T) -> T {
+    x.apply_expm1()
 }
 
 #[inline]
