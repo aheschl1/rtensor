@@ -50,12 +50,13 @@ const CUDA_BACKENDS: LazyLock<Vec<Cuda>> = LazyLock::new(|| {
     backends
 });
 
+#[derive(Debug)]
 pub struct CudaBuf<T: TensorValue> {
     pub(crate) ptr: CudaSlice<T>,
     pub(crate) len: usize,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Cuda {
     pub(crate) ctx: Arc<CudaContext>,
     pub(crate) cublas: Arc<CudaBlas>,

@@ -1,12 +1,16 @@
+use std::cell::RefCell;
+use std::fmt::Debug;
 use std::marker::PhantomData;
 #[cfg(feature = "remote")]
 use std::net::IpAddr;
+use std::sync::Arc;
 
 
 use crate::backend::Backend;
 use crate::backend::cpu::Cpu;
+use crate::grad::{self, GradNode, NodeKey};
 use crate::core::value::TensorValue;
-use crate::core::{MetaTensor, MetaTensorView, Shape, shape_to_stride};
+use crate::core::{shape_to_stride, MetaTensor, MetaTensorView, Shape};
 use crate::core::tensor::{TensorError, compute_squeezed_parameters};
 
 /// A generic tensor with backend-specific storage.
@@ -18,8 +22,72 @@ pub struct TensorBase<T: TensorValue, B: Backend> {
     pub(crate) backend: B,
     pub(crate) buf: B::Buf<T>,
     pub(crate) meta: MetaTensor,
-    _t: PhantomData<T>,
 }
+
+#[cfg(feature = "grad")]
+#[derive(Debug)]
+pub struct GradTensor<T: TensorValue, B: Backend> {
+    pub(crate) inner: GradTensorRef<T, B>,
+    pub(crate) node: NodeKey,
+}
+
+impl<T: TensorValue, B: Backend> GradTensor<T, B> {
+    pub(crate) fn leaf(
+        value: TensorBase<T, B>,
+    ) -> Self {
+        let inner = GradTensorInner {
+            value,
+            grad: None,
+        };
+        let inner = Arc::new(RefCell::new(inner));
+        grad::when_enabled::<T, B, _>(|ctx| {
+            ctx.make_leaf(inner)
+        }).expect("Gradient context not found.")
+    }
+
+    #[inline]
+    pub(crate) fn from_op(
+        value: TensorBase<T, B>,
+        op: GradNode<T, B>,
+    ) -> Self {
+        let inner = GradTensorInner {
+            value,
+            grad: None,
+        };
+        let inner = Arc::new(RefCell::new(inner));
+        grad::when_enabled::<T, B, _>(|ctx| {
+            ctx.attach(inner, op)
+        }).expect("Gradient context not found.")
+    }
+
+    pub fn borrow(&self) -> std::cell::Ref<'_, GradTensorInner<T, B>> {
+        self.inner.borrow()
+    }
+}
+
+#[cfg(feature = "grad")]
+pub struct GradTensorInner<T: TensorValue, B: Backend> {
+    pub(crate) value: TensorBase<T, B>,
+    pub(crate) grad: Option<Box<TensorBase<T, B>>>,
+}
+
+#[cfg(feature = "grad")]
+pub type GradTensorRef<T, B> = Arc<RefCell<GradTensorInner<T, B>>>;
+
+#[cfg(feature = "grad")]
+impl<T: TensorValue, B: Backend> Debug for GradTensorInner<T, B> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GradTensorInner")
+            .field("grad", &self.grad)
+            .field("value", &self.value)
+            .finish()
+    }
+}
+
+#[cfg(feature = "grad")]
+impl<T: TensorValue, B: Backend> Eq for GradTensor<T, B> {}
+#[cfg(feature = "grad")]
+impl<T: TensorValue, B: Backend> PartialEq for GradTensor<T, B> { fn eq(&self, other: &Self) -> bool { true }}
 
 impl<B: Backend, T: TensorValue> Clone for TensorBase<T, B> {
     fn clone(&self) -> Self {
@@ -29,7 +97,6 @@ impl<B: Backend, T: TensorValue> Clone for TensorBase<T, B> {
             backend: new_backend,
             buf: new_buffer,
             meta: self.meta.clone(),
-            _t: PhantomData,
         }
 
     }
@@ -188,8 +255,7 @@ where
         Self {
             backend,
             buf: raw,
-            meta,
-            _t: PhantomData,
+            meta
         }
     }
 
@@ -227,8 +293,7 @@ where
         Ok(Self {
             backend,
             buf: buffer,
-            meta: MetaTensor::new(shape, stride, 0),
-            _t: PhantomData,
+            meta: MetaTensor::new(shape, stride, 0)
         })
     }
 
@@ -327,6 +392,10 @@ where
         self.meta.strides = new_strides;
     }
 
+    #[cfg(feature = "grad")]
+    fn grad(self) -> GradTensor<T, B> {
+        GradTensor::leaf(self)
+    }
 }
 
 #[cfg(feature = "remote")]
@@ -344,5 +413,24 @@ pub enum DeviceType {
         ip: IpAddr,
         port: u16,
         remote_type: Box<DeviceType>
+    }
+}
+
+#[cfg(feature = "grad")]
+#[cfg(test)]
+mod tests {
+    use crate::{backend::cpu::Cpu, core::Tensor, grad};
+
+    #[test]
+    fn playbox() {
+        let tensor = Tensor::<f32>::zeros((2, 3));
+        let grad_tensor = tensor.grad();
+        println!("{:?}", grad_tensor);
+
+        grad::with::<f32, Cpu>(|ctx| {
+            let a = Tensor::<f32>::ones((2, 2)).grad();
+            let b = Tensor::<f32>::ones((2, 2)).grad();
+            let c = a + b;
+        })
     }
 }

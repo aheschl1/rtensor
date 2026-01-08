@@ -1,8 +1,10 @@
+use std::fmt::Debug;
+
 use crate::{backend::Backend, core::{primitives::{DeviceType, TensorBase}, tensor::{AsView, AsViewMut}, value::{types, DType, TensorValue}, MetaTensor, TensorView, TensorViewMut}};
 
 /// Trait for erased tensors, allowing dynamic dispatch on tensor types.
 /// Implemented for all `TensorBase<T, B>` where `T: TensorValue` and `B: Backend<T>`.
-pub trait UntypedTensor<B: Backend>: Send + Sync {
+pub trait UntypedTensor<B: Backend>: Send + Sync + Debug {
     fn as_any(&self) -> &dyn std::any::Any;
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
 
@@ -103,6 +105,20 @@ impl<B: Backend> dyn UntypedTensor<B> {
         T: TensorValue + 'static,
     {
         self.typed_mut::<T>().map(|t| t.view_mut())
+    }
+}
+
+pub trait AsUntypedTensor<B: Backend> {
+    fn as_untyped(self) -> Box<dyn UntypedTensor<B>>;
+}
+
+impl<T, B> AsUntypedTensor<B> for TensorBase<T, B>
+where
+    T: TensorValue + 'static,
+    B: Backend + 'static,
+{
+    fn as_untyped(self) -> Box<dyn UntypedTensor<B>> {
+        Box::new(self)
     }
 }
 

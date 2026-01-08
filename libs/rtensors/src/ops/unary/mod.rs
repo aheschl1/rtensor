@@ -1,10 +1,9 @@
 use crate::{
     backend::Backend,
     core::{
-        TensorView, TensorViewMut, primitives::TensorBase, primops::{Exp, InvExp, SquareRoot}, tensor::{AsTensor, AsViewMut}, value::{TensorValue, WeightValue}
+        primitives::{TensorBase}, primops::{Exp, InvExp, SquareRoot}, tensor::{AsTensor, AsViewMut}, value::{TensorValue, WeightValue}, TensorView, TensorViewMut
     },
 };
-
 
 macro_rules! specify_unary_op_template {
     (
