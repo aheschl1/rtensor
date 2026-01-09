@@ -1,7 +1,7 @@
 use slotmap::{new_key_type, SecondaryMap};
 
 use crate::{backend::{cpu::Cpu, cuda::Cuda, Backend}, core::{primitives::{GradTensor, GradTensorRef, TensorBase}, tensor::TensorError, untyped::UntypedTensor, value::TensorValue}};
-use std::{any::{Any, TypeId}, collections::VecDeque};
+use std::any::{Any, TypeId};
 use std::collections::HashMap;
 
 mod backwards;
@@ -53,11 +53,12 @@ impl<T: TensorValue, B: Backend> GradNode<T, B> {
         }
     }
 
-    fn backwards(&self, upstream: &TensorBase<T, B>) -> Result<Vec<TensorBase<T, B>>, TensorError> {
+    fn backwards(&self, upstream: &TensorBase<T, B>, ctx: &GradContext<T, B>) -> Result<Vec<TensorBase<T, B>>, TensorError> {
         match self {
-            GradNode::L1 { .. } => backwards::backwards_l1::<T, B>(self, upstream),
-            GradNode::Leaf( .. ) => backwards::accumulate_grad::<T, B>(self, upstream),
-            _ => Err(TensorError::UnsupportedOperation("Backward not implemented for this node type.".into())),
+            GradNode::L1 { .. } => backwards::backwards_l1::<T, B>(self, upstream, ctx),
+            GradNode::Leaf( .. ) => backwards::accumulate_grad::<T, B>(self, upstream, ctx),
+            GradNode::Add { left, right } => backwards::backwards_add::<T, B>(self, upstream, ctx),
+            // _ => Err(TensorError::UnsupportedOperation("Backward not implemented for this node type.".into())),
         }
     }
 }
@@ -99,6 +100,11 @@ impl<T: TensorValue, B: Backend> GradContext<T, B> {
             inner,
             node: node_id,
         }
+    }
+
+    #[inline]
+    pub(crate) fn get_node(&self, key: NodeKey) -> Option<&GradNode<T, B>> {
+        self.nodes.get(key)
     }
 
     pub fn backwards(&mut self, root: &GradTensor<T, B>) -> Result<(), TensorError> {
@@ -159,7 +165,7 @@ impl<T: TensorValue, B: Backend> GradContext<T, B> {
                 .unwrap(); // must have at least one upstream grad
 
             let node = self.nodes.get(node_key).unwrap(); // we would never have discovered this node if it was not present
-            let upstreams = node.backwards(&dldy)?;
+            let upstreams = node.backwards(&dldy, self)?;
             let parents = node.parents();
             for (parent, grad) in parents.into_iter().zip(upstreams.into_iter()) {
                 accumulations.entry(parent).or_insert_with(Vec::new).push(grad);
