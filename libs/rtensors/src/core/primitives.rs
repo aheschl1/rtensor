@@ -68,7 +68,7 @@ impl<T: TensorValue, B: Backend> GradTensor<T, B> {
 #[cfg(feature = "grad")]
 pub struct GradTensorInner<T: TensorValue, B: Backend> {
     pub(crate) value: TensorBase<T, B>,
-    pub(crate) grad: Option<Box<TensorBase<T, B>>>,
+    pub(crate) grad: Option<TensorBase<T, B>>,
 }
 
 #[cfg(feature = "grad")]

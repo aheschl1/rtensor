@@ -41,6 +41,10 @@ pub enum TensorError {
     #[error("cuda error: {0}")]
     CudaError(String),
 
+    #[cfg(feature = "grad")]
+    #[error("gradient error: {0}")]
+    GradError(String),
+
     #[cfg(feature = "remote")]
     #[error("connection not open: {0}")]
     RemoteError(String),

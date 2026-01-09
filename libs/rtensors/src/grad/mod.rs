@@ -1,8 +1,10 @@
-use slotmap::new_key_type;
+use slotmap::{new_key_type, SecondaryMap};
 
-use crate::{backend::{cpu::Cpu, cuda::Cuda, Backend}, core::{primitives::{GradTensor, GradTensorRef}, untyped::UntypedTensor, value::TensorValue}};
-use std::any::{Any, TypeId};
+use crate::{backend::{cpu::Cpu, cuda::Cuda, Backend}, core::{primitives::{GradTensor, GradTensorRef, TensorBase}, tensor::TensorError, untyped::UntypedTensor, value::TensorValue}};
+use std::{any::{Any, TypeId}, collections::VecDeque};
 use std::collections::HashMap;
+
+mod backwards;
 
 // struct NodeKey;
 
@@ -50,6 +52,14 @@ impl<T: TensorValue, B: Backend> GradNode<T, B> {
             GradNode::L1 { .. } => vec![],
         }
     }
+
+    fn backwards(&self, upstream: &TensorBase<T, B>) -> Result<Vec<TensorBase<T, B>>, TensorError> {
+        match self {
+            GradNode::L1 { .. } => backwards::backwards_l1::<T, B>(self, upstream),
+            GradNode::Leaf( .. ) => backwards::accumulate_grad::<T, B>(self, upstream),
+            _ => Err(TensorError::UnsupportedOperation("Backward not implemented for this node type.".into())),
+        }
+    }
 }
 
 pub struct GradContext<T: TensorValue, B: Backend> {
@@ -89,6 +99,74 @@ impl<T: TensorValue, B: Backend> GradContext<T, B> {
             inner,
             node: node_id,
         }
+    }
+
+    pub fn backwards(&mut self, root: &GradTensor<T, B>) -> Result<(), TensorError> {
+        // holds nodes to visit along with their upstream gradients
+        // topo sort, because concider a graph like A->C<-B<-D where BFS should visit C too early
+        let mut stack = Vec::new();
+        let mut marks = SecondaryMap::new();
+        let mut node_order = Vec::new();
+        stack.push(StackState::Enter(root.node));
+
+        enum StackState {
+            Enter (NodeKey),
+            Exit (NodeKey),
+        }
+
+        while let Some(state) = stack.pop() {
+            match state {
+                StackState::Enter (nkey) => {
+                    match marks.get(nkey) {
+                        Some(true) => continue,
+                        Some(false) => return Err(TensorError::GradError("Graph contains a cycle.".into())),
+                        None => {
+                            marks.insert(nkey, false);
+                            stack.push(StackState::Exit(nkey));
+                            if let Some(node) = self.nodes.get(nkey) {
+                                for parent in node.parents() {
+                                    stack.push(StackState::Enter(parent));
+                                }
+                            } else {
+                                return Err(TensorError::GradError("Node not found during backward pass.".into()));
+                            }
+                        }
+                    }
+                },
+                StackState::Exit (nkey) => {
+                    marks.insert(nkey, true);
+                    node_order.push(nkey);
+                }
+            }
+        }
+        // could in theory move this into the above loop but this is clearer
+        let mut accumulations = HashMap::new();
+        accumulations.insert(root.node, vec![root.borrow().value.clone()]);
+
+        for node_key in node_order {
+            // accumulate grad. because of topo sort, we can assume to just sum the upstreams present to us
+            // and then propagate downstream
+            let dldy = accumulations.remove(&node_key)
+                .unwrap() // t=since this node is in the visited list, it must have upstream grads
+                .into_iter()
+                .fold(None, |acc: Option<TensorBase<T, B>>, grad| {
+                    if let Some(accum) = acc {
+                        Some(accum + grad)
+                    } else {
+                        Some(grad)
+                    }
+                })
+                .unwrap(); // must have at least one upstream grad
+
+            let node = self.nodes.get(node_key).unwrap(); // we would never have discovered this node if it was not present
+            let upstreams = node.backwards(&dldy)?;
+            let parents = node.parents();
+            for (parent, grad) in parents.into_iter().zip(upstreams.into_iter()) {
+                accumulations.entry(parent).or_insert_with(Vec::new).push(grad);
+            }
+        }
+        Ok(())
+        // gradient is now accumulated in leaf nodes
     }
 }
 
