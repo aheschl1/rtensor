@@ -5,6 +5,7 @@ use std::{any::{Any, TypeId}, cell::RefCell};
 use std::collections::HashMap;
 
 mod backwards;
+pub mod optim;
 
 // struct NodeKey;
 

@@ -82,6 +82,10 @@ impl<T: WeightValue, B: Backend> GradTensor<T, B> {
     pub fn borrow(&self) -> std::cell::Ref<'_, GradTensorInner<T, B>> {
         self.inner.borrow()
     }
+
+    pub fn get_ref(&self) -> GradTensorRef<T, B> {
+        self.inner.clone()
+    }
 }
 
 #[cfg(feature = "grad")]
@@ -441,25 +445,61 @@ pub enum DeviceType {
 #[cfg(feature = "grad")]
 #[cfg(test)]
 mod tests {
-    use crate::{backend::cpu::Cpu, core::Tensor, grad, ops::broadcast::l1::l1_loss};
+    use crate::{backend::cpu::Cpu, core::{primitives::GradTensor, tensor::TensorAccess, Tensor}, grad::{self, optim::{Optim, SGD}}, ops::broadcast::l1::l1_loss};
 
     #[test]
-    fn testing_zone() {
-        let tensor = Tensor::<f32>::zeros((2, 3));
+    fn playground() {
+
+        fn model(wa: &GradTensor<f32, Cpu>, wb: &GradTensor<f32, Cpu>, target: &GradTensor<f32, Cpu>) -> GradTensor<f32, Cpu> {
+            let c = wa + wb;
+            let loss = l1_loss(&c, target);
+            loss
+        }
+
+        fn modelv2(
+            wa: &GradTensor<f32, Cpu>, 
+            wb: &GradTensor<f32, Cpu>, 
+            wc: &GradTensor<f32, Cpu>, 
+            target: &GradTensor<f32, Cpu>
+        ) -> GradTensor<f32, Cpu> {
+            let inter = wb + wc;
+            // println!("Intermediate: {:?}", inter);
+            let c = wa + &inter;
+            let loss = l1_loss(&c, target);
+            loss
+        }
 
         grad::with::<f32, Cpu>(|ctx| {
+            
             let a = Tensor::<f32>::ones((2, 2)).grad();
             let b = Tensor::<f32>::ones((2, 2)).grad();
             let target = Tensor::<f32>::zeros((2, 2)).grad();
+
+            let mut optim = SGD::<f32, Cpu>::new(1.);
+            optim.register_parameter(&a).unwrap();
+            optim.register_parameter(&b).unwrap();
             
-            let c = &a + &b;
-            // println!("{:?}", c);
+            for _ in 0..10 {
+                let loss = model(&a, &b, &target);
+                println!("Loss: {:?}", loss.borrow().value.item());
+                ctx.backwards(&loss).unwrap();
+                optim.step().unwrap();
+            }
 
-            let loss = l1_loss(&c, &target);
-            ctx.backwards(&loss).unwrap();
+            let a = Tensor::<f32>::ones((2, 2)).grad();
+            let b = Tensor::<f32>::ones((2, 2)).grad();
+            let c = Tensor::<f32>::ones((2, 2)).grad();
 
-            println!("a.grad: {:?}", a.borrow().grad);
-            println!("b.grad: {:?}", b.borrow().grad);
+            optim.register_parameter(&a).unwrap();
+            optim.register_parameter(&b).unwrap();
+            optim.register_parameter(&c).unwrap();
+
+            for _ in 0..10 {
+                let loss = modelv2(&a, &b, &c, &target);
+                println!("Loss: {:?}", loss.borrow().value.item());
+                ctx.backwards(&loss).unwrap();
+                optim.step().unwrap();
+            }
         })
     }
 }
