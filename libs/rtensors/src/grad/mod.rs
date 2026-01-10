@@ -7,6 +7,8 @@ use std::collections::HashMap;
 mod backwards;
 pub mod optim;
 
+pub use proc::when_enabled;
+
 // struct NodeKey;
 
 new_key_type! {
@@ -18,7 +20,7 @@ new_key_type! {
 pub(crate) enum GradNode<T: TensorValue, B: Backend> {
     Add { left: NodeKey, right: NodeKey },
     Leaf( GradTensorRef<T, B> ),
-
+    None,
     // LOSSES
     L1 { 
         input: NodeKey, 
@@ -43,17 +45,9 @@ impl<T: WeightValue, B: Backend> GradNode<T, B> {
     pub fn parents(&self) -> Vec<NodeKey> {
         match self {
             GradNode::Add { left, right } => vec![left.clone(), right.clone()],
-            GradNode::Leaf(_) => vec![],
             GradNode::L1 { input, target, ..} => vec![input.clone(), target.clone()],
-        }
-    }
+            GradNode::Leaf(_) | GradNode::None => vec![],
 
-    #[inline]
-    pub fn saved(&self) -> Vec<Box<dyn UntypedTensor<B>>> {
-        match self {
-            GradNode::Add { .. } => vec![],
-            GradNode::Leaf(_) => vec![],
-            GradNode::L1 { .. } => vec![],
         }
     }
 
@@ -61,7 +55,8 @@ impl<T: WeightValue, B: Backend> GradNode<T, B> {
         match self {
             GradNode::L1 { .. } => backwards::backwards_l1::<T, B>(self, upstream, ctx),
             GradNode::Leaf( .. ) => backwards::accumulate_grad::<T, B>(self, upstream, ctx),
-            GradNode::Add { left, right } => backwards::backwards_add::<T, B>(self, upstream, ctx),
+            GradNode::Add { .. } => backwards::backwards_add::<T, B>(self, upstream, ctx),
+            GradNode::None => Ok(vec![])
             // _ => Err(TensorError::UnsupportedOperation("Backward not implemented for this node type.".into())),
         }
     }
@@ -69,7 +64,7 @@ impl<T: WeightValue, B: Backend> GradNode<T, B> {
 
 pub struct GradContext<T: TensorValue, B: Backend> {
     // tape: Vec<NodeKey>, // holds references to all inner tensors that require gradients
-    nodes: RefCell<slotmap::SlotMap<NodeKey, GradNode<T, B>>>,
+    pub(crate) nodes: RefCell<slotmap::SlotMap<NodeKey, GradNode<T, B>>>,
 }
 
 impl<T: WeightValue, B: Backend> GradContext<T, B> {

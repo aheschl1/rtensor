@@ -1,6 +1,6 @@
 use std::{ops::{Add, AddAssign}};
 
-use crate::{backend::Backend, core::{primitives::{GradTensor, TensorBase}, value::{TensorValue, WeightValue}, TensorView, TensorViewMut}, grad::{self, GradNode}, ops::base::BinaryOpType};
+use crate::{backend::Backend, core::{primitives::TensorBase, value::TensorValue, TensorView, TensorViewMut}};
 use crate::core::tensor::AsTensor;
 
 impl<'a, T, B> AddAssign<T> for TensorViewMut<'a, T, B> 
@@ -94,28 +94,28 @@ impl_add!(TensorView<'a, T, B>);
 impl_add!(&TensorBase<T, B>);
 impl_add!(TensorBase<T, B>);
 
-impl<T, B> std::ops::Add<GradTensor<T, B>> for GradTensor<T, B> 
-    where T: WeightValue,
-          B: Backend,
-{
-    type Output = GradTensor<T, B>;
+// impl<T, B> std::ops::Add<GradTensor<T, B>> for GradTensor<T, B> 
+//     where T: WeightValue,
+//           B: Backend,
+// {
+//     type Output = GradTensor<T, B>;
 
-    fn add(self, rhs: GradTensor<T, B>) -> Self::Output {
-        let value = &rhs.borrow().value + &self.borrow().value;
-        let op = GradNode::Add { left: self.node, right: rhs.node };
-        GradTensor::from_op(value, op)
-    }
-}
+//     fn add(self, rhs: GradTensor<T, B>) -> Self::Output {
+//         let value = &rhs.borrow().value + &self.borrow().value;
+//         let op = GradNode::Add { left: self.node, right: rhs.node };
+//         GradTensor::from_op(value, op)
+//     }
+// }
 
-impl<T, B> std::ops::Add<&GradTensor<T, B>> for &GradTensor<T, B> 
-    where T: WeightValue,
-          B: Backend,
-{
-    type Output = GradTensor<T, B>;
+// impl<T, B> std::ops::Add<&GradTensor<T, B>> for &GradTensor<T, B> 
+//     where T: WeightValue,
+//           B: Backend,
+// {
+//     type Output = GradTensor<T, B>;
 
-    fn add(self, rhs: &GradTensor<T, B>) -> Self::Output {
-        let value = &rhs.borrow().value + &self.borrow().value;
-        let op = GradNode::Add { left: self.node, right: rhs.node };
-        GradTensor::from_op(value, op)
-    }
-}
+//     fn add(self, rhs: &GradTensor<T, B>) -> Self::Output {
+//         let value = &rhs.borrow().value + &self.borrow().value;
+//         let op = GradNode::Add { left: self.node, right: rhs.node };
+//         GradTensor::from_op(value, op)
+//     }
+// }

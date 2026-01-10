@@ -1,10 +1,16 @@
 use crate::{backend::Backend, core::{primitives::{GradTensor, GradTensorRef}, tensor::TensorError, value::WeightValue}, grad};
 
 
-
+    
 pub trait Optim<T: WeightValue, B: Backend> {
     fn step(&mut self) -> Result<(), TensorError>;
     fn register_parameter(&mut self, param: &GradTensor<T, B>) -> Result<(), TensorError>;
+    fn register_parameters(&mut self, param: &[&GradTensor<T, B>]) -> Result<(), TensorError> {
+        for p in param {
+            self.register_parameter(p)?;
+        }
+        Ok(())
+    }
 }
 
 pub struct SGD<T: WeightValue, B: Backend> {
@@ -36,16 +42,15 @@ impl<T: WeightValue, B: Backend> Optim<T, B> for SGD<T, B> {
         Ok(())  
     }
 
+    #[grad::when_enabled(ctx, message = "Cannot register a parameter without a grad context.")]
     fn register_parameter(&mut self, param: &GradTensor<T, B>) -> Result<(), TensorError> {
         // check is leaf node
-        grad::when_enabled::<T, B, _>(|ctx| {
-            let nodes = ctx.nodes.borrow();
-            let node = nodes.get(param.node).ok_or_else(|| TensorError::GradError("Parameter not found in grad context.".into()))?;
-            if !node.is_leaf() {
-                return Err(TensorError::GradError("Only leaf tensors can be registered as parameters.".into()));
-            }
-            self.parameters.push(param.get_ref());
-            Ok(())
-        }).expect("Cannot register a parameter without a grad context.")
+        let nodes = ctx.nodes.borrow();
+        let node = nodes.get(param.node).ok_or_else(|| TensorError::GradError("Parameter not found in grad context.".into()))?;
+        if !node.is_leaf() {
+            return Err(TensorError::GradError("Only leaf tensors can be registered as parameters.".into()));
+        }
+        self.parameters.push(param.get_ref());
+        Ok(())
     }
 }

@@ -27,7 +27,7 @@ pub mod core;
 pub mod ops;
 pub mod backend;
 pub mod macros;
-#[cfg(feature = "grad")]
+
 pub mod grad;
 
 pub(crate) mod testing;

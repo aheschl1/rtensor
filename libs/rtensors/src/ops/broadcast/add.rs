@@ -1,6 +1,6 @@
 use std::ops::{Add, AddAssign};
 
-use crate::{backend::Backend, core::{primitives::TensorBase, value::TensorValue, MetaTensor, MetaTensorView, TensorView, TensorViewMut}, ops::broadcast::{compute_broadcasted_params}};
+use crate::{backend::Backend, core::{primitives::{GradTensor, TensorBase}, tensor::WithGrad, value::{TensorValue, WeightValue}, MetaTensor, MetaTensorView, TensorView, TensorViewMut}, grad::GradNode, ops::broadcast::compute_broadcasted_params};
 use crate::ops::base::BinaryOpType;
 
 /// Macro to implement AddAssign for mutable tensor types (TensorBase and TensorViewMut)
@@ -465,3 +465,55 @@ impl_add!(&TensorViewMut, &TensorBase<T, B>, owned);
 impl_add!(&TensorViewMut, &TensorView<'_, T, B>, view);
 // &TensorViewMut + &TensorViewMut
 impl_add!(&TensorViewMut, &TensorViewMut<'_, T, B>, view);
+
+impl<T, B> std::ops::Add<GradTensor<T, B>> for GradTensor<T, B> 
+    where T: WeightValue,
+          B: Backend,
+{
+    type Output = GradTensor<T, B>;
+
+    fn add(self, rhs: GradTensor<T, B> ) -> Self::Output {
+        let value = &rhs.borrow().value + &self.borrow().value;
+        let op = GradNode::Add { left: self.node, right: rhs.node };
+        GradTensor::from_op(value, op)
+    }
+}
+
+impl<T, B> std::ops::Add<&GradTensor<T, B>> for GradTensor<T, B> 
+    where T: WeightValue,
+          B: Backend,
+{
+    type Output = GradTensor<T, B>;
+
+    fn add(self, rhs: &GradTensor<T, B> ) -> Self::Output {
+        let value = &rhs.borrow().value + &self.borrow().value;
+        let op = GradNode::Add { left: self.node, right: rhs.node };
+        GradTensor::from_op(value, op)
+    }
+}
+
+impl<T, B> std::ops::Add<&GradTensor<T, B>> for &GradTensor<T, B> 
+    where T: WeightValue,
+          B: Backend,
+{
+    type Output = GradTensor<T, B>;
+
+    fn add(self, rhs: &GradTensor<T, B> ) -> Self::Output {
+        let value = &rhs.borrow().value + &self.borrow().value;
+        let op = GradNode::Add { left: self.node, right: rhs.node };
+        GradTensor::from_op(value, op)
+    }
+}
+
+impl<T, B> std::ops::Add<GradTensor<T, B>> for &GradTensor<T, B> 
+    where T: WeightValue,
+          B: Backend,
+{
+    type Output = GradTensor<T, B>;
+
+    fn add(self, rhs: GradTensor<T, B> ) -> Self::Output {
+        let value = &rhs.borrow().value + &self.borrow().value;
+        let op = GradNode::Add { left: self.node, right: rhs.node };
+        GradTensor::from_op(value, op)
+    }
+}
