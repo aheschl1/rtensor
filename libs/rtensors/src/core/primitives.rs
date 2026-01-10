@@ -8,6 +8,8 @@ use std::sync::Arc;
 
 use crate::backend::Backend;
 use crate::backend::cpu::Cpu;
+#[cfg(feature = "grad")]
+use crate::core::value::WeightValue;
 use crate::grad::{self, GradNode, NodeKey};
 use crate::core::value::TensorValue;
 use crate::core::{shape_to_stride, MetaTensor, MetaTensorView, Shape};
@@ -26,12 +28,13 @@ pub struct TensorBase<T: TensorValue, B: Backend> {
 
 #[cfg(feature = "grad")]
 #[derive(Debug)]
-pub struct GradTensor<T: TensorValue, B: Backend> {
+pub struct GradTensor<T: WeightValue, B: Backend> {
     pub(crate) inner: GradTensorRef<T, B>,
     pub(crate) node: NodeKey,
 }
 
-impl<T: TensorValue, B: Backend> GradTensor<T, B> {
+#[cfg(feature = "grad")]
+impl<T: WeightValue, B: Backend> GradTensor<T, B> {
     pub(crate) fn leaf(
         value: TensorBase<T, B>,
     ) -> Self {
@@ -60,6 +63,22 @@ impl<T: TensorValue, B: Backend> GradTensor<T, B> {
         }).expect("Gradient context not found.")
     }
 
+    #[inline]
+    pub(crate) fn from_op_self_referential(
+        value: TensorBase<T, B>,
+        op_builder: impl FnOnce(GradTensorRef<T, B>) -> GradNode<T, B>,
+    ) -> Self {
+        let inner = GradTensorInner {
+            value,
+            grad: None,
+        };
+        let inner = Arc::new(RefCell::new(inner));
+        let node = op_builder(inner.clone());
+        grad::when_enabled::<T, B, _>(|ctx| {
+            ctx.attach(inner, node)
+        }).expect("Gradient context not found.") 
+    } 
+
     pub fn borrow(&self) -> std::cell::Ref<'_, GradTensorInner<T, B>> {
         self.inner.borrow()
     }
@@ -85,9 +104,9 @@ impl<T: TensorValue, B: Backend> Debug for GradTensorInner<T, B> {
 }
 
 #[cfg(feature = "grad")]
-impl<T: TensorValue, B: Backend> Eq for GradTensor<T, B> {}
+impl<T: WeightValue, B: Backend> Eq for GradTensor<T, B> {}
 #[cfg(feature = "grad")]
-impl<T: TensorValue, B: Backend> PartialEq for GradTensor<T, B> { fn eq(&self, other: &Self) -> bool { true }}
+impl<T: WeightValue, B: Backend> PartialEq for GradTensor<T, B> { fn eq(&self, other: &Self) -> bool { true }}
 
 impl<B: Backend, T: TensorValue> Clone for TensorBase<T, B> {
     fn clone(&self) -> Self {
@@ -393,7 +412,10 @@ where
     }
 
     #[cfg(feature = "grad")]
-    fn grad(self) -> GradTensor<T, B> {
+    fn grad(self) -> GradTensor<T, B> 
+    where 
+        T: WeightValue,
+    {
         GradTensor::leaf(self)
     }
 }
@@ -419,18 +441,25 @@ pub enum DeviceType {
 #[cfg(feature = "grad")]
 #[cfg(test)]
 mod tests {
-    use crate::{backend::cpu::Cpu, core::Tensor, grad};
+    use crate::{backend::cpu::Cpu, core::Tensor, grad, ops::broadcast::l1::l1_loss};
 
     #[test]
-    fn playbox() {
+    fn testing_zone() {
         let tensor = Tensor::<f32>::zeros((2, 3));
-        let grad_tensor = tensor.grad();
-        println!("{:?}", grad_tensor);
 
         grad::with::<f32, Cpu>(|ctx| {
             let a = Tensor::<f32>::ones((2, 2)).grad();
             let b = Tensor::<f32>::ones((2, 2)).grad();
-            let c = a + b;
+            let target = Tensor::<f32>::zeros((2, 2)).grad();
+            
+            let c = &a + &b;
+            // println!("{:?}", c);
+
+            let loss = l1_loss(&c, &target);
+            ctx.backwards(&loss).unwrap();
+
+            println!("a.grad: {:?}", a.borrow().grad);
+            println!("b.grad: {:?}", b.borrow().grad);
         })
     }
 }

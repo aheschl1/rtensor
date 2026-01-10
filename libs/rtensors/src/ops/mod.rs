@@ -82,6 +82,15 @@ mod tests {
     }
 
     #[test]
+    fn test_div() {
+        let mut tensor = TensorBase::<f32, Cpu>::from_buf(vec![1., 2., 3.], vec![3]).unwrap();
+        let mut view = tensor.view_mut();
+        view /= 5.;
+        let expected = TensorBase::<f32, Cpu>::from_buf(vec![0.2, 0.4, 0.6], vec![3]).unwrap();
+        assert_eq!(tensor.buf.clone(), expected.buf);
+    }
+
+    #[test]
     fn test_mul_ref() {
         let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3], vec![3]).unwrap();
         let value = 10;
@@ -2687,6 +2696,15 @@ mod cuda_tests {
         let mut view = tensor.view_mut();
         view *= 4;
         let expected = Tensor::<i32>::from_buf(vec![4, 8, 12], vec![3]).unwrap();
+        assert_eq!(tensor.cpu().unwrap(), expected);
+    }
+
+    #[test]
+    fn test_div_cuda() {
+        let mut tensor = CudaTensor::<f32>::from_buf(vec![1., 2., 3.], vec![3]).unwrap();
+        let mut view = tensor.view_mut();
+        view /= 4.;
+        let expected = Tensor::<f32>::from_buf(vec![0.25, 0.5, 0.75], vec![3]).unwrap();
         assert_eq!(tensor.cpu().unwrap(), expected);
     }
 

@@ -1,7 +1,7 @@
 use slotmap::{new_key_type, SecondaryMap};
 
-use crate::{backend::{cpu::Cpu, cuda::Cuda, Backend}, core::{primitives::{GradTensor, GradTensorRef, TensorBase}, tensor::TensorError, untyped::UntypedTensor, value::TensorValue}};
-use std::any::{Any, TypeId};
+use crate::{backend::{cpu::Cpu, cuda::Cuda, Backend}, core::{primitives::{GradTensor, GradTensorRef, TensorBase}, tensor::TensorError, untyped::UntypedTensor, value::{TensorValue, WeightValue}}};
+use std::{any::{Any, TypeId}, cell::RefCell};
 use std::collections::HashMap;
 
 mod backwards;
@@ -13,6 +13,7 @@ new_key_type! {
 }
 
 /// Each variant of a node holds parents and any tensors that need to be saved for backward.
+#[derive(Debug, Clone)]
 pub(crate) enum GradNode<T: TensorValue, B: Backend> {
     Add { left: NodeKey, right: NodeKey },
     Leaf( GradTensorRef<T, B> ),
@@ -22,11 +23,13 @@ pub(crate) enum GradNode<T: TensorValue, B: Backend> {
         input: NodeKey, 
         // it is likely that this is leaf; however, it is not always the case
         // consider siamese networks
-        target: NodeKey 
+        target: NodeKey,
+        grad_map: TensorBase<T, B>, // where is the diff greater than zero
+        loss: GradTensorRef<T, B>,
     },
 }
 
-impl<T: TensorValue, B: Backend> GradNode<T, B> {
+impl<T: WeightValue, B: Backend> GradNode<T, B> {
     pub fn is_leaf(&self) -> bool {
         matches!(self, GradNode::Leaf(..))
     }
@@ -40,7 +43,7 @@ impl<T: TensorValue, B: Backend> GradNode<T, B> {
         match self {
             GradNode::Add { left, right } => vec![left.clone(), right.clone()],
             GradNode::Leaf(_) => vec![],
-            GradNode::L1 { input, target } => vec![input.clone(), target.clone()],
+            GradNode::L1 { input, target, ..} => vec![input.clone(), target.clone()],
         }
     }
 
@@ -65,13 +68,13 @@ impl<T: TensorValue, B: Backend> GradNode<T, B> {
 
 pub struct GradContext<T: TensorValue, B: Backend> {
     // tape: Vec<NodeKey>, // holds references to all inner tensors that require gradients
-    nodes: slotmap::SlotMap<NodeKey, GradNode<T, B>>,
+    nodes: RefCell<slotmap::SlotMap<NodeKey, GradNode<T, B>>>,
 }
 
-impl<T: TensorValue, B: Backend> GradContext<T, B> {
+impl<T: WeightValue, B: Backend> GradContext<T, B> {
     pub fn new() -> Self {
         Self { 
-            nodes: slotmap::SlotMap::with_key(),
+            nodes: RefCell::new(slotmap::SlotMap::with_key()),
         }
     }
 
@@ -82,7 +85,7 @@ impl<T: TensorValue, B: Backend> GradContext<T, B> {
 
     #[inline]
     pub(crate) fn make_leaf(
-        &mut self,
+        &self,
         inner: GradTensorRef<T, B>,
     ) -> GradTensor<T, B> {
         let node = GradNode::leaf(inner.clone());
@@ -91,23 +94,18 @@ impl<T: TensorValue, B: Backend> GradContext<T, B> {
 
     #[inline]
     pub(crate) fn attach(
-        &mut self,
+        &self,
         inner: GradTensorRef<T, B>,
         op: GradNode<T, B>,
     ) -> GradTensor<T, B> {
-        let node_id = self.nodes.insert(op);
+        let node_id = self.nodes.borrow_mut().insert(op);
         GradTensor {
             inner,
             node: node_id,
         }
     }
 
-    #[inline]
-    pub(crate) fn get_node(&self, key: NodeKey) -> Option<&GradNode<T, B>> {
-        self.nodes.get(key)
-    }
-
-    pub fn backwards(&mut self, root: &GradTensor<T, B>) -> Result<(), TensorError> {
+    pub fn backwards(&self, root: &GradTensor<T, B>) -> Result<(), TensorError> {
         // holds nodes to visit along with their upstream gradients
         // topo sort, because concider a graph like A->C<-B<-D where BFS should visit C too early
         let mut stack = Vec::new();
@@ -129,7 +127,7 @@ impl<T: TensorValue, B: Backend> GradContext<T, B> {
                         None => {
                             marks.insert(nkey, false);
                             stack.push(StackState::Exit(nkey));
-                            if let Some(node) = self.nodes.get(nkey) {
+                            if let Some(node) = self.nodes.borrow().get(nkey) {
                                 for parent in node.parents() {
                                     stack.push(StackState::Enter(parent));
                                 }
@@ -149,7 +147,13 @@ impl<T: TensorValue, B: Backend> GradContext<T, B> {
         let mut accumulations = HashMap::new();
         accumulations.insert(root.node, vec![root.borrow().value.clone()]);
 
-        for node_key in node_order {
+        // println!("{:?}", node_order
+        //     .iter()
+        //     .map(|k| self.nodes.borrow().get(*k).unwrap().clone())
+        //     .collect::<Vec<_>>()
+        // );
+
+        for node_key in node_order.into_iter().rev() {
             // accumulate grad. because of topo sort, we can assume to just sum the upstreams present to us
             // and then propagate downstream
             let dldy = accumulations.remove(&node_key)
@@ -163,8 +167,9 @@ impl<T: TensorValue, B: Backend> GradContext<T, B> {
                     }
                 })
                 .unwrap(); // must have at least one upstream grad
-
-            let node = self.nodes.get(node_key).unwrap(); // we would never have discovered this node if it was not present
+            
+            let nodes = self.nodes.borrow();
+            let node = nodes.get(node_key).unwrap(); // we would never have discovered this node if it was not present
             let upstreams = node.backwards(&dldy, self)?;
             let parents = node.parents();
             for (parent, grad) in parents.into_iter().zip(upstreams.into_iter()) {
@@ -178,7 +183,7 @@ impl<T: TensorValue, B: Backend> GradContext<T, B> {
 
 impl<T: TensorValue, B: Backend> std::fmt::Debug for GradContext<T, B> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "GradContext {{ nodes_len: {} }}", self.nodes.len())
+        write!(f, "GradContext {{ nodes_len: {} }}", self.nodes.borrow().len())
     }
 }
 
@@ -188,8 +193,8 @@ thread_local! {
 }
 
 
-pub fn with<T: TensorValue, B: Backend>(
-    f: impl FnOnce(&mut GradContext<T, B>)
+pub fn with<T: WeightValue, B: Backend>(
+    f: impl FnOnce(&GradContext<T, B>)
 ) {
     let type_id = TypeId::of::<T>();
     
@@ -199,10 +204,14 @@ pub fn with<T: TensorValue, B: Backend>(
             let ctx = ctx_map
                 .entry(type_id)
                 .or_insert_with(|| Box::new(GradContext::<T, Cpu>::new()));
+            drop(ctx);
+            drop(ctx_map);
+            let ctx = ctx_cell.borrow();
+            let ctx = ctx.get(&type_id).unwrap();
             
             // SAFETY: We know the TypeId matches T, and we've verified B is Cpu
-            let ctx = ctx.downcast_mut::<GradContext<T, Cpu>>().unwrap();
-            let ctx = unsafe { &mut *(ctx as *mut GradContext<T, Cpu> as *mut GradContext<T, B>) };
+            let ctx = ctx.downcast_ref::<GradContext<T, Cpu>>().unwrap();
+            let ctx = unsafe { &*(ctx as *const GradContext<T, Cpu> as *const GradContext<T, B>) };
             f(ctx);
         });
     } else if std::any::TypeId::of::<B>() == std::any::TypeId::of::<Cuda>() {
@@ -243,22 +252,23 @@ pub fn is_enabled<T: TensorValue, B: Backend>() -> bool {
 
 /// Runs the provided closure if the gradient context is enabled for the given backend.
 pub fn when_enabled<T: TensorValue, B: Backend, R>(
-    f: impl FnOnce(&mut GradContext<T, B>) -> R
+    f: impl FnOnce(&GradContext<T, B>) -> R
 ) -> Option<R>{
     let type_id = TypeId::of::<T>();
     
     if std::any::TypeId::of::<B>() == std::any::TypeId::of::<Cpu>() {
         GRAD_CONTEXT_CPU.with(|ctx_cell| {
-            let mut ctx_map = ctx_cell.borrow_mut();
-            if let Some(ctx_box) = ctx_map.get_mut(&type_id) {
+            let ctx_map = ctx_cell.borrow();
+            if let Some(ctx_box) = ctx_map.get(&type_id) {
                 // SAFETY: We know the TypeId matches T, and we've verified B is Cpu
-                if let Some(ctx) = ctx_box.downcast_mut::<GradContext<T, Cpu>>() {
-                    let ctx = unsafe { &mut *(ctx as *mut GradContext<T, Cpu> as *mut GradContext<T, B>) };
+                if let Some(ctx) = ctx_box.downcast_ref::<GradContext<T, Cpu>>() {
+                    let ctx = unsafe { &*(ctx as *const GradContext<T, Cpu> as *const GradContext<T, B>) };
                     Some(f(ctx))
                 }else{
                     None
                 }
             } else {
+                // println!("fsdljfakjlfhlkasjfhlaskjfhals");
                 None
             }
         })
@@ -307,8 +317,8 @@ pub fn when_disabled<T: TensorValue, B: Backend>(
 }
 
 /// same as anabled but warns if not enabled
-pub fn enabled_or_warn<T: TensorValue, B: Backend>(
-    f: impl FnOnce(&mut GradContext<T, B>),
+pub fn enabled_or_warn<T: WeightValue, B: Backend>(
+    f: impl FnOnce(&GradContext<T, B>),
     msg: &str,
 ) {
     when_disabled::<T, B>(|| {

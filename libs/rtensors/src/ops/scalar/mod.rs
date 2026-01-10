@@ -7,6 +7,7 @@ use crate::core::tensor::{AsViewMut, AsTensor};
 pub mod add;
 pub mod sub;
 pub mod mul;
+pub mod div;
 
 macro_rules! specify_binary_scalar_op_template {
     (

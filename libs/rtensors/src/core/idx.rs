@@ -45,6 +45,12 @@ impl From<Vec<Dim>> for Idx {
     }
 }
 
+impl From<&Vec<Dim>> for Idx {
+    fn from(value: &Vec<Dim>) -> Self {
+        Idx::Coord(value.clone())
+    }
+}
+
 // Array slice implementation
 impl From<&[Dim]> for Idx {
     fn from(value: &[Dim]) -> Self {

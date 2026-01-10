@@ -47,6 +47,13 @@ struct MulOp {
     }
 };
 
+struct DivOp {
+    template<typename T>
+    __device__ __forceinline__ T operator()(T x, T value) const {
+        return x / value;
+    }
+};
+
 struct LeakyReluOp {
     template<typename T>
     __device__ __forceinline__ T operator()(T x, T slope) const {
@@ -242,6 +249,21 @@ DECLARE_SCALAR_LAUNCHERS(mul, MulOp, int32_t, i32)
 DECLARE_SCALAR_LAUNCHERS(mul, MulOp, int64_t, i64)
 DECLARE_SCALAR_LAUNCHERS(mul, MulOp, __int128_t, i128)
 DECLARE_SCALAR_LAUNCHERS(mul, MulOp, bool, boolean)
+
+// div: all types
+DECLARE_SCALAR_LAUNCHERS(div, DivOp, float,  f32)
+DECLARE_SCALAR_LAUNCHERS(div, DivOp, double, f64)
+DECLARE_SCALAR_LAUNCHERS(div, DivOp, uint8_t,  u8)
+DECLARE_SCALAR_LAUNCHERS(div, DivOp, uint16_t, u16)
+DECLARE_SCALAR_LAUNCHERS(div, DivOp, uint32_t, u32)
+DECLARE_SCALAR_LAUNCHERS(div, DivOp, uint64_t, u64)
+DECLARE_SCALAR_LAUNCHERS(div, DivOp, __uint128_t, u128)
+DECLARE_SCALAR_LAUNCHERS(div, DivOp, int8_t,  i8)
+DECLARE_SCALAR_LAUNCHERS(div, DivOp, int16_t, i16)
+DECLARE_SCALAR_LAUNCHERS(div, DivOp, int32_t, i32)
+DECLARE_SCALAR_LAUNCHERS(div, DivOp, int64_t, i64)
+DECLARE_SCALAR_LAUNCHERS(div, DivOp, __int128_t, i128)
+DECLARE_SCALAR_LAUNCHERS(div, DivOp, bool, boolean)
 
 DECLARE_SCALAR_LAUNCHERS(log, LogOp, float,  f32)
 DECLARE_SCALAR_LAUNCHERS(log, LogOp, double,  f64)

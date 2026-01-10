@@ -161,6 +161,48 @@ where
     }
 }
 
+impl<T, B> std::ops::Neg for &TensorBase<T, B>
+where
+    T: TensorValue + std::ops::Neg<Output = T>,
+    B: Backend,
+{
+    type Output = TensorBase<T, B>;
+
+    fn neg(self) -> Self::Output {
+        let mut result = self.owned();
+        result.neg_inplace();
+        result
+    }
+}
+
+impl<'a, T, B> std::ops::Neg for &TensorView<'a, T, B>
+where
+    T: TensorValue + std::ops::Neg<Output = T>,
+    B: Backend,
+{
+    type Output = TensorBase<T, B>;
+
+    fn neg(self) -> Self::Output {
+        let mut result = self.owned();
+        result.neg_inplace();
+        result
+    }
+}
+
+impl<'a, T, B> std::ops::Neg for &TensorViewMut<'a, T, B>
+where
+    T: TensorValue + std::ops::Neg<Output = T>,
+    B: Backend,
+{
+    type Output = TensorBase<T, B>;
+
+    fn neg(self) -> Self::Output {
+        let mut result = self.owned();
+        result.neg_inplace();
+        result
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

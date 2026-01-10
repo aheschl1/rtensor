@@ -297,6 +297,7 @@ pub trait Backend: Send + Sync + 'static + Clone + Debug {
     specify_trait_scalar_cabal!{add}
     specify_trait_scalar_cabal!{sub}
     specify_trait_scalar_cabal!{mul}
+    specify_trait_scalar_cabal!{div}
     specify_trait_scalar_cabal!{log where T: WeightValue}
     specify_trait_scalar_cabal!{log1p where T: WeightValue}
     specify_trait_scalar_cabal!{leaky_relu}

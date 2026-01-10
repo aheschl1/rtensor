@@ -1,7 +1,9 @@
-use crate::{backend::Backend, core::{primitives::TensorBase, tensor::TensorError, value::TensorValue}, grad::{GradContext, GradNode}};
+use rand::distr::weighted::Weight;
+
+use crate::{backend::Backend, core::{primitives::TensorBase, tensor::TensorError, value::{TensorValue, WeightValue}}, grad::{GradContext, GradNode}};
 
 
-pub(crate) fn accumulate_grad<T: TensorValue, B: Backend>(
+pub(crate) fn accumulate_grad<T: WeightValue, B: Backend>(
     node: &GradNode<T, B>, 
     upstream: &TensorBase<T, B>,
     _ctx: &GradContext<T, B>,
@@ -22,7 +24,7 @@ pub(crate) fn accumulate_grad<T: TensorValue, B: Backend>(
     Ok(vec![upstream.clone()])
 }
 
-pub(crate) fn backwards_add<T: TensorValue, B: Backend>(
+pub(crate) fn backwards_add<T: WeightValue, B: Backend>(
     node: &GradNode<T, B>, 
     upstream: &TensorBase<T, B>,
     _ctx: &GradContext<T, B>
@@ -35,18 +37,17 @@ pub(crate) fn backwards_add<T: TensorValue, B: Backend>(
     Ok(vec![upstream.clone(), upstream.clone()])
 }
 
-pub(crate) fn backwards_l1<T: TensorValue, B: Backend>(
+pub(crate) fn backwards_l1<T: WeightValue, B: Backend>(
     node: &GradNode<T, B>, 
     upstream: &TensorBase<T, B>,
     ctx: &GradContext<T, B>,
 ) -> Result<Vec<TensorBase<T, B>>, TensorError>{
-    let GradNode::L1 { input, target } = node else {
+    let GradNode::L1 { grad_map, ..} = node else {
         return Err(TensorError::UnsupportedOperation("Invalid node type passed to L1 backwards.".into()));
     };
-
-    // assume for now no batching
-    let input_tensor = ctx.get_node(*input).ok_or_else(|| TensorError::GradError("Input tensor not found in context.".into()))?;
-    let target_tensor = ctx.get_node(*target).ok_or_else(|| TensorError::GradError("Target tensor not found in context.".into()))?;
-
-    todo!()
+    let result = vec![
+        grad_map * upstream,
+        -grad_map * upstream,
+    ];
+    Ok(result)
 }
