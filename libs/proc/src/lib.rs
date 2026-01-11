@@ -10,7 +10,7 @@ mod rpc;
 /// # Usage
 /// 
 /// ```ignore
-/// #[requires_grad]
+/// #[requires_grad(ctx)]
 /// fn my_function(...) -> ... {
 ///     // ...
 /// }

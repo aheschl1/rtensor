@@ -1,6 +1,6 @@
 use std::{cell::RefCell, sync::Arc};
 
-use crate::{backend::Backend, core::{primitives::{GradTensor, GradTensorInner, TensorBase}, tensor::{TensorAccess, TensorAccessMut}, value::{TensorValue, WeightValue}, MetaTensorView}, grad::{self, GradNode}, ops::{reduction::{ReductionOp, TotalReductionOp}, unary::UnaryOp}};
+use crate::{backend::Backend, core::{primitives::TensorBase, tensor::{TensorAccess, TensorAccessMut}, value::{TensorValue, WeightValue}, MetaTensorView}, grad::{self, primitives::GradTensor, GradNode}, ops::{reduction::{ReductionOp, TotalReductionOp}, unary::UnaryOp}};
 
 
 
@@ -20,8 +20,8 @@ impl<T: WeightValue, B: Backend> L1<T, B> for GradTensor<T, B> {
         let self_inner = self.borrow();
         let target_inner = target.borrow();
 
-        let self_tensor = &self_inner.value;
-        let target_tensor = &target_inner.value;
+        let self_tensor = &self_inner.tensor;
+        let target_tensor = &target_inner.tensor;
 
         let diff = self_tensor - target_tensor;
         let mut grad_map = TensorBase::<T, B>::zeros(diff.shape());

@@ -1,4 +1,4 @@
-use crate::{backend::Backend, core::{primitives::{GradTensor, GradTensorRef}, tensor::TensorError, value::WeightValue}, grad};
+use crate::{backend::Backend, core::{tensor::TensorError, value::WeightValue}, grad::{self, primitives::{GradTensor, GradTensorRef}}};
 
 
     
@@ -34,7 +34,7 @@ impl<T: WeightValue, B: Backend> Optim<T, B> for SGD<T, B> {
             if let Some(grad) = &param.grad {
                 // Update parameter: param = param - learning_rate * grad
                 let update = grad * self.learning_rate;
-                param.value -= &update;
+                param.tensor -= &update;
                 // Clear gradient after update
                 param.grad = None;
             }

@@ -1,11 +1,12 @@
 use slotmap::{new_key_type, SecondaryMap};
 
-use crate::{backend::{cpu::Cpu, cuda::Cuda, Backend}, core::{primitives::{GradTensor, GradTensorRef, TensorBase}, tensor::TensorError, untyped::UntypedTensor, value::{TensorValue, WeightValue}}};
+use crate::{backend::{cpu::Cpu, cuda::Cuda, Backend}, core::{idx::Idx, primitives::TensorBase, tensor::TensorError, untyped::UntypedTensor, value::{TensorValue, WeightValue}}, grad::primitives::{GradTensor, GradTensorRef}};
 use std::{any::{Any, TypeId}, cell::RefCell};
 use std::collections::HashMap;
 
 mod backwards;
 pub mod optim;
+pub mod primitives;
 
 pub use proc::when_enabled;
 
@@ -18,9 +19,16 @@ new_key_type! {
 /// Each variant of a node holds parents and any tensors that need to be saved for backward.
 #[derive(Debug, Clone)]
 pub(crate) enum GradNode<T: TensorValue, B: Backend> {
-    Add { left: NodeKey, right: NodeKey },
+    // LEAF NODES
     Leaf( GradTensorRef<T, B> ),
     None,
+    // OPS
+    Add { left: NodeKey, right: NodeKey },
+    // VIEW OPS
+    Permute {
+        input: NodeKey,
+        dims: Idx
+    },
     // LOSSES
     L1 { 
         input: NodeKey, 
@@ -47,7 +55,7 @@ impl<T: WeightValue, B: Backend> GradNode<T, B> {
             GradNode::Add { left, right } => vec![left.clone(), right.clone()],
             GradNode::L1 { input, target, ..} => vec![input.clone(), target.clone()],
             GradNode::Leaf(_) | GradNode::None => vec![],
-
+            GradNode::Permute { input, .. } => vec![input.clone()],
         }
     }
 
@@ -56,7 +64,8 @@ impl<T: WeightValue, B: Backend> GradNode<T, B> {
             GradNode::L1 { .. } => backwards::backwards_l1::<T, B>(self, upstream, ctx),
             GradNode::Leaf( .. ) => backwards::accumulate_grad::<T, B>(self, upstream, ctx),
             GradNode::Add { .. } => backwards::backwards_add::<T, B>(self, upstream, ctx),
-            GradNode::None => Ok(vec![])
+            GradNode::None => Ok(vec![]),
+            GradNode::Permute { .. } => todo!(),
             // _ => Err(TensorError::UnsupportedOperation("Backward not implemented for this node type.".into())),
         }
     }
@@ -141,7 +150,7 @@ impl<T: WeightValue, B: Backend> GradContext<T, B> {
         }
         // could in theory move this into the above loop but this is clearer
         let mut accumulations = HashMap::new();
-        accumulations.insert(root.node, vec![root.borrow().value.clone()]);
+        accumulations.insert(root.node, vec![root.borrow().tensor.clone()]);
 
         // println!("{:?}", node_order
         //     .iter()
