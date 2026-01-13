@@ -25,6 +25,8 @@ pub(crate) enum GradNode<T: TensorValue, B: Backend> {
     // OPS
     Add { left: NodeKey, right: NodeKey },
     ReLU { input: NodeKey, grad_map: TensorBase<T, B> },
+    Negate { input: NodeKey },
+    Sqrt { input: NodeKey, output: TensorBase<T, B> },
     // VIEW OPS
     Permute {
         input: NodeKey,
@@ -58,6 +60,8 @@ impl<T: WeightValue, B: Backend> GradNode<T, B> {
             GradNode::Leaf(_) | GradNode::None => vec![],
             GradNode::Permute { input, .. } => vec![input.clone()],
             GradNode::ReLU { input, .. } => vec![input.clone()],
+            GradNode::Negate { input } => vec![input.clone()],
+            GradNode::Sqrt { input, .. } => vec![input.clone()],
         }
     }
 
@@ -68,8 +72,10 @@ impl<T: WeightValue, B: Backend> GradNode<T, B> {
             GradNode::Add { .. } => backwards::backwards_add::<T, B>(self, upstream, ctx),
             GradNode::Permute { .. } => backwards::backwards_permute::<T, B>(self, upstream, ctx),
 
+            GradNode::Negate { .. } => backwards::backwards_negate::<T, B>(self, upstream, ctx),
             GradNode::ReLU { .. } => backwards::backwards_relu::<T, B>(self, upstream, ctx),
-
+            GradNode::Sqrt { .. } => backwards::backwards_sqrt::<T, B>(self, upstream, ctx),
+            
             GradNode::None => Ok(vec![]),
             // _ => Err(TensorError::UnsupportedOperation("Backward not implemented for this node type.".into())),
         }

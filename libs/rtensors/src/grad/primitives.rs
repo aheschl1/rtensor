@@ -2,10 +2,36 @@ use std::{cell::RefCell, sync::Arc};
 
 use crate::{backend::Backend, core::{idx::Idx, primitives::TensorBase, tensor::{AsTensor, TensorAccess, TensorError}, value::{TensorValue, WeightValue}, MetaTensorView}, grad::{self, GradNode, NodeKey}};
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct GradTensor<T: WeightValue, B: Backend> {
     pub(crate) inner: GradTensorRef<T, B>,
     pub(crate) node: NodeKey,
+}
+
+// deep clone, not Rc clone
+impl<T: WeightValue, B: Backend> Clone for GradTensor<T, B> {
+    #[grad::when_enabled(ctx)]
+    fn clone(&self) -> Self {
+        let tensor = self.borrow().tensor.contiguous();
+        let grad = match &self.borrow().grad {
+            Some(g) => Some(g.contiguous()),
+            None => None,
+        };
+        let inner = GradTensorInner {
+            tensor,
+            grad,
+        };
+        let inner_ref = Arc::new(RefCell::new(inner));
+        let nodes = ctx.nodes.borrow();
+        let curr_node = nodes.get(self.node).expect("Node not found in grad context");
+        let node = if let GradNode::Leaf(_) = curr_node {
+            GradNode::Leaf( inner_ref.clone() )
+        } else {
+            curr_node.clone()
+        };
+        drop(nodes);
+        ctx.attach(inner_ref.clone(), node)
+    }
 }
 
 impl<T: WeightValue, B: Backend> GradTensor<T, B> {
@@ -180,6 +206,14 @@ mod tests {
             loss
         }
 
+        fn modelv5(
+            input: &GradTensor<f32, Cpu>,  // [2, 3]
+            target: &GradTensor<f32, Cpu> // [3, 2]
+        ) -> GradTensor<f32, Cpu> {
+            let loss = l1_loss(&-input, &target.clone().transpose());
+            loss
+        }
+
         grad::with::<f32, Cpu>(|ctx| {
             
             let a = Tensor::<f32>::scalar(1.).grad();
@@ -244,6 +278,21 @@ mod tests {
                 ctx.backwards(&loss).unwrap();
                 optim.step().unwrap();
             }
+
+            println!("{:?}", input);
+            println!("{:?}", wa);
+
+            let input = Tensor::<f32>::ones((2, 3)).param();
+            let target = Tensor::<f32>::zeros((3, 2)).grad();
+            optim.register_parameter(&input).unwrap();
+            for _ in 0..10 {
+                let loss = modelv5(&input, &target);
+                println!("Loss: {:?}", loss.borrow().tensor.item());
+                ctx.backwards(&loss).unwrap();
+                optim.step().unwrap();
+            }
+
+            println!("{:?}", input);
 
         })
     }

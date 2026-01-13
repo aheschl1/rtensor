@@ -88,3 +88,28 @@ pub fn backwards_relu<T: WeightValue, B: Backend>(
     let grad = grad_map * upstream;
     Ok(vec![grad])
 }
+
+pub fn backwards_negate<T: WeightValue, B: Backend>(
+    node: &GradNode<T, B>, 
+    upstream: &TensorBase<T, B>,
+    _ctx: &GradContext<T, B>,
+) -> Result<Vec<TensorBase<T, B>>, TensorError>{
+    let GradNode::Negate { .. } = node else {
+        return Err(TensorError::UnsupportedOperation("Invalid node type passed to Negate backwards.".into()));
+    };
+    let grad = -upstream;
+    Ok(vec![grad])
+}
+
+pub fn backwards_sqrt<T: WeightValue, B: Backend>(
+    node: &GradNode<T, B>, 
+    upstream: &TensorBase<T, B>,
+    _ctx: &GradContext<T, B>,
+) -> Result<Vec<TensorBase<T, B>>, TensorError>{
+    let GradNode::Sqrt { output, .. } = node else {
+        return Err(TensorError::UnsupportedOperation("Invalid node type passed to Sqrt backwards.".into()));
+    };
+    let two = T::from_f32(2.0);
+    let grad = upstream / (output * two);
+    Ok(vec![grad])
+}
