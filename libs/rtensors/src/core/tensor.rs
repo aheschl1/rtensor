@@ -49,7 +49,7 @@ pub enum TensorError {
     RemoteError(String),
 }
 
-mod seal {
+pub(crate) mod seal {
     use crate::{backend::Backend, core::{primitives::{TensorBase}, value::TensorValue, TensorView, TensorViewMut}};
 
     pub(crate) trait Sealed {}

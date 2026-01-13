@@ -76,3 +76,15 @@ pub fn backwards_permute<T: WeightValue, B: Backend>(
     grad.meta = permuted_grad.meta;
     Ok(vec![grad])
 }
+
+pub fn backwards_relu<T: WeightValue, B: Backend>(
+    node: &GradNode<T, B>, 
+    upstream: &TensorBase<T, B>,
+    _ctx: &GradContext<T, B>,
+) -> Result<Vec<TensorBase<T, B>>, TensorError>{
+    let GradNode::ReLU { grad_map, .. } = node else {
+        return Err(TensorError::UnsupportedOperation("Invalid node type passed to ReLU backwards.".into()));
+    };
+    let grad = grad_map * upstream;
+    Ok(vec![grad])
+}

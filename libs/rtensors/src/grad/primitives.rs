@@ -128,7 +128,7 @@ impl<T: WeightValue, B: Backend> PartialEq for GradTensor<T, B> { fn eq(&self, o
 
 #[cfg(test)]
 mod tests {
-    use crate::{backend::cpu::Cpu, core::{tensor::{TensorAccess, WithGrad}, Tensor}, grad::{self, optim::{Optim, SGD}, primitives::GradTensor}, ops::broadcast::l1::l1_loss};
+    use crate::{backend::cpu::Cpu, core::{tensor::{TensorAccess, WithGrad}, Tensor}, grad::{self, optim::{Optim, SGD}, primitives::GradTensor}, ops::{broadcast::l1::l1_loss, unary::UnaryGradOp}};
 
     #[test]
     fn playground() {
@@ -160,6 +160,20 @@ mod tests {
         ) -> GradTensor<f32, Cpu> {
             let inter = input + wa; // [2, 3]
             let inter2 = inter.permute((1, 0)).unwrap();
+            // println!("Intermediate: {:?}", inter);
+            let c = wb + &inter2;
+            let loss = l1_loss(&c, target);
+            loss
+        }
+
+        fn modelv4(
+            input: &GradTensor<f32, Cpu>,  // [2, 3]
+            wa: &GradTensor<f32, Cpu>, // [2, 3]
+            wb: &GradTensor<f32, Cpu>,  // [3, 2]
+            target: &GradTensor<f32, Cpu> // [3, 2]
+        ) -> GradTensor<f32, Cpu> {
+            let inter = input + wa; // [2, 3]
+            let inter2 = inter.permute((1, 0)).unwrap().relu();
             // println!("Intermediate: {:?}", inter);
             let c = wb + &inter2;
             let loss = l1_loss(&c, target);
@@ -217,6 +231,19 @@ mod tests {
 
             println!("{:?}", input);
             println!("{:?}", wa);
+
+            let input = Tensor::<f32>::ones((2, 3)).grad();
+            let wa = Tensor::<f32>::ones((2, 3)).param();
+            let wb = Tensor::<f32>::ones((3, 2)).param();
+            let target = Tensor::<f32>::zeros((3, 2)).grad();
+            optim.register_parameter(&wa).unwrap();
+            optim.register_parameter(&wb).unwrap();
+            for _ in 0..10 {
+                let loss = modelv4(&input, &wa, &wb, &target);
+                println!("Loss: {:?}", loss.borrow().tensor.item());
+                ctx.backwards(&loss).unwrap();
+                optim.step().unwrap();
+            }
 
         })
     }
