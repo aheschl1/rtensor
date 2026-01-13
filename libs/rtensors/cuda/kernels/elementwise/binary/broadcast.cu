@@ -50,6 +50,7 @@ __global__ void binary_broadcast_elementwise(
             case OP_ADD: dbuf[dof] = lbuf[lo] + rbuf[ro]; break;
             case OP_SUB: dbuf[dof] = lbuf[lo] - rbuf[ro]; break;
             case OP_MUL: dbuf[dof] = lbuf[lo] * rbuf[ro]; break;
+            case OP_DIV: dbuf[dof] = lbuf[lo] / rbuf[ro]; break;
         }
     }
 }

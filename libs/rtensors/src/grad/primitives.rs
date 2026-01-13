@@ -210,7 +210,7 @@ mod tests {
             input: &GradTensor<f32, Cpu>,  // [2, 3]
             target: &GradTensor<f32, Cpu> // [3, 2]
         ) -> GradTensor<f32, Cpu> {
-            let loss = l1_loss(&-input, &target.clone().transpose());
+            let loss = l1_loss(&-input.sqrt(), &target.clone().transpose());
             loss
         }
 
@@ -285,7 +285,7 @@ mod tests {
             let input = Tensor::<f32>::ones((2, 3)).param();
             let target = Tensor::<f32>::zeros((3, 2)).grad();
             optim.register_parameter(&input).unwrap();
-            for _ in 0..10 {
+            for _ in 0..12 {
                 let loss = modelv5(&input, &target);
                 println!("Loss: {:?}", loss.borrow().tensor.item());
                 ctx.backwards(&loss).unwrap();

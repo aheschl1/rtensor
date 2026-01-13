@@ -4,6 +4,7 @@ use crate::core::{tensor::TensorError, MetaTensor, Shape, Strides};
 pub mod add;
 pub mod sub;
 pub mod mul;
+pub mod div;
 pub mod l1;
 
 /// Computes the broadcasted shape and strides for two tensors.
