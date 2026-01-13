@@ -24,7 +24,9 @@ pub(crate) enum GradNode<T: TensorValue, B: Backend> {
     None,
     // OPS
     Add { left: NodeKey, right: NodeKey },
+    Abs { input: NodeKey, grad_map: TensorBase<T, B> },
     ReLU { input: NodeKey, grad_map: TensorBase<T, B> },
+    Sigmoid { input: NodeKey, result: TensorBase<T, B> },
     Negate { input: NodeKey },
     Sqrt { input: NodeKey, output: TensorBase<T, B> },
     // VIEW OPS
@@ -56,11 +58,13 @@ impl<T: WeightValue, B: Backend> GradNode<T, B> {
     pub fn parents(&self) -> Vec<NodeKey> {
         match self {
             GradNode::Add { left, right } => vec![left.clone(), right.clone()],
+            GradNode::Abs { input, .. } => vec![input.clone()],
             GradNode::L1 { input, target, ..} => vec![input.clone(), target.clone()],
             GradNode::Leaf(_) | GradNode::None => vec![],
             GradNode::Permute { input, .. } => vec![input.clone()],
             GradNode::ReLU { input, .. } => vec![input.clone()],
             GradNode::Negate { input } => vec![input.clone()],
+            GradNode::Sigmoid { input, .. } => vec![input.clone()],
             GradNode::Sqrt { input, .. } => vec![input.clone()],
         }
     }
@@ -73,7 +77,9 @@ impl<T: WeightValue, B: Backend> GradNode<T, B> {
             GradNode::Permute { .. } => backwards::backwards_permute::<T, B>(self, upstream, ctx),
 
             GradNode::Negate { .. } => backwards::backwards_negate::<T, B>(self, upstream, ctx),
+            GradNode::Sigmoid { .. } => backwards::backwards_sigmoid::<T, B>(self, upstream, ctx),
             GradNode::ReLU { .. } => backwards::backwards_relu::<T, B>(self, upstream, ctx),
+            GradNode::Abs { .. } => backwards::backwards_abs::<T, B>(self, upstream, ctx),
             GradNode::Sqrt { .. } => backwards::backwards_sqrt::<T, B>(self, upstream, ctx),
             
             GradNode::None => Ok(vec![]),

@@ -185,7 +185,7 @@ mod tests {
             target: &GradTensor<f32, Cpu> // [3, 2]
         ) -> GradTensor<f32, Cpu> {
             let inter = input + wa; // [2, 3]
-            let inter2 = inter.permute((1, 0)).unwrap();
+            let inter2 = inter.permute((1, 0)).unwrap().abs();
             // println!("Intermediate: {:?}", inter);
             let c = wb + &inter2;
             let loss = l1_loss(&c, target);
@@ -211,6 +211,17 @@ mod tests {
             target: &GradTensor<f32, Cpu> // [3, 2]
         ) -> GradTensor<f32, Cpu> {
             let loss = l1_loss(&-input.sqrt(), &target.clone().transpose());
+            loss
+        }
+
+        fn modelv6(
+            wa: &GradTensor<f32, Cpu>,  
+            input: &GradTensor<f32, Cpu>,  
+            target: &GradTensor<f32, Cpu> 
+        ) -> GradTensor<f32, Cpu> {
+            let temp = input + wa;
+            let temp2 = temp.sigmoid();
+            let loss = l1_loss(&-temp2.sqrt(), &target.clone().transpose());
             loss
         }
 
@@ -293,6 +304,18 @@ mod tests {
             }
 
             println!("{:?}", input);
+
+            let wa = Tensor::<f32>::ones((2, 3)).param();
+            let input = Tensor::<f32>::ones((2, 3)).grad();
+            let target = Tensor::<f32>::zeros((3, 2)).grad();
+            optim.register_parameter(&wa).unwrap();
+            for _ in 0..10 {
+                let loss = modelv6(&wa, &input, &target);
+                println!("Loss: {:?}", loss.borrow().tensor.item());
+                ctx.backwards(&loss).unwrap();
+                optim.step().unwrap();
+            }
+            println!("{:?}", wa);
 
         })
     }

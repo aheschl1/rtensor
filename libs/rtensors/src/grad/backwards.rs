@@ -113,3 +113,29 @@ pub fn backwards_sqrt<T: WeightValue, B: Backend>(
     let grad = upstream / (output * two);
     Ok(vec![grad])
 }
+
+pub fn backwards_abs<T: WeightValue, B: Backend>(
+    node: &GradNode<T, B>, 
+    upstream: &TensorBase<T, B>,
+    _ctx: &GradContext<T, B>,
+) -> Result<Vec<TensorBase<T, B>>, TensorError>{
+    let GradNode::Abs { grad_map, .. } = node else {
+        return Err(TensorError::UnsupportedOperation("Invalid node type passed to Abs backwards.".into()));
+    };
+    let grad = grad_map * upstream;
+    Ok(vec![grad])
+}
+
+pub fn backwards_sigmoid<T: WeightValue, B: Backend>(
+    node: &GradNode<T, B>, 
+    upstream: &TensorBase<T, B>,
+    _ctx: &GradContext<T, B>,
+) -> Result<Vec<TensorBase<T, B>>, TensorError>{
+    let GradNode::Sigmoid { result, .. } = node else {
+        return Err(TensorError::UnsupportedOperation("Invalid node type passed to Sigmoid backwards.".into()));
+    };
+    let one = T::from_f32(1.0);
+    // TODO allow scalars on left hand side so it is fewer kernel launches
+    let grad = result * (-result + one) * upstream;
+    Ok(vec![grad])
+}
