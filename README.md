@@ -1,9 +1,9 @@
 # rtensors
 
-Tensor primitives with CUDA and CPU backends. Remote execution protocol built in at backend level.
+Tensor primitives and autograd with CUDA and CPU backends. Remote execution protocol built in at backend level.
 Uses BLAS, cuBLAS, and custom kernels.
 
-Goal is high performance ML stack with minimal dependencies, and the flexibility of numpy.
+Goal is high performance ML stack with minimal dependencies, for inference and training.
 
 ## Creating Tensors
 
@@ -177,6 +177,28 @@ let result = a_gpu.matmul(&b_gpu).unwrap();
 let a = Tensor::<f32>::ones((3,));
 let b = Tensor::<f32>::from_buf(vec![4.0, 5.0, 6.0], (3,)).unwrap();
 let result = a.dot(&b).unwrap();  // scalar: 15.0
+```
+
+## Autograd
+
+```rust
+use rtensors::grad::{self, GradContext, GradTensor};
+
+grad::with::<f32, Cuda>(|ctx|{
+    let input = Tensor::<f32>::zeros((2, 2)).grad();
+    let weight = Tensor::<f32>::zeros((2, 2)).param();
+    let target = Tensor::<f32>::ones((2, 2)).grad();
+
+    let mut optim = grad::optim::SGD::new();
+    optim.register_param(&weight);
+
+    let output = input + weight;
+
+    let loss = l1_loss(&output, &target);
+    ctx.backwards(&loss).unwrap();
+    optim.step();
+})
+
 ```
 
 ## Remote Backend
