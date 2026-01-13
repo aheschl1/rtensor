@@ -198,7 +198,17 @@ specify_unary_op_template! {
         })
     },
     (NatLog) ln where T: WeightValue; |input, result, _ctx, grad_node| {
-        Err(TensorError::UnsupportedOperation("Gradient for ln not yet implemented.".into()))
+        // compute x.reciprocal
+        // TODO use unary .reciprocal op when available
+        let mut r = TensorBase::<T, B>::zeros(input.shape());
+        for coord in input.iter_coords() {
+            let val = input.get(&coord).unwrap();
+            r.set(&coord, T::ONE / val);
+        }
+        Ok(GradNode::Ln {
+            input: grad_node,
+            x_reciprocal: r,
+        })
     },
     (ExpM1) expm1 where T: Exp; |input, result, _ctx, grad_node| {
         Err(TensorError::UnsupportedOperation("Gradient for expm1 not yet implemented.".into()))

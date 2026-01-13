@@ -37,6 +37,42 @@ pub(crate) fn backwards_add<T: WeightValue, B: Backend>(
     Ok(vec![upstream.clone(), upstream.clone()])
 }
 
+pub(crate) fn backwards_add_scalar<T: WeightValue, B: Backend>(
+    node: &GradNode<T, B>, 
+    upstream: &TensorBase<T, B>,
+    _ctx: &GradContext<T, B>,
+) -> Result<Vec<TensorBase<T, B>>, TensorError>{
+    let GradNode::AddScalar { input: _ } = node else {
+        return Err(TensorError::UnsupportedOperation("Invalid node type passed to Add backwards.".into()));
+    };
+
+    Ok(vec![upstream.clone()])
+}
+
+pub(crate) fn backwards_mul_scalar<T: WeightValue, B: Backend>(
+    node: &GradNode<T, B>, 
+    upstream: &TensorBase<T, B>,
+    _ctx: &GradContext<T, B>,
+) -> Result<Vec<TensorBase<T, B>>, TensorError>{
+    let GradNode::MulScalar { input: _ , scalar: s} = node else {
+        return Err(TensorError::UnsupportedOperation("Invalid node type passed to Mul backwards.".into()));
+    };
+
+    Ok(vec![upstream * s])
+}
+
+pub(crate) fn backwards_div_scalar<T: WeightValue, B: Backend>(
+    node: &GradNode<T, B>, 
+    upstream: &TensorBase<T, B>,
+    _ctx: &GradContext<T, B>,
+) -> Result<Vec<TensorBase<T, B>>, TensorError>{
+    let GradNode::DivScalar { input: _ , scalar: s} = node else {
+        return Err(TensorError::UnsupportedOperation("Invalid node type passed to Div backwards.".into()));
+    };
+
+    Ok(vec![upstream / s])
+}
+
 pub(crate) fn backwards_l1<T: WeightValue, B: Backend>(
     node: &GradNode<T, B>, 
     upstream: &TensorBase<T, B>,
@@ -137,5 +173,17 @@ pub fn backwards_sigmoid<T: WeightValue, B: Backend>(
     let one = T::from_f32(1.0);
     // TODO allow scalars on left hand side so it is fewer kernel launches
     let grad = result * (-result + one) * upstream;
+    Ok(vec![grad])
+}
+
+pub fn backwards_ln<T: WeightValue, B: Backend>(
+    node: &GradNode<T, B>, 
+    upstream: &TensorBase<T, B>,
+    _ctx: &GradContext<T, B>,
+) -> Result<Vec<TensorBase<T, B>>, TensorError>{
+    let GradNode::Ln { x_reciprocal, .. } = node else {
+        return Err(TensorError::UnsupportedOperation("Invalid node type passed to Ln backwards.".into()));
+    };
+    let grad = x_reciprocal * upstream;
     Ok(vec![grad])
 }

@@ -154,7 +154,7 @@ impl<T: WeightValue, B: Backend> PartialEq for GradTensor<T, B> { fn eq(&self, o
 
 #[cfg(test)]
 mod tests {
-    use crate::{backend::cpu::Cpu, core::{tensor::{TensorAccess, WithGrad}, Tensor}, grad::{self, optim::{Optim, SGD}, primitives::GradTensor}, ops::{broadcast::l1::l1_loss, unary::UnaryGradOp}};
+    use crate::{backend::cpu::Cpu, core::{tensor::{TensorAccess, WithGrad}, Tensor}, grad::{self, optim::{Optim, SGD}, primitives::GradTensor}, ops::{broadcast::l1::l1_loss, scalar::ScalarGradOp, unary::UnaryGradOp}};
 
     #[test]
     fn playground() {
@@ -220,8 +220,19 @@ mod tests {
             target: &GradTensor<f32, Cpu> 
         ) -> GradTensor<f32, Cpu> {
             let temp = input + wa;
-            let temp2 = temp.sigmoid();
+            let temp2 = temp.sigmoid().leaky_relu(1.); // grad should be identical even without leaky relu
             let loss = l1_loss(&-temp2.sqrt(), &target.clone().transpose());
+            loss
+        }
+
+        fn modelv7(
+            wa: &GradTensor<f32, Cpu>,  
+            input: &GradTensor<f32, Cpu>,  
+            target: &GradTensor<f32, Cpu> 
+        ) -> GradTensor<f32, Cpu> {
+            let temp = input + wa;
+            let temp2 = temp.leaky_relu(0.1).ln();
+            let loss = l1_loss(&-temp2, &target.clone().transpose());
             loss
         }
 
@@ -311,6 +322,18 @@ mod tests {
             optim.register_parameter(&wa).unwrap();
             for _ in 0..10 {
                 let loss = modelv6(&wa, &input, &target);
+                println!("Loss: {:?}", loss.borrow().tensor.item());
+                ctx.backwards(&loss).unwrap();
+                optim.step().unwrap();
+            }
+            println!("{:?}", wa);
+
+            let wa = Tensor::<f32>::ones((2, 3)).param();
+            let input = Tensor::<f32>::ones((2, 3)).grad();
+            let target = Tensor::<f32>::zeros((3, 2)).grad();
+            optim.register_parameter(&wa).unwrap();
+            for _ in 0..10 {
+                let loss = modelv7(&wa, &input, &target);
                 println!("Loss: {:?}", loss.borrow().tensor.item());
                 ctx.backwards(&loss).unwrap();
                 optim.step().unwrap();

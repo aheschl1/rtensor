@@ -24,11 +24,15 @@ pub(crate) enum GradNode<T: TensorValue, B: Backend> {
     None,
     // OPS
     Add { left: NodeKey, right: NodeKey },
+    AddScalar { input: NodeKey },
+    MulScalar { input: NodeKey, scalar: T },
+    DivScalar { input: NodeKey, scalar: T },
     Abs { input: NodeKey, grad_map: TensorBase<T, B> },
     ReLU { input: NodeKey, grad_map: TensorBase<T, B> },
     Sigmoid { input: NodeKey, result: TensorBase<T, B> },
     Negate { input: NodeKey },
     Sqrt { input: NodeKey, output: TensorBase<T, B> },
+    Ln { input: NodeKey, x_reciprocal: TensorBase<T, B> }, // store 1/x for backward
     // VIEW OPS
     Permute {
         input: NodeKey,
@@ -58,6 +62,9 @@ impl<T: WeightValue, B: Backend> GradNode<T, B> {
     pub fn parents(&self) -> Vec<NodeKey> {
         match self {
             GradNode::Add { left, right } => vec![left.clone(), right.clone()],
+            GradNode::AddScalar { input } => vec![input.clone()],
+            GradNode::MulScalar { input , ..} => vec![input.clone()],
+            GradNode::DivScalar { input , ..} => vec![input.clone()],
             GradNode::Abs { input, .. } => vec![input.clone()],
             GradNode::L1 { input, target, ..} => vec![input.clone(), target.clone()],
             GradNode::Leaf(_) | GradNode::None => vec![],
@@ -66,6 +73,7 @@ impl<T: WeightValue, B: Backend> GradNode<T, B> {
             GradNode::Negate { input } => vec![input.clone()],
             GradNode::Sigmoid { input, .. } => vec![input.clone()],
             GradNode::Sqrt { input, .. } => vec![input.clone()],
+            GradNode::Ln { input, .. } => vec![input.clone()],
         }
     }
 
@@ -74,6 +82,9 @@ impl<T: WeightValue, B: Backend> GradNode<T, B> {
             GradNode::L1 { .. } => backwards::backwards_l1::<T, B>(self, upstream, ctx),
             GradNode::Leaf( .. ) => backwards::accumulate_grad::<T, B>(self, upstream, ctx),
             GradNode::Add { .. } => backwards::backwards_add::<T, B>(self, upstream, ctx),
+            GradNode::AddScalar { .. } => backwards::backwards_add_scalar::<T, B>(self, upstream, ctx),
+            GradNode::MulScalar { .. } => backwards::backwards_mul_scalar::<T, B>(self, upstream, ctx),
+            GradNode::DivScalar { .. } => backwards::backwards_div_scalar::<T, B>(self, upstream, ctx),
             GradNode::Permute { .. } => backwards::backwards_permute::<T, B>(self, upstream, ctx),
 
             GradNode::Negate { .. } => backwards::backwards_negate::<T, B>(self, upstream, ctx),
@@ -81,6 +92,7 @@ impl<T: WeightValue, B: Backend> GradNode<T, B> {
             GradNode::ReLU { .. } => backwards::backwards_relu::<T, B>(self, upstream, ctx),
             GradNode::Abs { .. } => backwards::backwards_abs::<T, B>(self, upstream, ctx),
             GradNode::Sqrt { .. } => backwards::backwards_sqrt::<T, B>(self, upstream, ctx),
+            GradNode::Ln { .. } => backwards::backwards_ln::<T, B>(self, upstream, ctx),
             
             GradNode::None => Ok(vec![]),
             // _ => Err(TensorError::UnsupportedOperation("Backward not implemented for this node type.".into())),
@@ -223,10 +235,9 @@ pub fn with<T: WeightValue, B: Backend>(
     if std::any::TypeId::of::<B>() == std::any::TypeId::of::<Cpu>() {
         GRAD_CONTEXT_CPU.with(|ctx_cell| {
             let mut ctx_map = ctx_cell.borrow_mut();
-            let ctx = ctx_map
+            let _ = ctx_map
                 .entry(type_id)
                 .or_insert_with(|| Box::new(GradContext::<T, Cpu>::new()));
-            drop(ctx);
             drop(ctx_map);
             let ctx = ctx_cell.borrow();
             let ctx = ctx.get(&type_id).unwrap();
@@ -239,13 +250,15 @@ pub fn with<T: WeightValue, B: Backend>(
     } else if std::any::TypeId::of::<B>() == std::any::TypeId::of::<Cuda>() {
         GRAD_CONTEXT_CUDA.with(|ctx_cell| {
             let mut ctx_map = ctx_cell.borrow_mut();
-            let ctx = ctx_map
+            let _ = ctx_map
                 .entry(type_id)
                 .or_insert_with(|| Box::new(GradContext::<T, Cuda>::new()));
-            
+            drop(ctx_map);
+            let ctx = ctx_cell.borrow();
+            let ctx = ctx.get(&type_id).unwrap();
             // SAFETY: We know the TypeId matches T, and we've verified B is Cuda
-            let ctx = ctx.downcast_mut::<GradContext<T, Cuda>>().unwrap();
-            let ctx = unsafe { &mut *(ctx as *mut GradContext<T, Cuda> as *mut GradContext<T, B>) };
+            let ctx = ctx.downcast_ref::<GradContext<T, Cuda>>().unwrap();
+            let ctx = unsafe { &*(ctx as *const GradContext<T, Cuda> as *const GradContext<T, B>) };
             f(ctx);
         });
     } else {
