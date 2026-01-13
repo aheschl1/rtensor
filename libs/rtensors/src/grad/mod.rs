@@ -64,8 +64,8 @@ impl<T: WeightValue, B: Backend> GradNode<T, B> {
             GradNode::L1 { .. } => backwards::backwards_l1::<T, B>(self, upstream, ctx),
             GradNode::Leaf( .. ) => backwards::accumulate_grad::<T, B>(self, upstream, ctx),
             GradNode::Add { .. } => backwards::backwards_add::<T, B>(self, upstream, ctx),
+            GradNode::Permute { .. } => backwards::backwards_permute::<T, B>(self, upstream, ctx),
             GradNode::None => Ok(vec![]),
-            GradNode::Permute { .. } => todo!(),
             // _ => Err(TensorError::UnsupportedOperation("Backward not implemented for this node type.".into())),
         }
     }

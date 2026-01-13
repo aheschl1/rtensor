@@ -1,6 +1,6 @@
 use std::{cell::RefCell, sync::Arc};
 
-use crate::{backend::Backend, core::{primitives::TensorBase, tensor::AsTensor, value::{TensorValue, WeightValue}}, grad::{self, GradNode, NodeKey}};
+use crate::{backend::Backend, core::{idx::Idx, primitives::TensorBase, tensor::{AsTensor, TensorAccess, TensorError}, value::{TensorValue, WeightValue}, MetaTensorView}, grad::{self, GradNode, NodeKey}};
 
 #[derive(Debug, Clone)]
 pub struct GradTensor<T: WeightValue, B: Backend> {
@@ -80,6 +80,29 @@ impl<T: WeightValue, B: Backend> GradTensor<T, B> {
     pub fn get_ref(&self) -> GradTensorRef<T, B> {
         self.inner.clone()
     }
+
+    #[grad::when_enabled(ctx)]
+    pub fn permute(self, dims: impl Into<Idx>) -> Result<Self, TensorError> {
+        let idx = dims.into();
+        let mut inner = self.borrow_mut();
+        let new_view = inner.tensor.permute(idx.clone())?;
+        inner.tensor.meta = new_view.meta.clone();
+        drop(inner);
+        // record node
+        let new_node = GradNode::Permute {
+            input: self.node,
+            dims: idx,
+        };
+
+        Ok(ctx.attach(self.inner, new_node))
+    }
+
+    pub fn transpose(self) -> Self {
+        let rank = self.borrow().tensor.rank();
+        let dims: Idx = Idx::Coord((0..rank).rev().collect());
+        unsafe { self.permute(dims).unwrap_unchecked() }
+    }
+    
 }
 
 
@@ -129,6 +152,20 @@ mod tests {
             loss
         }
 
+        fn modelv3(
+            input: &GradTensor<f32, Cpu>,  // [2, 3]
+            wa: &GradTensor<f32, Cpu>, // [2, 3]
+            wb: &GradTensor<f32, Cpu>,  // [3, 2]
+            target: &GradTensor<f32, Cpu> // [3, 2]
+        ) -> GradTensor<f32, Cpu> {
+            let inter = input + wa; // [2, 3]
+            let inter2 = inter.permute((1, 0)).unwrap();
+            // println!("Intermediate: {:?}", inter);
+            let c = wb + &inter2;
+            let loss = l1_loss(&c, target);
+            loss
+        }
+
         grad::with::<f32, Cpu>(|ctx| {
             
             let a = Tensor::<f32>::scalar(1.).grad();
@@ -142,7 +179,6 @@ mod tests {
             for _ in 0..10 {
                 let loss = model(&a, &b, &target);
                 println!("Loss: {:?}", loss.borrow().tensor.item());
-                println!("a: {:?}", a);
                 ctx.backwards(&loss).unwrap();
                 optim.step().unwrap();
             }
@@ -163,6 +199,25 @@ mod tests {
                 ctx.backwards(&loss).unwrap();
                 optim.step().unwrap();
             }
+
+            println!("{:?}", a);
+
+            let input = Tensor::<f32>::ones((2, 3)).grad();
+            let wa = Tensor::<f32>::ones((2, 3)).param();
+            let wb = Tensor::<f32>::ones((3, 2)).param();
+            let target = Tensor::<f32>::zeros((3, 2)).grad();
+            optim.register_parameter(&wa).unwrap();
+            optim.register_parameter(&wb).unwrap();
+            for _ in 0..10 {
+                let loss = modelv3(&input, &wa, &wb, &target);
+                println!("Loss: {:?}", loss.borrow().tensor.item());
+                ctx.backwards(&loss).unwrap();
+                optim.step().unwrap();
+            }
+
+            println!("{:?}", input);
+            println!("{:?}", wa);
+
         })
     }
 }
