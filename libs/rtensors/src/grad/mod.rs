@@ -1,6 +1,8 @@
 use slotmap::{new_key_type, SecondaryMap};
 
-use crate::{backend::{cpu::Cpu, cuda::Cuda, Backend, BackendMatMul}, core::{idx::Idx, primitives::TensorBase, tensor::TensorError, untyped::UntypedTensor, value::{TensorValue, WeightValue}, MetaTensor, Shape, Strides}, grad::primitives::{GradTensor, GradTensorRef}};
+use crate::{backend::{cpu::Cpu, Backend, BackendMatMul}, core::{idx::Idx, primitives::TensorBase, tensor::TensorError, untyped::UntypedTensor, value::{TensorValue, WeightValue}, MetaTensor, Shape, Strides}, grad::primitives::{GradTensor, GradTensorRef}};
+#[cfg(feature = "cuda")]
+use crate::backend::cuda::Cuda;
 use std::{any::{Any, TypeId}, cell::RefCell};
 use std::collections::HashMap;
 
@@ -278,6 +280,7 @@ impl<T: TensorValue, B: Backend> std::fmt::Debug for GradContext<T, B> {
 
 thread_local! {
     static GRAD_CONTEXT_CPU: std::cell::RefCell<HashMap<TypeId, Box<dyn Any>>> = std::cell::RefCell::new(HashMap::new());
+    #[cfg(feature = "cuda")]
     static GRAD_CONTEXT_CUDA: std::cell::RefCell<HashMap<TypeId, Box<dyn Any>>> = std::cell::RefCell::new(HashMap::new());
 }
 
@@ -302,23 +305,30 @@ pub fn with<T: WeightValue, B: Backend>(
             let ctx = unsafe { &*(ctx as *const GradContext<T, Cpu> as *const GradContext<T, B>) };
             f(ctx);
         });
-    } else if std::any::TypeId::of::<B>() == std::any::TypeId::of::<Cuda>() {
-        GRAD_CONTEXT_CUDA.with(|ctx_cell| {
-            let mut ctx_map = ctx_cell.borrow_mut();
-            let _ = ctx_map
-                .entry(type_id)
-                .or_insert_with(|| Box::new(GradContext::<T, Cuda>::new()));
-            drop(ctx_map);
-            let ctx = ctx_cell.borrow();
-            let ctx = ctx.get(&type_id).unwrap();
-            // SAFETY: We know the TypeId matches T, and we've verified B is Cuda
-            let ctx = ctx.downcast_ref::<GradContext<T, Cuda>>().unwrap();
-            let ctx = unsafe { &*(ctx as *const GradContext<T, Cuda> as *const GradContext<T, B>) };
-            f(ctx);
-        });
-    } else {
-        panic!("Unsupported backend for GradContext");
+        return;
     }
+    
+    #[cfg(feature = "cuda")]
+    {
+        if std::any::TypeId::of::<B>() == std::any::TypeId::of::<Cuda>() {
+            GRAD_CONTEXT_CUDA.with(|ctx_cell| {
+                let mut ctx_map = ctx_cell.borrow_mut();
+                let _ = ctx_map
+                    .entry(type_id)
+                    .or_insert_with(|| Box::new(GradContext::<T, Cuda>::new()));
+                drop(ctx_map);
+                let ctx = ctx_cell.borrow();
+                let ctx = ctx.get(&type_id).unwrap();
+                // SAFETY: We know the TypeId matches T, and we've verified B is Cuda
+                let ctx = ctx.downcast_ref::<GradContext<T, Cuda>>().unwrap();
+                let ctx = unsafe { &*(ctx as *const GradContext<T, Cuda> as *const GradContext<T, B>) };
+                f(ctx);
+            });
+            return;
+        }
+    }
+    
+    panic!("Unsupported backend for GradContext");
 }
 
 #[inline]
@@ -326,18 +336,23 @@ pub fn is_enabled<T: TensorValue, B: Backend>() -> bool {
     let type_id = TypeId::of::<T>();
     
     if std::any::TypeId::of::<B>() == std::any::TypeId::of::<Cpu>() {
-        GRAD_CONTEXT_CPU.with(|ctx_cell| {
+        return GRAD_CONTEXT_CPU.with(|ctx_cell| {
             let ctx_map = ctx_cell.borrow();
             ctx_map.contains_key(&type_id)
-        })
-    } else if std::any::TypeId::of::<B>() == std::any::TypeId::of::<Cuda>() {
-        GRAD_CONTEXT_CUDA.with(|ctx_cell| {
-            let ctx_map = ctx_cell.borrow();
-            ctx_map.contains_key(&type_id)
-        })
-    } else {
-        panic!("Unsupported backend for GradContext");
+        });
     }
+    
+    #[cfg(feature = "cuda")]
+    {
+        if std::any::TypeId::of::<B>() == std::any::TypeId::of::<Cuda>() {
+            return GRAD_CONTEXT_CUDA.with(|ctx_cell| {
+                let ctx_map = ctx_cell.borrow();
+                ctx_map.contains_key(&type_id)
+            });
+        }
+    }
+    
+    panic!("Unsupported backend for GradContext");
 }
 
 /// Runs the provided closure if the gradient context is enabled for the given backend.
@@ -347,7 +362,7 @@ pub fn when_enabled<T: TensorValue, B: Backend, R>(
     let type_id = TypeId::of::<T>();
     
     if std::any::TypeId::of::<B>() == std::any::TypeId::of::<Cpu>() {
-        GRAD_CONTEXT_CPU.with(|ctx_cell| {
+        return GRAD_CONTEXT_CPU.with(|ctx_cell| {
             let ctx_map = ctx_cell.borrow();
             if let Some(ctx_box) = ctx_map.get(&type_id) {
                 // SAFETY: We know the TypeId matches T, and we've verified B is Cpu
@@ -360,25 +375,30 @@ pub fn when_enabled<T: TensorValue, B: Backend, R>(
             } else {
                 None
             }
-        })
-    } else if std::any::TypeId::of::<B>() == std::any::TypeId::of::<Cuda>() {
-        GRAD_CONTEXT_CUDA.with(|ctx_cell| {
-            let mut ctx_map = ctx_cell.borrow_mut();
-            if let Some(ctx_box) = ctx_map.get_mut(&type_id) {
-                // SAFETY: We know the TypeId matches T, and we've verified B is Cuda
-                if let Some(ctx) = ctx_box.downcast_mut::<GradContext<T, Cuda>>() {
-                    let ctx = unsafe { &mut *(ctx as *mut GradContext<T, Cuda> as *mut GradContext<T, B>) };
-                    Some(f(ctx))
+        });
+    }
+    
+    #[cfg(feature = "cuda")]
+    {
+        if std::any::TypeId::of::<B>() == std::any::TypeId::of::<Cuda>() {
+            return GRAD_CONTEXT_CUDA.with(|ctx_cell| {
+                let mut ctx_map = ctx_cell.borrow_mut();
+                if let Some(ctx_box) = ctx_map.get_mut(&type_id) {
+                    // SAFETY: We know the TypeId matches T, and we've verified B is Cuda
+                    if let Some(ctx) = ctx_box.downcast_mut::<GradContext<T, Cuda>>() {
+                        let ctx = unsafe { &mut *(ctx as *mut GradContext<T, Cuda> as *mut GradContext<T, B>) };
+                        Some(f(ctx))
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 }
-            } else {
-                None
-            }
-        })
-    } else {
-        panic!("Unsupported backend for GradContext");
+            });
+        }
     }
+    
+    panic!("Unsupported backend for GradContext");
 }
 
 pub fn when_disabled<T: TensorValue, B: Backend>(
@@ -393,16 +413,23 @@ pub fn when_disabled<T: TensorValue, B: Backend>(
                 f();
             }
         });
-    } else if std::any::TypeId::of::<B>() == std::any::TypeId::of::<Cuda>() {
-        GRAD_CONTEXT_CUDA.with(|ctx_cell| {
-            let ctx_map = ctx_cell.borrow();
-            if !ctx_map.contains_key(&type_id) {
-                f();
-            }
-        });
-    } else {
-        panic!("Unsupported backend for GradContext");
+        return;
     }
+    
+    #[cfg(feature = "cuda")]
+    {
+        if std::any::TypeId::of::<B>() == std::any::TypeId::of::<Cuda>() {
+            GRAD_CONTEXT_CUDA.with(|ctx_cell| {
+                let ctx_map = ctx_cell.borrow();
+                if !ctx_map.contains_key(&type_id) {
+                    f();
+                }
+            });
+            return;
+        }
+    }
+    
+    panic!("Unsupported backend for GradContext");
 }
 
 /// same as anabled but warns if not enabled
