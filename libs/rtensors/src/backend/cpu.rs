@@ -41,25 +41,6 @@ macro_rules! elemwise_nd_loop {
     }};
 }
 
-macro_rules! unary_todo {
-    ($name:ident) => {
-        
-        paste::paste! {
-            fn [<apply_ $name _1d_strided>]<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,stride:isize,len:usize) -> Result<(),TensorError>where T:WeightValue {
-        todo!()
-    }
-    fn [<apply_ $name _contiguous>]<T:TensorValue>(&self,buf: &mut Self::Buf<T>,start:usize,len:usize) -> Result<(),TensorError>where T:WeightValue {
-        todo!()
-    }
-
-    fn [<apply_ $name _nd>]<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,shape: &[usize],stride: &[isize],) -> Result<(),TensorError>where T:WeightValue {
-        todo!()
-    }
-        }
-
-    };
-}
-
 macro_rules! impl_cpu_unary {
     ($name:ident, $func:ident $( where $($extra:tt)+ )?) => {
         paste::paste! {
@@ -316,20 +297,23 @@ impl Backend for Cpu {
     impl_cpu_unary!{ tanh, _tanh where T: Exp + InvExp }
     impl_cpu_unary!{ abs, _abs }
     impl_cpu_unary!{ sqrt, _sqrt where T: SquareRoot }
-
-    unary_todo! { sinh }
-    // unary_todo! { sinh }
-    unary_todo! { cosh }
-    unary_todo! { asinh }
-    unary_todo! { acosh }
-    unary_todo! { atanh }
-
-    unary_todo! { rsqrt }
-    unary_todo! { reciprocal }
-    unary_todo! { square }
-    unary_todo! { cube }
-    unary_todo! { exp }
-    unary_todo! { sign  }
+    impl_cpu_unary!{ sinh, _sinh where T: Exp + InvExp }
+    impl_cpu_unary!{ cosh, _cosh where T: Exp + InvExp }
+    impl_cpu_unary!{ asinh, _asinh where T: WeightValue }
+    impl_cpu_unary!{ acosh, _acosh where T: WeightValue }
+    impl_cpu_unary!{ atanh, _atanh where T: WeightValue }
+    impl_cpu_unary!{ rsqrt, _rsqrt where T: SquareRoot }
+    impl_cpu_unary!{ reciprocal, _reciprocal }
+    impl_cpu_unary!{ square, _square }
+    impl_cpu_unary!{ cube, _cube }
+    impl_cpu_unary!{ exp, _exp where T: Exp }
+    impl_cpu_unary!{ sign, _sign where T: std::ops::Neg<Output = T> }
+    impl_cpu_unary!{ sin, _sin where T: WeightValue }
+    impl_cpu_unary!{ cos, _cos where T: WeightValue }
+    impl_cpu_unary!{ tan, _tan where T: WeightValue }
+    impl_cpu_unary!{ asin, _asin where T: WeightValue }
+    impl_cpu_unary!{ acos, _acos where T: WeightValue }
+    impl_cpu_unary!{ atan, _atan where T: WeightValue }
 
     impl_cpu_unary!{ ln, _ln where T: WeightValue }
     impl_cpu_unary!{ expm1, _expm1 where T: Exp }
@@ -347,78 +331,7 @@ impl Backend for Cpu {
     impl_cpu_scalar!{ log, _scalar_log where T: WeightValue }
     impl_cpu_scalar!{ log1p, _scalar_log1p where T: WeightValue }
     impl_cpu_scalar!{ leaky_relu, _scalar_leaky_relu }
-    impl_cpu_scalar!{ elu, _scalar_elu where T: WeightValue }    
-
-    fn apply_sin_1d_strided<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,stride:isize,len:usize) -> Result<(),TensorError>where T:WeightValue {
-        todo!()
-    }
-    fn apply_sin_contiguous<T:TensorValue>(&self,buf: &mut Self::Buf<T>,start:usize,len:usize) -> Result<(),TensorError>where T:WeightValue {
-        todo!()
-    }
-
-    fn apply_sin_nd<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,shape: &[usize],stride: &[isize],) -> Result<(),TensorError>where T:WeightValue {
-        todo!()
-    }
-
-    fn apply_cos_1d_strided<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,stride:isize,len:usize) -> Result<(),TensorError>where T:WeightValue {
-        todo!()
-    }
-
-    fn apply_cos_contiguous<T:TensorValue>(&self,buf: &mut Self::Buf<T>,start:usize,len:usize) -> Result<(),TensorError>where T:WeightValue {
-        todo!()
-    }
-
-    fn apply_cos_nd<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,shape: &[usize],stride: &[isize],) -> Result<(),TensorError>where T:WeightValue {
-        todo!()
-    }
-    
-    fn apply_tan_1d_strided<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,stride:isize,len:usize) -> Result<(),TensorError>where T:WeightValue {
-        todo!()
-    }
-
-    fn apply_tan_contiguous<T:TensorValue>(&self,buf: &mut Self::Buf<T>,start:usize,len:usize) -> Result<(),TensorError>where T:WeightValue {
-        todo!()
-    }
-
-    fn apply_tan_nd<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,shape: &[usize],stride: &[isize],) -> Result<(),TensorError>where T:WeightValue {
-        todo!()
-    }
-
-    fn apply_acos_1d_strided<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,stride:isize,len:usize) -> Result<(),TensorError>where T:WeightValue {
-        todo!()
-    }
-
-    fn apply_acos_contiguous<T:TensorValue>(&self,buf: &mut Self::Buf<T>,start:usize,len:usize) -> Result<(),TensorError>where T:WeightValue {
-        todo!()
-    }
-
-    fn apply_acos_nd<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,shape: &[usize],stride: &[isize],) -> Result<(),TensorError>where T:WeightValue {
-        todo!()
-    }
-
-    fn apply_asin_1d_strided<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,stride:isize,len:usize) -> Result<(),TensorError>where T:WeightValue {
-        todo!()
-    }
-
-    fn apply_asin_contiguous<T:TensorValue>(&self,buf: &mut Self::Buf<T>,start:usize,len:usize) -> Result<(),TensorError>where T:WeightValue {
-        todo!()
-    }
-
-    fn apply_asin_nd<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,shape: &[usize],stride: &[isize],) -> Result<(),TensorError>where T:WeightValue {
-        todo!()
-    }
-
-    fn apply_atan_1d_strided<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,stride:isize,len:usize) -> Result<(),TensorError>where T:WeightValue {
-        todo!()
-    }
-
-    fn apply_atan_contiguous<T:TensorValue>(&self,buf: &mut Self::Buf<T>,start:usize,len:usize) -> Result<(),TensorError>where T:WeightValue {
-        todo!()
-    }
-
-    fn apply_atan_nd<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,shape: &[usize],stride: &[isize],) -> Result<(),TensorError>where T:WeightValue {
-        todo!()
-    }
+    impl_cpu_scalar!{ elu, _scalar_elu where T: WeightValue }
 
     /// go through entire buffer, take everything
     fn apply_reduce_contiguous_flat<T: WeightValue>(
@@ -497,6 +410,110 @@ impl Backend for Cpu {
         todo!()
     }
 
+}
+
+#[inline]
+fn _sinh<T: TensorValue + Exp + InvExp>(x: &mut T) -> T {
+    let a = x.apply_exp();
+    let b = x.apply_invexp();
+    (a - b) / (T::ONE + T::ONE)
+}
+
+#[inline]
+fn _cosh<T: TensorValue + Exp + InvExp>(x: &mut T) -> T {
+    let a = x.apply_exp();
+    let b = x.apply_invexp();
+    (a + b) / (T::ONE + T::ONE)
+}
+
+#[inline]
+fn _asinh<T: WeightValue>(x: &mut T) -> T {
+    // asinh(x) = ln(x + sqrt(x^2 + 1))
+    let x_sq = *x * *x;
+    let one = T::ONE;
+    ((*x) + (x_sq + one).apply_sqrt()).nat_log()
+}
+
+#[inline]
+fn _acosh<T: WeightValue>(x: &mut T) -> T {
+    // acosh(x) = ln(x + sqrt(x^2 - 1))
+    let x_sq = *x * *x;
+    let one = T::ONE;
+    ((*x) + (x_sq - one).apply_sqrt()).nat_log()
+}
+
+#[inline]
+fn _atanh<T: WeightValue>(x: &mut T) -> T {
+    // atanh(x) = 0.5 * ln((1 + x) / (1 - x))
+    let one = T::ONE;
+    let two = one + one;
+    ((one + *x) / (one - *x)).nat_log() / two
+}
+
+#[inline]
+fn _rsqrt<T: TensorValue + SquareRoot>(x: &mut T) -> T {
+    T::ONE / x.apply_sqrt()
+}
+
+#[inline]
+fn _reciprocal<T: TensorValue>(x: &mut T) -> T {
+    T::ONE / *x
+}
+
+#[inline]
+fn _square<T: TensorValue>(x: &mut T) -> T {
+    *x * *x
+}
+
+#[inline]
+fn _cube<T: TensorValue>(x: &mut T) -> T {
+    *x * *x * *x
+}
+
+#[inline]
+fn _exp<T: Exp>(x: &mut T) -> T {
+    x.apply_exp()
+}
+
+#[inline]
+fn _sign<T: TensorValue + std::ops::Neg<Output = T>>(x: &mut T) -> T {
+    if *x < T::ZERO {
+        -T::ONE
+    } else if *x > T::ZERO {
+        T::ONE
+    } else {
+        T::ZERO
+    }
+}
+
+#[inline]
+fn _sin<T: WeightValue>(x: &mut T) -> T {
+    x.vsin()
+}
+
+#[inline]
+fn _cos<T: WeightValue>(x: &mut T) -> T {
+    x.vcos()
+}
+
+#[inline]
+fn _tan<T: WeightValue>(x: &mut T) -> T {
+    x.vtan()
+}
+
+#[inline]
+fn _asin<T: WeightValue>(x: &mut T) -> T {
+    x.vasin()
+}
+
+#[inline]
+fn _acos<T: WeightValue>(x: &mut T) -> T {
+    x.vacos()
+}
+
+#[inline]
+fn _atan<T: WeightValue>(x: &mut T) -> T {
+    x.vatan()
 }
 
 #[inline]
@@ -1077,62 +1094,7 @@ mod tests {
                 .unwrap();
         assert_eq!(cuda.prod_at(&Idx::Item).unwrap().item().unwrap(), 40320.);
     }
-
-    // #[test]
-    // pub fn test_reduce_total_mean_case1() {
-    //      let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cpu::Cpu> =
-    //         Tensor::<f64>::from_buf(vec![1., 2., 3., 4., 5., 6., 7., 8.], (4, 2))
-    //             .unwrap();
-    //     assert_eq!(cuda.mean(&Idx::Item).unwrap().item().unwrap(), 4.5);
-    // }
-
-    // #[test]
-    // pub fn test_reduce_total_variance_unbiased() {
-    //      let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cpu::Cpu> =
-    //         Tensor::<f64>::from_buf(vec![1., 2., 3., 4., 5., 6., 7., 8.], (4, 2))
-    //             .unwrap();
-    //     assert_eq!(cuda.var(&Idx::Item).unwrap().item().unwrap(), 6.0);
-    // }
-
-    // #[test]
-    // pub fn test_reduce_total_variance_biased() {
-    //      let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cpu::Cpu> =
-    //         Tensor::<f64>::from_buf(vec![1., 2., 3., 4., 5., 6., 7., 8.], (4, 2))
-    //             .unwrap();
-    //     assert_eq!(cuda.pop_var(&Idx::Item).unwrap().item().unwrap(), 5.25);
-    // }
-
-    // #[test]
-    // pub fn test_reduce_total_stdev_unbiased() {
-    //      let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cpu::Cpu> =
-    //         Tensor::<f64>::from_buf(vec![1., 2., 3., 4., 5., 6., 7., 8.], (4, 2))
-    //             .unwrap();
-    //     assert_eq!(cuda.std(&Idx::Item, true).unwrap().item().unwrap(), 2.449489742783178);
-    // }
-
-    // #[test]
-    // pub fn test_reduce_total_stdev_biased() {
-    //      let mut cuda = Tensor::<f64>::from_buf(vec![1., 2., 3., 4., 5., 6., 7., 8.], (4, 2))
-    //             .unwrap();
-    //     assert_eq!(cuda.std(&Idx::Item, false).unwrap().item().unwrap(), 2.29128784747792);
-    // }
-
-    // #[test]
-    // pub fn test_reduce_total_norm_l1() {
-    //      let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cpu::Cpu> =
-    //         Tensor::<f64>::from_buf(vec![1., 2., 3., 4., 5., 6., 7., 8.], (4, 2))
-    //             .unwrap();
-    //     assert_eq!(cuda.norm(&Idx::Item, NormType::L1).unwrap().item().unwrap(), 36.);
-    // }
-
-    // #[test]
-    // pub fn test_reduce_total_norm_l2() {
-    //      let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cpu::Cpu> =
-    //         Tensor::<f64>::from_buf(vec![1., 2., 3., 4., 5., 6., 7., 8.], (4, 2))
-    //             .unwrap();
-    //     assert_eq!(cuda.norm(&Idx::Item, NormType::L2).unwrap().item().unwrap(), 14.2828568570857);
-    // }
-
+    
     #[test]
     pub fn test_reduce_sum_case1() -> Result<(), Box<dyn Error>> {
         let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cpu::Cpu> =

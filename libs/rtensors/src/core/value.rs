@@ -44,6 +44,12 @@ pub trait WeightValue :
     fn vtrunc(&self) -> Self;
     fn vlog(&self, base: Self) -> Self;
     fn vlog1p(&self, base: Self) -> Self;
+    fn vsin(&self) -> Self;
+    fn vcos(&self) -> Self;
+    fn vtan(&self) -> Self;
+    fn vasin(&self) -> Self;
+    fn vacos(&self) -> Self;
+    fn vatan(&self) -> Self;
     fn from_usize(value: usize) -> Self {
         Self::from_f32(value as f32)
     }
@@ -117,6 +123,36 @@ impl WeightValue for f32 {
         // (self + Self::ONE).log(base)
         self.ln_1p() / base.ln()
     }
+
+    #[inline(always)]
+    fn vsin(&self) -> Self {
+        self.sin()
+    }
+
+    #[inline(always)]
+    fn vcos(&self) -> Self {
+        self.cos()
+    }
+
+    #[inline(always)]
+    fn vtan(&self) -> Self {
+        self.tan()
+    }
+
+    #[inline(always)]
+    fn vasin(&self) -> Self {
+        self.asin()
+    }
+
+    #[inline(always)]
+    fn vacos(&self) -> Self {
+        self.acos()
+    }
+
+    #[inline(always)]
+    fn vatan(&self) -> Self {
+        self.atan()
+    }
 }
 
 impl WeightValue for f64 {
@@ -182,6 +218,36 @@ impl WeightValue for f64 {
     #[inline(always)]
     fn vlog1p(&self, base: Self) -> Self {
         self.ln_1p() / base.ln()
+    }
+
+    #[inline(always)]
+    fn vsin(&self) -> Self {
+        self.sin()
+    }
+
+    #[inline(always)]
+    fn vcos(&self) -> Self {
+        self.cos()
+    }
+
+    #[inline(always)]
+    fn vtan(&self) -> Self {
+        self.tan()
+    }
+
+    #[inline(always)]
+    fn vasin(&self) -> Self {
+        self.asin()
+    }
+
+    #[inline(always)]
+    fn vacos(&self) -> Self {
+        self.acos()
+    }
+
+    #[inline(always)]
+    fn vatan(&self) -> Self {
+        self.atan()
     }
 }
 
