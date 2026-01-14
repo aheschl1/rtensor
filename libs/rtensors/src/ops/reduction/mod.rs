@@ -224,6 +224,9 @@ pub trait TotalReductionOp<T: TensorValue, B: Backend>: Sized + ReductionOp<T, B
     fn argmin(&self) -> Result<TensorBase<u64, B>, TensorError> {
         self.argmin_at(Idx::Item)
     }
+    fn total_argmax(&self) -> Result<TensorBase<u64, B>, TensorError> {
+        self.argmax(Idx::Item)
+    }
 }
 
 pub trait ReductionOp<T: TensorValue, B: Backend> : Sized {
