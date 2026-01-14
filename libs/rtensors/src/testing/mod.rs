@@ -55,12 +55,10 @@ where
 
 fn eps_eq<T>(a: &T, b: &T)
 where 
-    T: TensorValue + WeightValue + Debug
+    T: TensorValue + Debug
 {
-    if(a.eps_eq(b, 0.001)) {
-
-    } else {
-        panic!("Epsilon comparison failed!\n\tleft: {a:?}\n\tright: {b:?}");
+    if *a - *b > T::TEST_TOLERANCE || *b - *a > T::TEST_TOLERANCE {
+        panic!("Values are not approximately equal: {:?} vs {:?}", a, b);
     }
 }
 
@@ -102,7 +100,7 @@ where
     B: Backend,
     F: FnOnce(&mut TensorBase<T, B>),
     FTr: Fn(T) -> T,
-    T: PartialEq<T> + Debug + WeightValue
+    T: PartialEq<T> + Debug
 {
     let mut base = TensorBase::<T, B>::from_buf(definition.to_vec(), (2, 1)).unwrap();
     let original = base.owned();
@@ -130,7 +128,7 @@ where
     B: Backend,
     F: FnOnce(&mut TensorViewMut<'_, T, B>),
     FTr: Fn(T) -> T,
-    T: PartialEq<T> + Debug + WeightValue,
+    T: PartialEq<T> + Debug,
     // TensorBase<T, B>: Debug,
     // for<'a> TensorViewMut<'a, T, B>: Debug
 {
@@ -167,7 +165,7 @@ where
     B: Backend,
     F: FnOnce(&mut TensorViewMut<'_, T, B>),
     FTr: Fn(T) -> T,
-    T: PartialEq<T> + Debug + WeightValue
+    T: PartialEq<T> + Debug
 {
      let mut tensor = TensorBase::<T, B>::from_buf(definition.to_vec(), (4, 4, 1)).unwrap();
     let mut original = tensor.clone();

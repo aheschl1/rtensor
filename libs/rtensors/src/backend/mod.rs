@@ -241,42 +241,6 @@ pub trait Backend: Send + Sync + 'static + Clone + Debug {
         dst: (*mut Self::Buf<T>, &MetaTensor),
         op: BinaryOpType
     ) -> Result<(), TensorError>;
-    // fn apply_elementwise_binary_contiguous<T: TensorValue>(
-    //     &self, buf: &mut Self::Buf<T>, 
-    //     op: (BinaryOpType, T), 
-    //     start: usize,
-    //     len: usize
-    // ) -> Result<(), TensorError>;
-
-    // fn apply_elementwise_binary_1d_strided<T: TensorValue>(
-    //     &self, buf: &mut Self::Buf<T>, 
-    //     op: (BinaryOpType, T), 
-    //     offset: usize,
-    //     stride: isize,
-    //     len: usize
-    // ) -> Result<(), TensorError>;
-
-    // fn apply_elementwise_binary_nd<T: TensorValue>(
-    //     &self,
-    //     buf: &mut Self::Buf<T>,
-    //     op: (BinaryOpType, T),
-    //     offset: usize,
-    //     shape: &[usize],
-    //     stride: &[isize],
-    // ) -> Result<(), TensorError>;
-
-    // fn apply_elementwise_binary<T: TensorValue>(&self, buf: &mut Self::Buf<T>, op: (BinaryOpType, T), meta: &MetaTensor) -> Result<(), TensorError> {
-    //     elementwise_binary_dispatch!(
-    //         self,
-    //         buf,
-    //         op,
-    //         meta,
-    //         contiguous = apply_elementwise_binary_contiguous,
-    //         strided1d  = apply_elementwise_binary_1d_strided,
-    //         nd         = apply_elementwise_binary_nd
-    //     )
-    // }
-
     
     specify_trait_unary_cabal!{neg where T: std::ops::Neg<Output = T>}
     specify_trait_unary_cabal!{relu}
@@ -312,7 +276,6 @@ pub trait Backend: Send + Sync + 'static + Clone + Debug {
     
     specify_trait_unary_cabal!{sinh where T: WeightValue}
     specify_trait_unary_cabal!{cosh where T: WeightValue}
-    // specify_trait_unary_cabal!{tan where T: WeightValue}
     specify_trait_unary_cabal!{asinh where T: WeightValue}
     specify_trait_unary_cabal!{acosh where T: WeightValue}
     specify_trait_unary_cabal!{atanh where T: WeightValue}
@@ -324,24 +287,6 @@ pub trait Backend: Send + Sync + 'static + Clone + Debug {
     specify_trait_unary_cabal!{ cube where T: WeightValue }
     specify_trait_unary_cabal!{ exp where T: WeightValue }
     specify_trait_unary_cabal!{ sign where T: WeightValue }
-
-    specify_trait_unary_cabal!{ln where T: WeightValue}
-    specify_trait_unary_cabal!{expm1 where T: Exp}
-    specify_trait_unary_cabal!{ln1p where T: WeightValue}
-    specify_trait_unary_cabal!{floor where T: WeightValue}
-    specify_trait_unary_cabal!{ceil where T: WeightValue}
-    specify_trait_unary_cabal!{round where T: WeightValue}
-    specify_trait_unary_cabal!{trunc where T: WeightValue}
-
-    // Scalar binary operations
-    specify_trait_scalar_cabal!{add}
-    specify_trait_scalar_cabal!{sub}
-    specify_trait_scalar_cabal!{mul}
-    specify_trait_scalar_cabal!{div}
-    specify_trait_scalar_cabal!{log where T: WeightValue}
-    specify_trait_scalar_cabal!{log1p where T: WeightValue}
-    specify_trait_scalar_cabal!{leaky_relu}
-    specify_trait_scalar_cabal!{elu where T: WeightValue}
 
     fn apply_reduce_contiguous_flat<T: WeightValue>(
         &self, 

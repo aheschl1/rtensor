@@ -672,67 +672,6 @@ mod tests {
     }
 
     #[test]
-    fn test_unary_floor_contiguous_f32() {
-        unary_assert_contiguous::<f32, _, _, Cpu>([1.7, 2.3], |f| f.floor(), |f| f.floor_inplace());
-    }
-
-    #[test]
-    fn test_unary_ceil_nd_strided_f32() {
-        unary_assert_nd_strided::<f32, _, _, Cpu>([1.3; 16], |f| f.ceil(), |f| f.ceil_inplace());
-    }
-
-    #[test]
-    fn test_unary_ceil_1d_strided_f32() {
-        unary_assert_1d_strided::<f32, _, _, Cpu>(
-            [1.3, 2.7, 3.1],
-            |f| f.ceil(),
-            |f| f.ceil_inplace(),
-        );
-    }
-
-    #[test]
-    fn test_unary_ceil_contiguous_f32() {
-        unary_assert_contiguous::<f32, _, _, Cpu>([1.3, 2.7], |f| f.ceil(), |f| f.ceil_inplace());
-    }
-
-    #[test]
-    fn test_unary_round_nd_strided_f32() {
-        unary_assert_nd_strided::<f32, _, _, Cpu>([1.4; 16], |f| f.round(), |f| f.round_inplace());
-    }
-
-    #[test]
-    fn test_unary_round_1d_strided_f32() {
-        unary_assert_1d_strided::<f32, _, _, Cpu>(
-            [1.4, 2.6, 3.5],
-            |f| f.round(),
-            |f| f.round_inplace(),
-        );
-    }
-
-    #[test]
-    fn test_unary_round_contiguous_f32() {
-        unary_assert_contiguous::<f32, _, _, Cpu>([1.4, 2.6], |f| f.round(), |f| f.round_inplace());
-    }
-
-    #[test]
-    fn test_unary_trunc_nd_strided_f32() {
-        unary_assert_nd_strided::<f32, _, _, Cpu>([-1.4; 16], |f| f.trunc(), |f| f.trunc_inplace());
-    }
-
-    #[test]
-    fn test_unary_trunc_1d_strided_f32() {
-        unary_assert_1d_strided::<f32, _, _, Cpu>(
-            [-1.4, 2.6, 3.5],
-            |f| f.trunc(),
-            |f| f.trunc_inplace(),
-        );
-    }
-
-    #[test]
-    fn test_unary_trunc_contiguous_f32() {
-        unary_assert_contiguous::<f32, _, _, Cpu>([-1.4, 2.6], |f| f.trunc(), |f| f.trunc_inplace());
-    }
-
     fn test_unary_round_contiguous_f32() {
         unary_assert_contiguous::<f32, _, _, Cpu>([1.4, 2.6], |f| f.round(), |f| f.round_inplace());
     }
@@ -766,7 +705,7 @@ mod cuda_tests {
             tensor::{AsTensor, TensorAccess, TensorAccessMut},
             Tensor,
         },
-        ops::unary::{Abs, Ceil, ExpM1, Floor, Ln1p, NatLog, Negate, Relu, Round, Sigmoid, Silu, Sqrt as _, Tanh, Trunc},
+        ops::unary::*,
         testing::{
             test_with_contiguous_2_elem_tensor, unary_assert_1d_strided, unary_assert_contiguous,
             unary_assert_nd_strided,
