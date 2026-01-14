@@ -210,6 +210,27 @@ pub trait Backend: Send + Sync + 'static + Clone {
     specify_trait_unary_cabal!{tanh where T: Exp + InvExp}
     specify_trait_unary_cabal!{abs}
     specify_trait_unary_cabal!{sqrt where T: SquareRoot}
+    specify_trait_unary_cabal!{sin where T: WeightValue}
+    specify_trait_unary_cabal!{cos where T: WeightValue}
+    specify_trait_unary_cabal!{tan where T: WeightValue}
+    specify_trait_unary_cabal!{asin where T: WeightValue}
+    specify_trait_unary_cabal!{acos where T: WeightValue}
+    specify_trait_unary_cabal!{atan where T: WeightValue}
+    
+    specify_trait_unary_cabal!{sinh where T: WeightValue}
+    specify_trait_unary_cabal!{cosh where T: WeightValue}
+    // specify_trait_unary_cabal!{tan where T: WeightValue}
+    specify_trait_unary_cabal!{asinh where T: WeightValue}
+    specify_trait_unary_cabal!{acosh where T: WeightValue}
+    specify_trait_unary_cabal!{atanh where T: WeightValue}
+
+    specify_trait_unary_cabal!{ rsqrt where T: WeightValue }
+
+    specify_trait_unary_cabal!{ reciprocal where T: WeightValue }
+    specify_trait_unary_cabal!{ square where T: WeightValue }
+    specify_trait_unary_cabal!{ cube where T: WeightValue }
+    specify_trait_unary_cabal!{ exp where T: WeightValue }
+    specify_trait_unary_cabal!{ sign where T: WeightValue }
 
     fn apply_reduce_contiguous_flat<T: WeightValue>(
         &self, 

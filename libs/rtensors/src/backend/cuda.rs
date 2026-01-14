@@ -998,6 +998,28 @@ impl Backend for Cuda {
     specify_trait_unary_cabal!{relu}
     specify_trait_unary_cabal!{abs}
     specify_trait_unary_cabal!{sqrt}
+    specify_trait_unary_cabal!{sin}
+    specify_trait_unary_cabal!{cos}
+    specify_trait_unary_cabal!{tan}
+    specify_trait_unary_cabal!{asin}
+    specify_trait_unary_cabal!{acos}
+    specify_trait_unary_cabal!{atan}
+
+
+    specify_trait_unary_cabal!{sinh}
+    specify_trait_unary_cabal!{cosh}
+    // specify_trait_unary_cabal!{tan}
+    specify_trait_unary_cabal!{asinh}
+    specify_trait_unary_cabal!{acosh}
+    specify_trait_unary_cabal!{atanh}
+
+    specify_trait_unary_cabal!{rsqrt}
+
+    specify_trait_unary_cabal!{ exp }
+    specify_trait_unary_cabal!{ sign }
+    specify_trait_unary_cabal!{ square }
+    specify_trait_unary_cabal!{ cube }
+    specify_trait_unary_cabal!{ reciprocal  }
 
     fn apply_sigmoid_contiguous<T: TensorValue + InvExp>(
         &self,

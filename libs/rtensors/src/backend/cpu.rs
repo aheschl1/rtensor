@@ -41,6 +41,24 @@ macro_rules! elemwise_nd_loop {
     }};
 }
 
+macro_rules! unary_todo {
+    ($name:ident) => {
+        
+        paste::paste! {
+            fn [<apply_ $name _1d_strided>]<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,stride:isize,len:usize) -> Result<(),TensorError>where T:WeightValue {
+        todo!()
+    }
+    fn [<apply_ $name _contiguous>]<T:TensorValue>(&self,buf: &mut Self::Buf<T>,start:usize,len:usize) -> Result<(),TensorError>where T:WeightValue {
+        todo!()
+    }
+
+    fn [<apply_ $name _nd>]<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,shape: &[usize],stride: &[isize],) -> Result<(),TensorError>where T:WeightValue {
+        todo!()
+    }
+        }
+
+    };
+}
 
 macro_rules! impl_cpu_unary {
     ($name:ident, $func:ident $( where $($extra:tt)+ )?) => {
@@ -298,7 +316,92 @@ impl Backend for Cpu {
     impl_cpu_unary!{ tanh, _tanh where T: Exp + InvExp }
     impl_cpu_unary!{ abs, _abs }
     impl_cpu_unary!{ sqrt, _sqrt where T: SquareRoot }
+    unary_todo! { sinh }
+    // unary_todo! { sinh }
+    unary_todo! { cosh }
+    unary_todo! { asinh }
+    unary_todo! { acosh }
+    unary_todo! { atanh }
+
+    unary_todo! { rsqrt }
+    unary_todo! { reciprocal }
+    unary_todo! { square }
+    unary_todo! { cube }
+    unary_todo! { exp }
+    unary_todo! { sign  }
     
+
+    fn apply_sin_1d_strided<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,stride:isize,len:usize) -> Result<(),TensorError>where T:WeightValue {
+        todo!()
+    }
+    fn apply_sin_contiguous<T:TensorValue>(&self,buf: &mut Self::Buf<T>,start:usize,len:usize) -> Result<(),TensorError>where T:WeightValue {
+        todo!()
+    }
+
+    fn apply_sin_nd<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,shape: &[usize],stride: &[isize],) -> Result<(),TensorError>where T:WeightValue {
+        todo!()
+    }
+
+    fn apply_cos_1d_strided<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,stride:isize,len:usize) -> Result<(),TensorError>where T:WeightValue {
+        todo!()
+    }
+
+    fn apply_cos_contiguous<T:TensorValue>(&self,buf: &mut Self::Buf<T>,start:usize,len:usize) -> Result<(),TensorError>where T:WeightValue {
+        todo!()
+    }
+
+    fn apply_cos_nd<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,shape: &[usize],stride: &[isize],) -> Result<(),TensorError>where T:WeightValue {
+        todo!()
+    }
+    
+    fn apply_tan_1d_strided<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,stride:isize,len:usize) -> Result<(),TensorError>where T:WeightValue {
+        todo!()
+    }
+
+    fn apply_tan_contiguous<T:TensorValue>(&self,buf: &mut Self::Buf<T>,start:usize,len:usize) -> Result<(),TensorError>where T:WeightValue {
+        todo!()
+    }
+
+    fn apply_tan_nd<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,shape: &[usize],stride: &[isize],) -> Result<(),TensorError>where T:WeightValue {
+        todo!()
+    }
+
+    fn apply_acos_1d_strided<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,stride:isize,len:usize) -> Result<(),TensorError>where T:WeightValue {
+        todo!()
+    }
+
+    fn apply_acos_contiguous<T:TensorValue>(&self,buf: &mut Self::Buf<T>,start:usize,len:usize) -> Result<(),TensorError>where T:WeightValue {
+        todo!()
+    }
+
+    fn apply_acos_nd<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,shape: &[usize],stride: &[isize],) -> Result<(),TensorError>where T:WeightValue {
+        todo!()
+    }
+
+    fn apply_asin_1d_strided<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,stride:isize,len:usize) -> Result<(),TensorError>where T:WeightValue {
+        todo!()
+    }
+
+    fn apply_asin_contiguous<T:TensorValue>(&self,buf: &mut Self::Buf<T>,start:usize,len:usize) -> Result<(),TensorError>where T:WeightValue {
+        todo!()
+    }
+
+    fn apply_asin_nd<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,shape: &[usize],stride: &[isize],) -> Result<(),TensorError>where T:WeightValue {
+        todo!()
+    }
+
+    fn apply_atan_1d_strided<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,stride:isize,len:usize) -> Result<(),TensorError>where T:WeightValue {
+        todo!()
+    }
+
+    fn apply_atan_contiguous<T:TensorValue>(&self,buf: &mut Self::Buf<T>,start:usize,len:usize) -> Result<(),TensorError>where T:WeightValue {
+        todo!()
+    }
+
+    fn apply_atan_nd<T:TensorValue>(&self,buf: &mut Self::Buf<T>,offset:usize,shape: &[usize],stride: &[isize],) -> Result<(),TensorError>where T:WeightValue {
+        todo!()
+    }
+
     /// go through entire buffer, take everything
     fn apply_reduce_contiguous_flat<T: WeightValue>(
         &self, 
@@ -389,6 +492,8 @@ fn _tanh<T: TensorValue + InvExp + Exp>(x: &mut T) -> T {
 fn _abs<T: TensorValue>(x: &mut T) -> T {
     x.absolute()
 }
+
+
 
 #[inline]
 fn _sqrt<T: TensorValue + SquareRoot>(x: &mut T) -> T {
