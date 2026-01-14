@@ -18,6 +18,26 @@ struct SumOp
     }
 };
 
+struct LessOp
+{
+    template <typename T>
+    __device__ __forceinline__ bool
+    operator()(const T &a, const T &b) const
+    {
+        return a > b;
+    }
+};
+
+struct GreaterOp
+{
+    template <typename T>
+    __device__ __forceinline__ bool
+    operator()(const T &a, const T &b) const
+    {
+        return a < b;
+    }
+};
+
 struct L1SumOp
 {
     template <typename T>
@@ -29,8 +49,6 @@ struct L1SumOp
     }
 };
 
-
-
 struct SquareUnaryOp
 {
     template <typename T>
@@ -38,11 +56,9 @@ struct SquareUnaryOp
         T
         operator()(const T &a) const
     {
-        return a*a;
+        return a * a;
     }
 };
-
-
 
 struct L2SumOp
 {
@@ -233,12 +249,13 @@ void launch_flat_contiguous_reduce(
 
 template <typename T>
 __global__ void square_kernel(
-    const T* __restrict__ in,
-    T* __restrict__ out,
-    size_t n
-) {
+    const T *__restrict__ in,
+    T *__restrict__ out,
+    size_t n)
+{
     size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < n) {
+    if (i < n)
+    {
         T x = in[i];
         out[i] = x * x;
     }
@@ -246,18 +263,18 @@ __global__ void square_kernel(
 
 template <typename T>
 void launch_flat_contiguous_l2norm(
-    const T* data,
-    T* d_out,
+    const T *data,
+    T *d_out,
     size_t start,
     size_t num_items,
-    unsigned int block_size
-) {
+    unsigned int block_size)
+{
     // 1) allocate temp for squares
-    T* d_tmp = nullptr;
+    T *d_tmp = nullptr;
     cudaMalloc(&d_tmp, num_items * sizeof(T));
 
     // 2) map: tmp[i] = data[start+i]^2
-    const T* d_in = data + start;
+    const T *d_in = data + start;
     int threads = 256;
     int blocks = (int)((num_items + threads - 1) / threads);
     square_kernel<<<blocks, threads>>>(d_in, d_tmp, num_items);
@@ -271,8 +288,7 @@ void launch_flat_contiguous_l2norm(
         block_size,
         SumOp{},
         (T)0,
-        PostSqrt{}
-    );
+        PostSqrt{});
 
     cudaFree(d_tmp);
 }
@@ -337,16 +353,22 @@ __global__ void to_welford_state_kernel(const T *__restrict__ in,
 template <typename T>
 __global__ void finalize_var_kernel_ptr(
     T *out_var,
-    const WelfordState<T>* state,
+    const WelfordState<T> *state,
     bool unbiased,
-    bool should_sqrt
-) {
-    if (threadIdx.x == 0) {
+    bool should_sqrt)
+{
+    if (threadIdx.x == 0)
+    {
         int n = state->count;
-        if (n <= 1) { out_var[0] = T(0); return; }
+        if (n <= 1)
+        {
+            out_var[0] = T(0);
+            return;
+        }
         T denom = unbiased ? (T)(n - 1) : (T)n;
         out_var[0] = state->m2 / denom;
-        if(should_sqrt) {
+        if (should_sqrt)
+        {
             out_var[0] = sqrt(out_var[0]);
         }
     }
@@ -389,20 +411,14 @@ void launch_flat_contiguous_reduce_variance(
     // Run reduction
     cub::DeviceReduce::Reduce(
         d_temp_storage, temp_storage_bytes,
-        d_states, d_states_out, num_items, WelfordCombine<T> {}, welford_init<T>());
+        d_states, d_states_out, num_items, WelfordCombine<T>{}, welford_init<T>());
 
-
-    
-
-    finalize_var_kernel_ptr<<<1,1>>>(d_out, d_states_out, settings->unbiased, settings->is_std);
-
+    finalize_var_kernel_ptr<<<1, 1>>>(d_out, d_states_out, settings->unbiased, settings->is_std);
 
     // Free the temporary storage allocation.
     cudaFree(d_temp_storage);
     cudaFree(d_states_out);
     cudaFree(d_states);
-
-
 
     // post_transform_kernel<<<1, block_size>>>(d_out, num_items, post);
 }
@@ -458,7 +474,6 @@ __global__ void fold_axis_contig_kernel(
         out[out_linear] = post((T)smem[0], R);
     }
 }
-
 
 template <typename T, typename Op, typename PostOp, typename MapOp>
 __global__ void map_axis_contig_kernel(
@@ -574,67 +589,77 @@ __global__ void var_axis_contig_kernel(
             denom = (reso.count > 0) ? (T)(reso.count) : (T)1;
         }
 
-        
-        if(is_std) {
+        if (is_std)
+        {
             out[out_linear] = sqrt(reso.m2 / denom);
-        } else {
+        }
+        else
+        {
             out[out_linear] = reso.m2 / denom;
         }
     }
 }
 
 template <typename T>
-struct LogSumExpState {
-    T m;   // max
-    T s;   // sum exp(x - m)
+struct LogSumExpState
+{
+    T m; // max
+    T s; // sum exp(x - m)
 };
 
 template <typename T>
-__device__ __forceinline__ LogSumExpState<T> lse_init() {
+__device__ __forceinline__ LogSumExpState<T> lse_init()
+{
     // m = -inf, s = 0
-    return LogSumExpState<T>{ -INFINITY, (T)0 };
+    return LogSumExpState<T>{-INFINITY, (T)0};
 }
 
 template <typename T>
-__device__ __forceinline__ LogSumExpState<T> lse_from_value(T x) {
+__device__ __forceinline__ LogSumExpState<T> lse_from_value(T x)
+{
     // for a single value: m=x, s=1
-    return LogSumExpState<T>{ x, (T)1 };
+    return LogSumExpState<T>{x, (T)1};
 }
 
 template <typename T>
-__device__ __forceinline__ LogSumExpState<T> lse_combine(LogSumExpState<T> a, LogSumExpState<T> b) {
-    if (a.s == (T)0) return b;
-    if (b.s == (T)0) return a;
+__device__ __forceinline__ LogSumExpState<T> lse_combine(LogSumExpState<T> a, LogSumExpState<T> b)
+{
+    if (a.s == (T)0)
+        return b;
+    if (b.s == (T)0)
+        return a;
 
     T m = (a.m > b.m) ? a.m : b.m;
     // rescale both sums into the new max frame
     T s = a.s * exp(a.m - m) + b.s * exp(b.m - m);
-    return LogSumExpState<T>{ m, s };
+    return LogSumExpState<T>{m, s};
 }
 
 template <typename T>
 __global__ void logsumexp_axis_contig_kernel(
-    const T* __restrict__ in,
-    T* __restrict__ out,
+    const T *__restrict__ in,
+    T *__restrict__ out,
     size_t offset,
     size_t outer,
     size_t R,
-    size_t inner
-) {
+    size_t inner)
+{
     size_t out_linear = (size_t)blockIdx.x;
-    size_t out_elems  = outer * inner;
-    if (out_linear >= out_elems) return;
+    size_t out_elems = outer * inner;
+    if (out_linear >= out_elems)
+        return;
 
     // Map linear output index -> (o, i)
     size_t o = out_linear / inner;
     size_t i = out_linear - o * inner;
 
     // Base pointer for this output element: in[o, 0, i]
-    const T* base = in + offset + o * (R * inner) + i;
+    const T *base = in + offset + o * (R * inner) + i;
 
     // Each thread accumulates a partial LSE state over k
     LogSumExpState<T> st = lse_init<T>();
-    for (size_t k = threadIdx.x; k < R; k += (size_t)blockDim.x) {
+    for (size_t k = threadIdx.x; k < R; k += (size_t)blockDim.x)
+    {
         T x = base[k * inner];
         st = lse_combine(st, lse_from_value<T>(x));
     }
@@ -644,14 +669,17 @@ __global__ void logsumexp_axis_contig_kernel(
     smem[threadIdx.x] = st;
     __syncthreads();
 
-    for (unsigned s = blockDim.x / 2; s > 0; s >>= 1) {
-        if (threadIdx.x < s) {
+    for (unsigned s = blockDim.x / 2; s > 0; s >>= 1)
+    {
+        if (threadIdx.x < s)
+        {
             smem[threadIdx.x] = lse_combine(smem[threadIdx.x], smem[threadIdx.x + s]);
         }
         __syncthreads();
     }
 
-    if (threadIdx.x == 0) {
+    if (threadIdx.x == 0)
+    {
         LogSumExpState<T> r0 = smem[0];
         // If R==0 (shouldn't happen), keep sane output
         out[out_linear] = (R == 0) ? (T)-INFINITY : (r0.m + log(r0.s));
@@ -705,27 +733,20 @@ void sum_axis_strided_fast_launch(
         logsumexp_axis_contig_kernel<T><<<grid, block>>>(d_in, d_out, offset, outer, r, inner);
         break;
     case OP_NORM:
-        if(settings->norm_type == 1) {
+        if (settings->norm_type == 1)
+        {
             fold_axis_contig_kernel<T, L1SumOp, PostNothing><<<grid, block>>>(d_in, d_out, offset, outer, r, inner, L1SumOp{}, (T)0, PostNothing{});
-        } else if(settings->norm_type == 2) {
-            map_axis_contig_kernel<T, SumOp, PostSqrt, SquareUnaryOp><<<grid, block>>>(d_in, d_out, offset, outer, r, inner, SquareUnaryOp {}, SumOp{}, (T)0, PostSqrt {});
         }
-        
+        else if (settings->norm_type == 2)
+        {
+            map_axis_contig_kernel<T, SumOp, PostSqrt, SquareUnaryOp><<<grid, block>>>(d_in, d_out, offset, outer, r, inner, SquareUnaryOp{}, SumOp{}, (T)0, PostSqrt{});
+        }
+
         break;
-    // case OP_VARIANCE_UNBIASED:
-    //     var_axis_contig_kernel<T, PostDivTotal, true><<<grid, block>>>(d_in, d_out, offset, outer, r, inner, PostDivTotal{});
-    //     break;
-    // case OP_POP_VARIANCE:
-    //     var_axis_contig_kernel<T, PostDivTotal, false><<<grid, block>>>(d_in, d_out, offset, outer, r, inner, PostDivTotal{});
-    //     break;
     default:
         return;
-        // case OP_ADD: dbuf[dof] = lbuf[lo] + rbuf[ro]; break;
-        // case OP_SUB: dbuf[dof] = lbuf[lo] - rbuf[ro]; break;
-        // case OP_MUL: dbuf[dof] = lbuf[lo] * rbuf[ro]; break;
     }
 }
-
 
 template <typename T>
 void dispatch_flat_contiguous_reduce(
@@ -759,10 +780,13 @@ void dispatch_flat_contiguous_reduce(
         launch_flat_contiguous_reduce_variance<T>(data, out, start, len, settings, block_size);
         break;
     case OP_NORM:
-        if(settings->norm_type == 1) {
+        if (settings->norm_type == 1)
+        {
             launch_flat_contiguous_reduce<T, L1SumOp, PostNothing>(data, out, start, len, block_size, L1SumOp{}, (T)0, PostNothing{});
-        } else {
-            launch_flat_contiguous_l2norm(data, out,start,len, block_size);
+        }
+        else
+        {
+            launch_flat_contiguous_l2norm(data, out, start, len, block_size);
         }
         break;
     default:
@@ -770,15 +794,13 @@ void dispatch_flat_contiguous_reduce(
     }
 }
 
-template<typename T>
+template <typename T>
 __global__ void unpack(
     cub::KeyValuePair<int, T> *p,
-    uint64_t *out
-)
+    uint64_t *out)
 {
-    if(threadIdx.x == 0)
-        *out = (uint64_t) p->key;
-
+    if (threadIdx.x == 0)
+        *out = (uint64_t)p->key;
 }
 
 template <typename T>
@@ -794,7 +816,6 @@ void dispatch_flat_contiguous_argmax(
 
     const T *d_in = data + start;
 
-
     using Pair = cub::KeyValuePair<int, T>;
 
     // output pair (index, value)
@@ -805,19 +826,27 @@ void dispatch_flat_contiguous_argmax(
     size_t temp_bytes = 0;
 
     // temp size
-    cub::DeviceReduce::ArgMax(nullptr, temp_bytes, d_in, d_pair_out, (int)num_items);
+    if(op == OP_ARGMAX) {
+        cub::DeviceReduce::ArgMax(nullptr, temp_bytes, d_in, d_pair_out, (int)num_items);
+    } else if(op == OP_ARGMIN) {
+        cub::DeviceReduce::ArgMin(nullptr, temp_bytes, d_in, d_pair_out, (int)num_items);
+    }
+    
     cudaMalloc(&d_temp, temp_bytes);
 
     // run
-    cub::DeviceReduce::ArgMax(d_temp, temp_bytes, d_in, d_pair_out, (int)num_items);
+    if(op == OP_ARGMAX) {
+        cub::DeviceReduce::ArgMax(d_temp, temp_bytes, d_in, d_pair_out, (int)num_items);
+    } else if(op == OP_ARGMIN) {
+        cub::DeviceReduce::ArgMin(d_temp, temp_bytes, d_in, d_pair_out, (int)num_items);
+    }
+    
 
     unpack<T><<<1, 1>>>(d_pair_out, out);
 
     cudaFree(d_temp);
     cudaFree(d_pair_out);
 }
-
-
 
 template <typename T, typename Op, typename PostOp>
 __global__ void argmax_axis_contig_kernel(
@@ -853,15 +882,16 @@ __global__ void argmax_axis_contig_kernel(
     {
 
         T cur = base[k * inner];
-        if(thread_biggest < cur) {
+        if (op(thread_biggest, cur))
+        {
             thread_biggest = cur;
-            biggest_idx = (uint64_t) k * inner;
+            biggest_idx = (uint64_t)k;
         }
     }
 
     // Reduce thread_sum across the block (simple shared-memory reduction)
     __shared__ Pair smem[256];
-    smem[threadIdx.x] = Pair { biggest_idx, thread_biggest };
+    smem[threadIdx.x] = Pair{biggest_idx, thread_biggest};
     __syncthreads();
 
     // power-of-two reduction
@@ -869,7 +899,8 @@ __global__ void argmax_axis_contig_kernel(
     {
         if (threadIdx.x < s)
         {
-            if(smem[threadIdx.x].value < smem[threadIdx.x + s].value) {
+            if (op(smem[threadIdx.x].value, smem[threadIdx.x + s].value))
+            {
                 smem[threadIdx.x] = smem[threadIdx.x + s];
             }
         }
@@ -881,7 +912,6 @@ __global__ void argmax_axis_contig_kernel(
         out[out_linear] = smem[0].key;
     }
 }
-
 
 template <typename T>
 void reduce_axis_strided_fast_launch(
@@ -906,53 +936,54 @@ void reduce_axis_strided_fast_launch(
 
     dim3 grid((unsigned)out_elems);
 
-    if(op == OP_ARGMAX) {
-        argmax_axis_contig_kernel<T, SumOp, PostNothing><<<grid, block>>>(d_in, d_out, offset, outer, r, inner, SumOp{}, (T)std::numeric_limits<T>::lowest(), PostNothing{});
+    if (op == OP_ARGMAX)
+    {
+        argmax_axis_contig_kernel<T, GreaterOp, PostNothing><<<grid, block>>>(d_in, d_out, offset, outer, r, inner, GreaterOp{}, (T)std::numeric_limits<T>::lowest(), PostNothing{});
     }
-    
+    else if (op == OP_ARGMIN)
+    {
+        argmax_axis_contig_kernel<T, LessOp, PostNothing><<<grid, block>>>(d_in, d_out, offset, outer, r, inner, LessOp{}, (T)std::numeric_limits<T>::max(), PostNothing{});
+    }
 }
 
-
-
 #define DECLARE_ARGMAX_LAUNCHERS(TYPE, SUFFIX)                                                    \
-    extern "C" void launch_flat_contiguous_argmax_##SUFFIX(                                      \
-        const TYPE *data, uint64_t *out, size_t start, size_t len,                                   \
-        ReductionOpCode code, const ReductionSettings *settings, unsigned int block_size)        \
-    {                                                                                            \
+    extern "C" void launch_flat_contiguous_argmax_##SUFFIX(                                       \
+        const TYPE *data, uint64_t *out, size_t start, size_t len,                                \
+        ReductionOpCode code, const ReductionSettings *settings, unsigned int block_size)         \
+    {                                                                                             \
         dispatch_flat_contiguous_argmax<TYPE>(data, out, start, len, code, settings, block_size); \
-    }                                                                                            \
-                                                                                                 \
-    extern "C" void launch_nd_argmax_contiguous_##SUFFIX(                                        \
-        TYPE *data, uint64_t *out, size_t offset, size_t outer, size_t r, size_t inner,             \
-        ReductionOpCode code, const ReductionSettings *settings, unsigned int block_size)        \
-    {                                                                                            \
-        reduce_axis_strided_fast_launch<TYPE>(                                                      \
-            data, out, offset, outer, r, inner, code, settings, block_size);                    \
+    }                                                                                             \
+                                                                                                  \
+    extern "C" void launch_nd_argmax_contiguous_##SUFFIX(                                         \
+        TYPE *data, uint64_t *out, size_t offset, size_t outer, size_t r, size_t inner,           \
+        ReductionOpCode code, const ReductionSettings *settings, unsigned int block_size)         \
+    {                                                                                             \
+        reduce_axis_strided_fast_launch<TYPE>(                                                    \
+            data, out, offset, outer, r, inner, code, settings, block_size);                      \
     }
 
 // Float types
-DECLARE_ARGMAX_LAUNCHERS(float,  f32)
+DECLARE_ARGMAX_LAUNCHERS(float, f32)
 DECLARE_ARGMAX_LAUNCHERS(double, f64)
 
-
-#define DECLARE_REDUCTION_LAUNCHERS(TYPE, SUFFIX)                                                    \
-    extern "C" void launch_flat_contiguous_reduce_##SUFFIX(                                      \
-        const TYPE *data, TYPE *out, size_t start, size_t len,                                   \
-        ReductionOpCode code, const ReductionSettings *settings, unsigned int block_size)        \
-    {                                                                                            \
+#define DECLARE_REDUCTION_LAUNCHERS(TYPE, SUFFIX)                                                 \
+    extern "C" void launch_flat_contiguous_reduce_##SUFFIX(                                       \
+        const TYPE *data, TYPE *out, size_t start, size_t len,                                    \
+        ReductionOpCode code, const ReductionSettings *settings, unsigned int block_size)         \
+    {                                                                                             \
         dispatch_flat_contiguous_reduce<TYPE>(data, out, start, len, code, settings, block_size); \
-    }                                                                                            \
-                                                                                                 \
-    extern "C" void launch_nd_reduce_contiguous_##SUFFIX(                                        \
-        TYPE *data, TYPE *out, size_t offset, size_t outer, size_t r, size_t inner,             \
-        ReductionOpCode code, const ReductionSettings *settings, unsigned int block_size)        \
-    {                                                                                            \
-        sum_axis_strided_fast_launch<TYPE>(                                                      \
-            data, out, offset, outer, r, inner, code, settings, block_size);                    \
+    }                                                                                             \
+                                                                                                  \
+    extern "C" void launch_nd_reduce_contiguous_##SUFFIX(                                         \
+        TYPE *data, TYPE *out, size_t offset, size_t outer, size_t r, size_t inner,               \
+        ReductionOpCode code, const ReductionSettings *settings, unsigned int block_size)         \
+    {                                                                                             \
+        sum_axis_strided_fast_launch<TYPE>(                                                       \
+            data, out, offset, outer, r, inner, code, settings, block_size);                      \
     }
 
 // Float types
-DECLARE_REDUCTION_LAUNCHERS(float,  f32)
+DECLARE_REDUCTION_LAUNCHERS(float, f32)
 DECLARE_REDUCTION_LAUNCHERS(double, f64)
 
 // // Unsigned integer types

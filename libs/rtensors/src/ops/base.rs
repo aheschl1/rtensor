@@ -7,7 +7,8 @@ use serde::{Deserialize, Serialize};
 pub enum BinaryOpType {
     Add = 0,
     Sub = 1,
-    Mul = 2
+    Mul = 2,
+    Div = 3
 }
 
 #[cfg(feature = "cuda")]
@@ -17,7 +18,8 @@ impl BinaryOpType {
         match self {
             Self::Add => 0,
             Self::Sub => 1,
-            Self::Mul => 2
+            Self::Mul => 2,
+            Self::Div => 3
         }
     }
 }
@@ -29,7 +31,8 @@ impl BinaryOpType {
         match self {
             Self::Add => a + b,
             Self::Sub => a - b,
-            Self::Mul => a * b
+            Self::Mul => a * b,
+            Self::Div => a / b
         }
     }
 }

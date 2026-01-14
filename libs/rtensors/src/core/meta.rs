@@ -569,6 +569,10 @@ pub trait MetaTensorView {
     /// Returns an iterator over all buffer offsets for this tensor/view.
     fn iter_offsets(&self) -> impl Iterator<Item = usize> + '_ { self.meta().iter_offsets() }
 
+    fn iter_coords(&self) -> impl Iterator<Item = Vec<usize>> + '_ {
+        self.meta().iter_coords()
+    }
+
     /// Returns a vector of (dim_index, dim_size, dim_stride) for all non-singleton dimensions.
     fn non_singleton_dims(&self) -> Vec<(usize, Dim, isize)> {
         self.shape().iter()
@@ -611,6 +615,12 @@ impl <T: TensorValue, B: Backend> MetaTensorView for TensorViewMut<'_, T, B>
     }
 }
 
+
+impl From<&Shape> for Shape {
+    fn from(val: &Shape) -> Self {
+        Shape(val.0.clone())
+    }
+}
 
 impl From<Shape> for Vec<Dim> {
     fn from(val: Shape) -> Self {

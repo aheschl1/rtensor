@@ -87,6 +87,56 @@ macro_rules! impl_cpu_unary {
     };
 }
 
+macro_rules! impl_cpu_scalar {
+    ($name:ident, $func:ident $( where $($extra:tt)+ )?) => {
+        paste::paste! {
+            fn [<scalar_apply_ $name _1d_strided>]<T: TensorValue>(
+                &self, 
+                buf: &mut Self::Buf<T>, 
+                value: T,
+                offset: usize,
+                stride: isize,
+                len: usize
+            ) -> Result<(), TensorError>
+            $( where $($extra)+ )?
+            {
+                let bufptr = buf.as_mut();
+                elemwise_1d_strided_loop!(bufptr, offset, stride, len, |x| $func(x, value));
+                Ok(())
+            }
+
+            fn [<scalar_apply_ $name _contiguous>]<T: TensorValue>(
+                &self, 
+                buf: &mut Self::Buf<T>, 
+                value: T,
+                start: usize,
+                len: usize
+            ) -> Result<(), TensorError>
+            $( where $($extra)+ )?
+            {
+                let bufptr = buf.as_mut();
+                elemwise_contiguous_loop!(bufptr, start, len, |x| $func(x, value));
+                Ok(())
+            }
+
+            fn [<scalar_apply_ $name _nd>]<T: TensorValue>(
+                &self,
+                buf: &mut Self::Buf<T>,
+                value: T,
+                offset: usize,
+                shape: &[usize],
+                stride: &[isize],
+            ) -> Result<(), TensorError>
+            $( where $($extra)+ )?
+            {
+                let bufptr = buf.as_mut();
+                elemwise_nd_loop!(bufptr, offset, shape, stride, |x| $func(x, value));
+                Ok(())
+            }
+        }
+    };
+}
+
 
 impl Backend for Cpu {
     type Buf<T: TensorValue> = Box<[T]>;
@@ -241,63 +291,30 @@ impl Backend for Cpu {
 
         Ok(())
     }
-
-    fn apply_elementwise_binary_contiguous<T: TensorValue>(
-        &self, buf: &mut Self::Buf<T>, 
-        op: (BinaryOpType, T), 
-        start: usize,
-        len: usize
-    ) -> Result<(), TensorError> {
-        let bufptr = buf.as_mut();
-        elemwise_contiguous_loop!(bufptr, start, len, |x| op.0.apply(*x, op.1));
-        Ok(())
-    }
-    
-    fn apply_elementwise_binary_1d_strided<T: TensorValue>(
-        &self, buf: &mut Self::Buf<T>, 
-        op: (BinaryOpType, T), 
-        offset: usize,
-        stride: isize,
-        len: usize
-    ) -> Result<(), TensorError> {
-        let bufptr = buf.as_mut();
-
-        elemwise_1d_strided_loop!(
-            bufptr,
-            offset,
-            stride,
-            len,
-            |x| op.0.apply(*x, op.1)
-        );
-
-        Ok(())
-    }
-    
-    fn apply_elementwise_binary_nd<T: TensorValue>(
-        &self,
-        buf: &mut Self::Buf<T>,
-        op: (BinaryOpType, T),
-        offset: usize,
-        shape: &[usize],
-        stride: &[isize],
-    ) -> Result<(), TensorError> {
-        let bufptr = buf.as_mut();
-        elemwise_nd_loop!(
-            bufptr,
-            offset,
-            shape,
-            stride,
-            |x| op.0.apply(*x, op.1)
-        );
-        Ok(())
-    }
-    
     impl_cpu_unary!{ neg, _negate where T: std::ops::Neg<Output = T> }
     impl_cpu_unary!{ relu, _relu }
     impl_cpu_unary!{ sigmoid, _sigmoid where T: InvExp}
+    impl_cpu_unary!{ silu, _silu where T: InvExp}
     impl_cpu_unary!{ tanh, _tanh where T: Exp + InvExp }
     impl_cpu_unary!{ abs, _abs }
     impl_cpu_unary!{ sqrt, _sqrt where T: SquareRoot }
+    impl_cpu_unary!{ ln, _ln where T: WeightValue }
+    impl_cpu_unary!{ expm1, _expm1 where T: Exp }
+    impl_cpu_unary!{ ln1p, _ln1p where T: WeightValue }
+    impl_cpu_unary!{ floor, _floor where T: WeightValue }
+    impl_cpu_unary!{ ceil, _ceil where T: WeightValue }
+    impl_cpu_unary!{ round, _round where T: WeightValue }
+    impl_cpu_unary!{ trunc, _trunc where T: WeightValue }
+    
+    // Scalar binary operations
+    impl_cpu_scalar!{ add, _scalar_add }
+    impl_cpu_scalar!{ sub, _scalar_sub }
+    impl_cpu_scalar!{ mul, _scalar_mul }
+    impl_cpu_scalar!{ div, _scalar_div }
+    impl_cpu_scalar!{ log, _scalar_log where T: WeightValue }
+    impl_cpu_scalar!{ log1p, _scalar_log1p where T: WeightValue }
+    impl_cpu_scalar!{ leaky_relu, _scalar_leaky_relu }
+    impl_cpu_scalar!{ elu, _scalar_elu where T: WeightValue }
     
     /// go through entire buffer, take everything
     fn apply_reduce_contiguous_flat<T: WeightValue>(
@@ -379,6 +396,41 @@ impl Backend for Cpu {
 }
 
 #[inline]
+fn _ln<T: WeightValue>(x: &mut T) -> T {
+    x.nat_log()
+}
+
+#[inline]
+fn _ln1p<T: WeightValue>(x: &mut T) -> T {
+    x.nat_log1p()
+}
+
+#[inline]
+fn _floor<T: WeightValue>(x: &mut T) -> T {
+    x.vfloor()
+}
+
+#[inline]
+fn _ceil<T: WeightValue>(x: &mut T) -> T {
+    x.vceil()
+}
+
+#[inline]
+fn _round<T: WeightValue>(x: &mut T) -> T {
+    x.vround()
+}
+
+#[inline]
+fn _trunc<T: WeightValue>(x: &mut T) -> T {
+    x.vtrunc()
+}
+
+#[inline]
+fn _expm1<T: Exp>(x: &mut T) -> T {
+    x.apply_expm1()
+}
+
+#[inline]
 fn _tanh<T: TensorValue + InvExp + Exp>(x: &mut T) -> T {
     let a = x.apply_exp();
     let b = x.apply_invexp();
@@ -419,6 +471,63 @@ where
     T: InvExp
 {
     T::ONE / (T::ONE + x.apply_invexp())
+}
+
+#[inline]
+fn _silu<T: TensorValue>(x: &mut T) -> T
+where 
+    T: InvExp
+{
+    *x * _sigmoid(x)
+}
+
+// Scalar binary operation helper functions
+#[inline]
+fn _scalar_add<T: TensorValue>(x: &mut T, value: T) -> T {
+    *x + value
+}
+
+#[inline]
+fn _scalar_sub<T: TensorValue>(x: &mut T, value: T) -> T {
+    *x - value
+}
+
+#[inline]
+fn _scalar_mul<T: TensorValue>(x: &mut T, value: T) -> T {
+    *x * value
+}
+
+#[inline]
+fn _scalar_div<T: TensorValue>(x: &mut T, value: T) -> T {
+    *x / value
+}
+
+#[inline]
+fn _scalar_log<T: WeightValue>(x: &mut T, value: T) -> T {
+    x.vlog(value)
+}
+
+#[inline]
+fn _scalar_log1p<T: WeightValue>(x: &mut T, value: T) -> T {
+    x.vlog1p(value)
+}
+
+#[inline]
+fn _scalar_leaky_relu<T: TensorValue>(x: &mut T, slope: T) -> T {
+    if *x > T::ZERO {
+        *x
+    } else {
+        *x * slope
+    }
+}
+
+#[inline]
+fn _scalar_elu<T: WeightValue>(x: &mut T, alpha: T) -> T {
+    if *x >= T::ZERO {
+        *x
+    } else {
+        alpha * (x.apply_expm1())
+    }
 }
 
 macro_rules! blas_impl {
@@ -835,7 +944,7 @@ mod tests {
         let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cpu::Cpu> =
             Tensor::<f64>::from_buf(vec![0.2, 0.3, 0.1, 0.3, 0.3, -0.1, -0.3, 0.3], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.total_sum().unwrap().item().unwrap(), 1.0999999999999999);
+        assert_eq!(cuda.sum().unwrap().item().unwrap(), 1.0999999999999999);
     }
 
     #[test]
@@ -843,7 +952,7 @@ mod tests {
          let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cpu::Cpu> =
             Tensor::<f64>::from_buf(vec![0.2, 0.3, 0.1, 0.3, 0.3, -0.1, -0.3, 0.3], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.max(&Idx::Item).unwrap().item().unwrap(), 0.3);
+        assert_eq!(cuda.max_at(&Idx::Item).unwrap().item().unwrap(), 0.3);
     }
 
      #[test]
@@ -851,7 +960,7 @@ mod tests {
          let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cpu::Cpu> =
             Tensor::<f64>::from_buf(vec![0.2, 0.3, 0.1, -0.9, 0.3, -0.1, -0.3, 0.3], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.min(&Idx::Item).unwrap().item().unwrap(), -0.9);
+        assert_eq!(cuda.min_at(&Idx::Item).unwrap().item().unwrap(), -0.9);
     }
 
 
@@ -860,7 +969,7 @@ mod tests {
          let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cpu::Cpu> =
             Tensor::<f64>::from_buf(vec![1., 2., 3., 4., 5., 6., 7., 8.], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.prod(&Idx::Item).unwrap().item().unwrap(), 40320.);
+        assert_eq!(cuda.prod_at(&Idx::Item).unwrap().item().unwrap(), 40320.);
     }
 
     // #[test]
@@ -928,7 +1037,7 @@ mod tests {
                 1., 0.
             ], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.sum(&Idx::At(0))?, Tensor::from_buf(vec![4., 1.], (1, 2))?);
+        assert_eq!(cuda.sum_at(&Idx::At(0))?, Tensor::from_buf(vec![4., 1.], (1, 2))?);
         Ok(())
     }
 
@@ -941,7 +1050,7 @@ mod tests {
                 1., 2., 
                 -1., 4.
             ], (4, 2)).unwrap();
-        assert_eq!(cuda.max(&Idx::At(0))?, Tensor::from_buf(vec![6., 8.], (1, 2))?);
+        assert_eq!(cuda.max_at(&Idx::At(0))?, Tensor::from_buf(vec![6., 8.], (1, 2))?);
         Ok(())
     }
 
@@ -955,7 +1064,7 @@ mod tests {
                 -1., 4.
             ], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.min(&Idx::At(0))?, Tensor::from_buf(vec![-1., 2.], (1, 2))?);
+        assert_eq!(cuda.min_at(&Idx::At(0))?, Tensor::from_buf(vec![-1., 2.], (1, 2))?);
         Ok(())
     }
 
@@ -967,7 +1076,7 @@ mod tests {
             1., 2.,
             -1., 4.
         ], (4, 2)).unwrap();
-        assert_eq!(cuda.prod(&Idx::At(0))?, Tensor::from_buf(vec![-18., 320.], (1, 2))?);
+        assert_eq!(cuda.prod_at(&Idx::At(0))?, Tensor::from_buf(vec![-18., 320.], (1, 2))?);
         Ok(())
     }
 
@@ -981,7 +1090,7 @@ mod tests {
                 7., 8.
             ], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.mean(&Idx::At(0))?, Tensor::from_buf(vec![4.0, 5.0], (1, 2))?);
+        assert_eq!(cuda.mean_at(&Idx::At(0))?, Tensor::from_buf(vec![4.0, 5.0], (1, 2))?);
         Ok(())
     }
 
@@ -996,7 +1105,7 @@ mod tests {
                 7., 8.
             ], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.mean(&Idx::At(1))?, Tensor::from_buf(vec![1.5, 3.5, 5.5, 7.5], (4, 1))?);
+        assert_eq!(cuda.mean_at(&Idx::At(1))?, Tensor::from_buf(vec![1.5, 3.5, 5.5, 7.5], (4, 1))?);
         Ok(())
     }
 
@@ -1084,7 +1193,7 @@ mod tests {
 
         println!("Original: {:?}", cuda);
 
-        let result = cuda.sum(&Idx::At(1));
+        let result = cuda.sum_at(&Idx::At(1));
         println!("Result: {:?}", result.unwrap());
         
         // let mut out: crate::core::primitives::TensorBase<f64, Cuda> = CudaTensor::from_buf(vec![0.0f64, 0.0f64], (2,))

@@ -1,13 +1,13 @@
-use std::{ops::{Mul, MulAssign}};
+use std::{ops::{Div, DivAssign}};
 
 use crate::{backend::Backend, core::{primitives::TensorBase, tensor::AsTensor, value::{TensorValue, WeightValue}, TensorView, TensorViewMut}, grad::{self, primitives::GradTensor, GradNode}, ops::base::BinaryOpType};
 
-impl<'a, T, B> MulAssign<T> for TensorViewMut<'a, T, B> 
+impl<'a, T, B> DivAssign<T> for TensorViewMut<'a, T, B> 
     where T: TensorValue,
           B: Backend,
 {
-    fn mul_assign(&mut self, rhs: T) {
-        self.backend.scalar_apply_mul(
+    fn div_assign(&mut self, rhs: T) {
+        self.backend.scalar_apply_div(
             self.buf, 
             rhs,
             &self.meta
@@ -15,12 +15,12 @@ impl<'a, T, B> MulAssign<T> for TensorViewMut<'a, T, B>
     }
 }
 
-impl<'a, T, B> MulAssign<&T> for TensorViewMut<'a, T, B> 
+impl<'a, T, B> DivAssign<&T> for TensorViewMut<'a, T, B> 
     where T: TensorValue,
           B: Backend,
 {
-    fn mul_assign(&mut self, rhs: &T) {
-        self.backend.scalar_apply_mul(
+    fn div_assign(&mut self, rhs: &T) {
+        self.backend.scalar_apply_div(
             self.buf, 
             *rhs,
             &self.meta
@@ -28,12 +28,12 @@ impl<'a, T, B> MulAssign<&T> for TensorViewMut<'a, T, B>
     }
 }
 
-impl<T, B> MulAssign<T> for TensorBase<T, B> 
+impl<T, B> DivAssign<T> for TensorBase<T, B> 
     where T: TensorValue,
           B: Backend,
 {
-    fn mul_assign(&mut self, rhs: T) {
-        self.backend.scalar_apply_mul(
+    fn div_assign(&mut self, rhs: T) {
+        self.backend.scalar_apply_div(
             &mut self.buf, 
             rhs,
             &self.meta
@@ -41,12 +41,12 @@ impl<T, B> MulAssign<T> for TensorBase<T, B>
     }
 }
 
-impl<T, B> MulAssign<&T> for TensorBase<T, B> 
+impl<T, B> DivAssign<&T> for TensorBase<T, B> 
     where T: TensorValue,
           B: Backend,
 {
-    fn mul_assign(&mut self, rhs: &T) {
-        self.backend.scalar_apply_mul(
+    fn div_assign(&mut self, rhs: &T) {
+        self.backend.scalar_apply_div(
             &mut self.buf, 
             *rhs,
             &self.meta
@@ -54,55 +54,55 @@ impl<T, B> MulAssign<&T> for TensorBase<T, B>
     }
 }
 
-macro_rules! impl_mul {
+macro_rules! impl_div {
     ($type:ty) => {
-        impl<'a, T, B> Mul<T> for $type
+        impl<'a, T, B> Div<T> for $type
         where
             T: TensorValue,
             B: Backend,
         {
             type Output = TensorBase<T, B>;
 
-            fn mul(self, rhs: T) -> Self::Output {
+            fn div(self, rhs: T) -> Self::Output {
                 let mut result = self.owned();
-                result *= rhs;
+                result /= rhs;
                 result
             }
         }
 
-        impl<'a, T, B> Mul<&T> for $type
+        impl<'a, T, B> Div<&T> for $type
         where
             T: TensorValue,
             B: Backend,
         {
             type Output = TensorBase<T, B>;
 
-            fn mul(self, rhs: &T) -> Self::Output {
+            fn div(self, rhs: &T) -> Self::Output {
                 let mut result = self.owned();
-                result *= rhs;
+                result /= rhs;
                 result
             }
         }
     };
 }
 
-impl_mul!(&TensorViewMut<'a, T, B>);
-impl_mul!(TensorViewMut<'a, T, B>);
-impl_mul!(&TensorView<'a, T, B>);
-impl_mul!(TensorView<'a, T, B>);
-impl_mul!(&TensorBase<T, B>);
-impl_mul!(TensorBase<T, B>);
+impl_div!(&TensorViewMut<'a, T, B>);
+impl_div!(TensorViewMut<'a, T, B>);
+impl_div!(&TensorView<'a, T, B>);
+impl_div!(TensorView<'a, T, B>);
+impl_div!(&TensorBase<T, B>);
+impl_div!(TensorBase<T, B>);
 
-impl<T, B> std::ops::Mul<T> for &GradTensor<T, B> 
+impl<T, B> std::ops::Div<T> for &GradTensor<T, B> 
     where T: WeightValue,
           B: Backend,
 {
     type Output = GradTensor<T, B>;
 
     #[grad::when_enabled(ctx)]
-    fn mul(self, rhs: T) -> Self::Output {
-        self.borrow_mut().tensor *= rhs;
-        let op = GradNode::MulScalar { // both are the same as addition of negative scalar
+    fn div(self, rhs: T) -> Self::Output {
+        self.borrow_mut().tensor /= rhs;
+        let op = GradNode::DivScalar { // both are the same as addition of negative scalar
             input: self.node,
             scalar: rhs,
         };
@@ -113,16 +113,16 @@ impl<T, B> std::ops::Mul<T> for &GradTensor<T, B>
     }
 }
 
-impl<T, B> std::ops::Mul<T> for GradTensor<T, B> 
+impl<T, B> std::ops::Div<T> for GradTensor<T, B> 
     where T: WeightValue,
           B: Backend,
 {
     type Output = GradTensor<T, B>;
 
     #[grad::when_enabled(ctx)]
-    fn mul(self, rhs: T) -> Self::Output {
-        self.borrow_mut().tensor *= rhs;
-        let op = GradNode::MulScalar { // both are the same as addition of negative scalar
+    fn div(self, rhs: T) -> Self::Output {
+        self.borrow_mut().tensor /= rhs;
+        let op = GradNode::DivScalar { // both are the same as addition of negative scalar
             input: self.node,
             scalar: rhs,
         };

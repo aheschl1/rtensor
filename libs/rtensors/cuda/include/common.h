@@ -7,6 +7,7 @@ enum OpCode : uint8_t {
     OP_ADD = 0,
     OP_SUB = 1,
     OP_MUL = 2,
+    OP_DIV = 3,
 };
 
 struct ReductionSettings {

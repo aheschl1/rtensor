@@ -1,108 +1,11 @@
-//! Procedural macro for generating RPC client routines from an impl block.
-//!
-//! This crate provides the `#[routines]` attribute macro, which, given an impl block and an enum type,
-//! generates RPC client routines for each method in the impl block. Methods can be customized with the
-//! `#[rpc(...)]` attribute to control code generation.
-
 use std::cell::RefCell;
+
 use proc_macro::TokenStream;
+use syn::{parse_macro_input, ItemImpl};
 use quote::{format_ident, quote};
-use syn::{parenthesized, parse::{Parse, ParseStream}, parse_macro_input, parse_quote, Expr, Ident, ItemImpl, PathArguments, Token, Type};
+use syn::{parenthesized, parse::{Parse, ParseStream}, parse_quote, Expr, Ident, PathArguments, Token, Type};
 use syn::Result;
 
-
-#[proc_macro_attribute]
-
-/// Attribute macro to generate RPC client routines for each method in an impl block.
-///
-/// # Usage
-///
-/// ```ignore
-/// #[routines(MyRpcEnum)]
-/// impl MyClient {
-///     // ...
-/// }
-/// ```
-///
-/// Optionally, methods can be annotated with `#[rpc(skip)]` to skip codegen, or `#[rpc(extra(...))]` to add extra arguments.
-/// By default, the variant for the method is derived from the method name in CamelCase.
-/// To override the variant name, use `#[rpc(variant(VariantName))]`.
-pub fn routines(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let mut impl_block = parse_macro_input!(item as ItemImpl);
-    let rpc_args = parse_macro_input!(attr as RpcArgs);
-    let enum_variant = rpc_args.target_enum;
-
-    for item in &mut impl_block.items {
-        if let syn::ImplItem::Fn(method) = item {
-            // Parse #[rpc(...)] attribute if present
-            let rpc_args = if let Some(attr) = rpc_attr(&method.attrs) {
-                let args = RpcMethodArgs::parse(attr).expect("Failed to parse args");
-                // Remove the helper attribute so it doesn't appear in output
-                method.attrs.retain(|a| !a.path().is_ident("rpc"));
-                Some(args)
-            } else {
-                None
-            }.unwrap_or_default();
-            if rpc_args.skip {
-                continue;
-            }
-            let (message_signature, response_signature) = process_method(method, &rpc_args);
-
-            let mut new_method = method.clone();
-            let variant_name = rpc_args.override_variant_name.as_ref().unwrap_or(&message_signature.name);
-            let initializers = &message_signature.initializers;
-            let response_name = &response_signature.name;
-            // Output conversion logic based on return type
-            let out_conv = match &new_method.sig.output {
-                syn::ReturnType::Type(_, ty) => {
-                    if let syn::Type::Path(type_path) = &**ty {
-                        if !type_is_result(type_path) {
-                            syn::Error::new_spanned(ty, "RPC method must return a Result type. Consider skipping and implementing the routine yourself.").to_compile_error()
-                        } else if type_is_unit_result(type_path) {
-                            quote! { result.into() }
-                        } else {
-                            quote! { result?.into() }
-                        }
-                    } else {
-                        quote! { result.into() }
-                    }
-                },
-                _ => quote! { () },
-            };
-            let sync_tokens = if rpc_args.sync {
-                quote! {
-                    self.sync();
-                }
-            } else {
-                quote! {}
-            };
-            new_method.block = parse_quote!({
-                #sync_tokens
-                let message = #enum_variant::#variant_name {
-                    #( #initializers ),*
-                };
-
-                let receiver = self.send_message(message);
-                let response = receiver.recv()
-                    .map_err(|e| TensorError::BackendError(format!("Failed to receive RPC response: {}", e)))?;
-                match response {
-                    #enum_variant::#response_name(result) => {
-                        #out_conv
-                    },
-                    _ => {
-                        return Err(TensorError::BackendError("Received unexpected RPC response message".to_string()));
-                    }
-                }
-            });
-
-            *item = syn::ImplItem::Fn(new_method);
-        }
-    }
-    let output = quote! {
-        #impl_block
-    };
-    output.into()
-}
 
 
 /// Holds the name and field initializers for an RPC message or response variant.
@@ -299,4 +202,82 @@ fn type_is_result(ty: &syn::TypePath) -> bool {
         PathArguments::AngleBracketed(args) => args.args.len() == 2,
         _ => false,
     }
+}
+
+
+pub fn routines(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let mut impl_block = parse_macro_input!(item as ItemImpl);
+    let rpc_args = parse_macro_input!(attr as RpcArgs);
+    let enum_variant = rpc_args.target_enum;
+
+    for item in &mut impl_block.items {
+        if let syn::ImplItem::Fn(method) = item {
+            // Parse #[rpc(...)] attribute if present
+            let rpc_args = if let Some(attr) = rpc_attr(&method.attrs) {
+                let args = RpcMethodArgs::parse(attr).expect("Failed to parse args");
+                // Remove the helper attribute so it doesn't appear in output
+                method.attrs.retain(|a| !a.path().is_ident("rpc"));
+                Some(args)
+            } else {
+                None
+            }.unwrap_or_default();
+            if rpc_args.skip {
+                continue;
+            }
+            let (message_signature, response_signature) = process_method(method, &rpc_args);
+
+            let mut new_method = method.clone();
+            let variant_name = rpc_args.override_variant_name.as_ref().unwrap_or(&message_signature.name);
+            let initializers = &message_signature.initializers;
+            let response_name = &response_signature.name;
+            // Output conversion logic based on return type
+            let out_conv = match &new_method.sig.output {
+                syn::ReturnType::Type(_, ty) => {
+                    if let syn::Type::Path(type_path) = &**ty {
+                        if !type_is_result(type_path) {
+                            syn::Error::new_spanned(ty, "RPC method must return a Result type. Consider skipping and implementing the routine yourself.").to_compile_error()
+                        } else if type_is_unit_result(type_path) {
+                            quote! { result.into() }
+                        } else {
+                            quote! { result?.into() }
+                        }
+                    } else {
+                        quote! { result.into() }
+                    }
+                },
+                _ => quote! { () },
+            };
+            let sync_tokens = if rpc_args.sync {
+                quote! {
+                    self.sync();
+                }
+            } else {
+                quote! {}
+            };
+            new_method.block = parse_quote!({
+                #sync_tokens
+                let message = #enum_variant::#variant_name {
+                    #( #initializers ),*
+                };
+
+                let receiver = self.send_message(message);
+                let response = receiver.recv()
+                    .map_err(|e| TensorError::BackendError(format!("Failed to receive RPC response: {}", e)))?;
+                match response {
+                    #enum_variant::#response_name(result) => {
+                        #out_conv
+                    },
+                    _ => {
+                        return Err(TensorError::BackendError("Received unexpected RPC response message".to_string()));
+                    }
+                }
+            });
+
+            *item = syn::ImplItem::Fn(new_method);
+        }
+    }
+    let output = quote! {
+        #impl_block
+    };
+    output.into()
 }
