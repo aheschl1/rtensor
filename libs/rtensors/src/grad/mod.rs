@@ -1,6 +1,6 @@
 use slotmap::{new_key_type, SecondaryMap};
 
-use crate::{backend::{cpu::Cpu, cuda::Cuda, Backend}, core::{idx::Idx, primitives::TensorBase, tensor::TensorError, untyped::UntypedTensor, value::{TensorValue, WeightValue}, MetaTensor, Shape, Strides}, grad::primitives::{GradTensor, GradTensorRef}};
+use crate::{backend::{cpu::Cpu, cuda::Cuda, Backend, BackendMatMul}, core::{idx::Idx, primitives::TensorBase, tensor::TensorError, untyped::UntypedTensor, value::{TensorValue, WeightValue}, MetaTensor, Shape, Strides}, grad::primitives::{GradTensor, GradTensorRef}};
 use std::{any::{Any, TypeId}, cell::RefCell};
 use std::collections::HashMap;
 
@@ -68,6 +68,12 @@ pub(crate) enum GradNode<T: TensorValue, B: Backend> {
     Negate { input: NodeKey },
     Sqrt { input: NodeKey, output: TensorBase<T, B> },
     Ln { input: NodeKey, x_reciprocal: TensorBase<T, B> }, // store 1/x for backward
+    MatMul {
+        left: NodeKey,
+        right: NodeKey,
+        left_input: TensorBase<T, B>,
+        right_input: TensorBase<T, B>,
+    },
     // VIEW OPS
     Permute {
         input: NodeKey,
@@ -112,29 +118,33 @@ impl<T: WeightValue, B: Backend> GradNode<T, B> {
             GradNode::Sigmoid { input, .. } => vec![input.clone()],
             GradNode::Sqrt { input, .. } => vec![input.clone()],
             GradNode::Ln { input, .. } => vec![input.clone()],
+            GradNode::MatMul { left, right, .. } => vec![left.clone(), right.clone()],
         }
     }
 
-    fn backwards(&self, upstream: &TensorBase<T, B>, ctx: &GradContext<T, B>) -> Result<Vec<TensorBase<T, B>>, TensorError> {
+    fn backwards(&self, upstream: &TensorBase<T, B>, _ctx: &GradContext<T, B>) -> Result<Vec<TensorBase<T, B>>, TensorError> 
+    where 
+        B: BackendMatMul<T>
+    {
         match self {
-            GradNode::L1 { .. } => backwards::backwards_l1::<T, B>(self, upstream, ctx),
-            GradNode::Leaf( .. ) => backwards::accumulate_grad::<T, B>(self, upstream, ctx),
-            GradNode::BroadcastAdd { .. } => backwards::backwards_add::<T, B>(self, upstream, ctx),
-            GradNode::BroadcastSub { .. } => backwards::backwards_sub::<T, B>(self, upstream, ctx),
-            GradNode::BroadcastMul { .. } => backwards::backwards_mul::<T, B>(self, upstream, ctx),
-            GradNode::BroadcastDiv { .. } => backwards::backwards_div::<T, B>(self, upstream, ctx),
-            GradNode::AddScalar { .. } => backwards::backwards_add_scalar::<T, B>(self, upstream, ctx),
-            GradNode::MulScalar { .. } => backwards::backwards_mul_scalar::<T, B>(self, upstream, ctx),
-            GradNode::DivScalar { .. } => backwards::backwards_div_scalar::<T, B>(self, upstream, ctx),
-            GradNode::Permute { .. } => backwards::backwards_permute::<T, B>(self, upstream, ctx),
+            GradNode::L1 { .. } => backwards::backwards_l1::<T, B>(self, upstream),
+            GradNode::Leaf( .. ) => backwards::accumulate_grad::<T, B>(self, upstream),
+            GradNode::BroadcastAdd { .. } => backwards::backwards_add::<T, B>(self, upstream),
+            GradNode::BroadcastSub { .. } => backwards::backwards_sub::<T, B>(self, upstream),
+            GradNode::BroadcastMul { .. } => backwards::backwards_mul::<T, B>(self, upstream),
+            GradNode::BroadcastDiv { .. } => backwards::backwards_div::<T, B>(self, upstream),
+            GradNode::AddScalar { .. } => backwards::backwards_add_scalar::<T, B>(self, upstream),
+            GradNode::MulScalar { .. } => backwards::backwards_mul_scalar::<T, B>(self, upstream),
+            GradNode::DivScalar { .. } => backwards::backwards_div_scalar::<T, B>(self, upstream),
+            GradNode::Permute { .. } => backwards::backwards_permute::<T, B>(self, upstream),
 
-            GradNode::Negate { .. } => backwards::backwards_negate::<T, B>(self, upstream, ctx),
-            GradNode::Sigmoid { .. } => backwards::backwards_sigmoid::<T, B>(self, upstream, ctx),
-            GradNode::ReLU { .. } => backwards::backwards_relu::<T, B>(self, upstream, ctx),
-            GradNode::Abs { .. } => backwards::backwards_abs::<T, B>(self, upstream, ctx),
-            GradNode::Sqrt { .. } => backwards::backwards_sqrt::<T, B>(self, upstream, ctx),
-            GradNode::Ln { .. } => backwards::backwards_ln::<T, B>(self, upstream, ctx),
-            
+            GradNode::Negate { .. } => backwards::backwards_negate::<T, B>(self, upstream),
+            GradNode::Sigmoid { .. } => backwards::backwards_sigmoid::<T, B>(self, upstream),
+            GradNode::ReLU { .. } => backwards::backwards_relu::<T, B>(self, upstream),
+            GradNode::Abs { .. } => backwards::backwards_abs::<T, B>(self, upstream),
+            GradNode::Sqrt { .. } => backwards::backwards_sqrt::<T, B>(self, upstream),
+            GradNode::Ln { .. } => backwards::backwards_ln::<T, B>(self, upstream),
+            GradNode::MatMul { .. } => backwards::backwards_matmul::<T, B>(self, upstream),
             GradNode::None => Ok(vec![]),
             // _ => Err(TensorError::UnsupportedOperation("Backward not implemented for this node type.".into())),
         }
@@ -180,7 +190,10 @@ impl<T: WeightValue, B: Backend> GradContext<T, B> {
         }
     }
 
-    pub fn backwards(&self, root: &GradTensor<T, B>) -> Result<(), TensorError> {
+    pub fn backwards(&self, root: &GradTensor<T, B>) -> Result<(), TensorError> 
+    where 
+        B: BackendMatMul<T>
+    {
         // holds nodes to visit along with their upstream gradients
         // topo sort, because concider a graph like A->C<-B<-D where BFS should visit C too early
         let mut stack = Vec::new();
@@ -246,6 +259,7 @@ impl<T: WeightValue, B: Backend> GradContext<T, B> {
             let nodes = self.nodes.borrow();
             let node = nodes.get(node_key).unwrap(); // we would never have discovered this node if it was not present
             let upstreams = node.backwards(&dldy, self)?;
+            // println!("upstreams: {:?}", upstreams);
             let parents = node.parents();
             for (parent, grad) in parents.into_iter().zip(upstreams.into_iter()) {
                 accumulations.entry(parent).or_insert_with(Vec::new).push(grad);
@@ -270,7 +284,7 @@ thread_local! {
 
 pub fn with<T: WeightValue, B: Backend>(
     f: impl FnOnce(&GradContext<T, B>)
-) {
+){
     let type_id = TypeId::of::<T>();
     
     if std::any::TypeId::of::<B>() == std::any::TypeId::of::<Cpu>() {
@@ -344,7 +358,6 @@ pub fn when_enabled<T: TensorValue, B: Backend, R>(
                     None
                 }
             } else {
-                // println!("fsdljfakjlfhlkasjfhlaskjfhals");
                 None
             }
         })

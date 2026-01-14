@@ -10,6 +10,7 @@ where
     T: TensorValue,
     B: Backend,
 {
+    type Output;
     /// Performs matrix multiplication.
     /// 
     /// # Examples
@@ -18,7 +19,7 @@ where
     /// let b = Tensor::<f32>::from_buf(vec![5.0, 6.0, 7.0, 8.0], (2, 2)).unwrap();
     /// let c = a.matmul(&b).unwrap();
     /// ```
-    fn matmul(&self, rhs: &Rhs) -> Result<TensorBase<T, B>, TensorError>;
+    fn matmul(&self, rhs: &Rhs) -> Result<Self::Output, TensorError>;
     
     /// Computes the dot product of two 1-D tensors.
     /// 
@@ -31,7 +32,7 @@ where
     /// let b = Tensor::<f32>::from_buf(vec![4.0, 5.0, 6.0], (3,)).unwrap();
     /// let result = a.dot(&b).unwrap(); // Scalar: 32.0
     /// ```
-    fn dot(&self, rhs: &Rhs) -> Result<TensorBase<T, B>, TensorError>;
+    fn dot(&self, rhs: &Rhs) -> Result<Self::Output, TensorError>;
 }
 
 #[cfg(test)]
