@@ -1,4 +1,4 @@
-use crate::{backend::{Backend, BackendMatMul}, core::{idx::Idx, primitives::TensorBase, tensor::{TensorAccess, TensorError}, value::WeightValue, Shape, Strides}, grad::GradNode, ops::reduction::ReductionOp};
+use crate::{backend::{Backend, BackendMatMul}, core::{idx::Idx, primitives::TensorBase, tensor::{TensorAccess, TensorError}, value::WeightValue, Shape, Strides}, grad::GradNode, ops::{reduction::ReductionOp, unary::UnaryOp}};
 use crate::ops::linalg::MatMul;
 
 pub(crate) fn accumulate_grad<T: WeightValue, B: Backend>(
@@ -92,8 +92,7 @@ pub(crate) fn backwards_div<T: WeightValue, B: Backend>(
     };
 
     let mut lhs_grad = upstream * rhs_input_reciprocal;
-    // TODO replace with .square() method when available
-    let mut rhs_grad = upstream * -(lhs_input * rhs_input_reciprocal * rhs_input_reciprocal);
+    let mut rhs_grad = upstream * -(lhs_input * rhs_input_reciprocal.square());
     inverse_broadcast_gradient(&mut lhs_grad, lhs_strides, lhs_shape)?;
     inverse_broadcast_gradient(&mut rhs_grad, rhs_strides, rhs_shape)?;
 

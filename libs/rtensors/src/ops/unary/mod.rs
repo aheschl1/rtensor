@@ -190,13 +190,14 @@ specify_unary_op_template! {
         Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
     },
     (Abs) abs; |input, result, _ctx, grad_node| {
+        // TODO: Make a kernel for this
         let mut grad_map = TensorBase::<T, B>::zeros(input.shape());
         for coord in input.iter_coords() {
             let val = input.get(&coord).unwrap();
             if val > T::ZERO {
-                grad_map.set(&coord, T::ONE);
+                grad_map.set(&coord, T::ONE).unwrap();
             } else {
-                grad_map.set(&coord, -T::ONE);
+                grad_map.set(&coord, -T::ONE).unwrap();
             }
         }
 
@@ -208,12 +209,13 @@ specify_unary_op_template! {
     },
     (Relu) relu; |input, result, _ctx, grad_node| {
         let mut grad_map = TensorBase::<T, B>::zeros(input.shape());
+        // TODO: Make a kernel for this
         for coord in input.iter_coords() {
             let val = input.get(&coord).unwrap();
             if val > T::ZERO {
-                grad_map.set(&coord, T::ONE);
+                grad_map.set(&coord, T::ONE).unwrap();
             } else {
-                grad_map.set(&coord, T::ZERO);
+                grad_map.set(&coord, T::ZERO).unwrap();
             }
         }
 
@@ -247,16 +249,9 @@ specify_unary_op_template! {
         })
     },
     (NatLog) ln where T: WeightValue; |input, result, _ctx, grad_node| {
-        // compute x.reciprocal
-        // TODO use unary .reciprocal op when available
-        let mut r = TensorBase::<T, B>::zeros(input.shape());
-        for coord in input.iter_coords() {
-            let val = input.get(&coord).unwrap();
-            r.set(&coord, T::ONE / val);
-        }
         Ok(GradNode::Ln {
             input: grad_node,
-            x_reciprocal: r,
+            x_reciprocal: input.reciprocal(),
         })
     },
     (ExpM1) expm1 where T: Exp; |input, result, _ctx, grad_node| {

@@ -24,18 +24,7 @@ impl<T: WeightValue, B: Backend> L1<T, B> for GradTensor<T, B> {
         let target_tensor = &target_inner.tensor;
 
         let diff = self_tensor - target_tensor;
-        let mut grad_map = TensorBase::<T, B>::zeros(diff.shape());
-        // TODO replace with sign operation
-        for coord in diff.iter_coords() {
-            let d = diff.get(&coord).unwrap();
-            if d > T::ZERO {
-                grad_map.set(&coord, T::ONE);
-            } else if d < T::ZERO {
-                grad_map.set(&coord, -T::ONE);
-            } else {
-                grad_map.set(&coord, T::ZERO);
-            }
-        }
+        let mut grad_map = diff.sign();
 
         grad_map /= T::from_usize(self_tensor.size());
 
