@@ -1,6 +1,8 @@
 use std::ops::{Div, DivAssign};
 
-use crate::{backend::Backend, core::{primitives::TensorBase, value::TensorValue, MetaTensor, MetaTensorView, TensorView, TensorViewMut}, ops::broadcast::{compute_broadcasted_params}};
+use rand::rand_core::le;
+
+use crate::{backend::Backend, core::{primitives::TensorBase, value::{TensorValue, WeightValue}, MetaTensor, MetaTensorView, TensorView, TensorViewMut}, grad::{primitives::GradTensor, GradNode}, ops::broadcast::compute_broadcasted_params};
 use crate::ops::base::BinaryOpType;
 
 /// Macro to implement DivAssign for mutable tensor types (TensorBase and TensorViewMut)
@@ -464,3 +466,120 @@ impl_div!(&TensorViewMut, &TensorBase<T, B>, owned);
 impl_div!(&TensorViewMut, &TensorView<'_, T, B>, view);
 // &TensorViewMut / &TensorViewMut
 impl_div!(&TensorViewMut, &TensorViewMut<'_, T, B>, view);
+
+
+impl<T, B> std::ops::Div<GradTensor<T, B>> for GradTensor<T, B> 
+    where T: WeightValue,
+          B: Backend,
+{
+    type Output = GradTensor<T, B>;
+
+    fn div(self, rhs: GradTensor<T, B> ) -> Self::Output {
+        let value = &self.borrow().tensor / &rhs.borrow().tensor;
+        let (_, broadcast_stra, broadcast_strb) = 
+            compute_broadcasted_params(&self.borrow().tensor.meta, &rhs.borrow().tensor.meta).unwrap();
+
+        // TODO replace with .reciprocal() method once available
+        let mut rhs_input_reciprocal = TensorBase::<T, B>::ones(rhs.borrow().tensor.meta.shape.as_ref());
+        rhs_input_reciprocal /= &rhs.borrow().tensor;
+        
+        let op = GradNode::BroadcastDiv {
+            left: self.node, 
+            right: rhs.node,
+            lhs_input: self.borrow().tensor.clone(),
+            rhs_input_reciprocal: rhs_input_reciprocal,
+            lhs_strides: broadcast_stra, 
+            rhs_strides: broadcast_strb,
+            lhs_shape: self.borrow().tensor.meta.shape.clone(),
+            rhs_shape: rhs.borrow().tensor.meta.shape.clone(),
+        };
+        GradTensor::from_op(value, op)
+    }
+}
+
+impl<T, B> std::ops::Div<&GradTensor<T, B>> for GradTensor<T, B> 
+    where T: WeightValue,
+          B: Backend,
+{
+    type Output = GradTensor<T, B>;
+
+    fn div(self, rhs: &GradTensor<T, B> ) -> Self::Output {
+        let (_, broadcast_stra, broadcast_strb) = 
+            compute_broadcasted_params(&self.borrow().tensor.meta, &rhs.borrow().tensor.meta).unwrap();
+
+        let value = &self.borrow().tensor / &rhs.borrow().tensor;
+        // TODO replace with .reciprocal() method once available
+        let mut rhs_input_reciprocal = TensorBase::<T, B>::ones(rhs.borrow().tensor.meta.shape.as_ref());
+        rhs_input_reciprocal /= &rhs.borrow().tensor;
+
+        let op = GradNode::BroadcastDiv { 
+            lhs_input: self.borrow().tensor.clone(),
+            rhs_input_reciprocal: rhs_input_reciprocal,
+            left: self.node, 
+            right: rhs.node, 
+            lhs_strides: broadcast_stra, 
+            rhs_strides: broadcast_strb,
+            lhs_shape: self.borrow().tensor.meta.shape.clone(),
+            rhs_shape: rhs.borrow().tensor.meta.shape.clone(),
+        };
+        GradTensor::from_op(value, op)
+    }
+}
+
+impl<T, B> std::ops::Div<&GradTensor<T, B>> for &GradTensor<T, B> 
+    where T: WeightValue,
+          B: Backend,
+{
+    type Output = GradTensor<T, B>;
+
+    fn div(self, rhs: &GradTensor<T, B> ) -> Self::Output {
+        let value = &self.borrow().tensor / &rhs.borrow().tensor;
+        let (_, broadcast_stra, broadcast_strb) = 
+            compute_broadcasted_params(&self.borrow().tensor.meta, &rhs.borrow().tensor.meta).unwrap();
+        
+        // TODO replace with .reciprocal() method once available
+        let mut rhs_input_reciprocal = TensorBase::<T, B>::ones(rhs.borrow().tensor.meta.shape.as_ref());
+        rhs_input_reciprocal /= &rhs.borrow().tensor;
+
+        let op = GradNode::BroadcastDiv { 
+            left: self.node, 
+            right: rhs.node, 
+            lhs_input: self.borrow().tensor.clone(),
+            rhs_input_reciprocal: rhs_input_reciprocal,
+            lhs_strides: broadcast_stra, 
+            rhs_strides: broadcast_strb,
+            lhs_shape: self.borrow().tensor.meta.shape.clone(),
+            rhs_shape: rhs.borrow().tensor.meta.shape.clone(),
+        };
+        GradTensor::from_op(value, op)
+    }
+}
+
+impl<T, B> std::ops::Div<GradTensor<T, B>> for &GradTensor<T, B> 
+    where T: WeightValue,
+          B: Backend,
+{
+    type Output = GradTensor<T, B>;
+
+    fn div(self, rhs: GradTensor<T, B> ) -> Self::Output {
+        let value = &self.borrow().tensor / &rhs.borrow().tensor;
+        let (_, broadcast_stra, broadcast_strb) = 
+            compute_broadcasted_params(&self.borrow().tensor.meta, &rhs.borrow().tensor.meta).unwrap();
+        
+        // TODO replace with .reciprocal() method once available
+        let mut rhs_input_reciprocal = TensorBase::<T, B>::ones(rhs.borrow().tensor.meta.shape.as_ref());
+        rhs_input_reciprocal /= &rhs.borrow().tensor;
+
+        let op = GradNode::BroadcastDiv { 
+            left: self.node, 
+            right: rhs.node, 
+            lhs_input: self.borrow().tensor.clone(),
+            rhs_input_reciprocal: rhs_input_reciprocal,
+            lhs_strides: broadcast_stra, 
+            rhs_strides: broadcast_strb,
+            lhs_shape: self.borrow().tensor.meta.shape.clone(),
+            rhs_shape: rhs.borrow().tensor.meta.shape.clone(),
+        };
+        GradTensor::from_op(value, op)
+    }
+}

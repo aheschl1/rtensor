@@ -484,16 +484,12 @@ fn materialize_output<T: TensorValue, B: Backend>(input: &MetaTensor, backend: B
 fn reduction_output_meta(input: MetaTensor, axes: &Idx) -> MetaTensor {
     let mut output_shape = Vec::new();
 
-
     let idx_num = match axes {
         Idx::Item => 0,
         Idx::At(x) => *x,
         _ => panic!("Weird multi dimension reductions are not avaiable.")
     };
-
-
-
-
+    
     for d in 0..input.rank() {
         if d == idx_num {
             // PyTorch and Numpy have a keep dim argument that removes this.
@@ -503,14 +499,6 @@ fn reduction_output_meta(input: MetaTensor, axes: &Idx) -> MetaTensor {
 
         }
     }
-
-    // for (i, &dim) in input.shape.iter().enumerate() {
-    //     println!("i={i}, dim={dim}");
-    //     if i < idx_num {
-    //         output_shape.push(dim);
-    //     }
-    // }
-    println!("materialziing output: {:?}", output_shape);
     let output_shape: Shape = Shape::from(output_shape);
     let strides = shape_to_stride(&output_shape);
 

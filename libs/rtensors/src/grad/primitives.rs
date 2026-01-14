@@ -340,6 +340,66 @@ mod tests {
             }
             println!("{:?}", wa);
 
+            // use model, but do a broadcasted add
+            let wa = Tensor::<f32>::ones((1, 3)).param();
+            let input = Tensor::<f32>::ones((1, 2, 1)).param();
+            let target = Tensor::<f32>::zeros((2, 3)).grad();
+            optim.register_parameter(&wa).unwrap();
+            optim.register_parameter(&input).unwrap();
+            for _ in 0..10 {
+                let inter = &input + &wa; // broadcasted add
+                let loss = l1_loss(&inter, &target);
+                println!("Loss: {:?}", loss.borrow().tensor.item());
+                ctx.backwards(&loss).unwrap();
+                optim.step().unwrap();
+            }
+            println!("{:?}", wa);
+
+            // use model, but do a broadcasted sub
+            let wa = Tensor::<f32>::ones((1, 3)).param();
+            let input = Tensor::<f32>::ones((1, 2, 1)).param();
+            let target = Tensor::<f32>::ones((2, 3)).grad();
+            optim.register_parameter(&wa).unwrap();
+            optim.register_parameter(&input).unwrap();
+            for _ in 0..10 {
+                let inter = &input - &wa; // broadcasted sub
+                let loss = l1_loss(&inter, &target);
+                println!("Loss: {:?}", loss.borrow().tensor.item());
+                ctx.backwards(&loss).unwrap();
+                optim.step().unwrap();
+            }
+            println!("{:?}", wa);
+
+            // use model, but do a broadcasted mul
+            let wa = Tensor::<f32>::ones((1, 3)).param();
+            let input = Tensor::<f32>::ones((1, 2, 1)).param();
+            let target = Tensor::<f32>::zeros((2, 3)).grad();
+            optim.register_parameter(&wa).unwrap();
+            optim.register_parameter(&input).unwrap();
+            for _ in 0..10 {
+                let inter = &input * &wa; // broadcasted mul
+                let loss = l1_loss(&inter, &target);
+                println!("Loss: {:?}", loss.borrow().tensor.item());
+                ctx.backwards(&loss).unwrap();
+                optim.step().unwrap();
+            }
+            println!("{:?}", wa);
+
+            // use model, but do a broadcasted div
+            let wa = Tensor::<f32>::ones((1, 3)).param();
+            let input = Tensor::<f32>::ones((1, 2, 1)).param();
+            let target = Tensor::<f32>::zeros((2, 3)).grad();
+            optim.register_parameter(&wa).unwrap();
+            optim.register_parameter(&input).unwrap();
+            for _ in 0..10 {
+                let inter = &input / &wa; // broadcasted div
+                let loss = l1_loss(&inter, &target);
+                println!("Loss: {:?}", loss.borrow().tensor.item());
+                ctx.backwards(&loss).unwrap();
+                optim.step().unwrap();
+            }
+            println!("{:?}", wa);
+
         })
     }
 }

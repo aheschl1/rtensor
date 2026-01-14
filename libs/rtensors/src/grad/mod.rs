@@ -1,6 +1,6 @@
 use slotmap::{new_key_type, SecondaryMap};
 
-use crate::{backend::{cpu::Cpu, cuda::Cuda, Backend}, core::{idx::Idx, primitives::TensorBase, tensor::TensorError, untyped::UntypedTensor, value::{TensorValue, WeightValue}}, grad::primitives::{GradTensor, GradTensorRef}};
+use crate::{backend::{cpu::Cpu, cuda::Cuda, Backend}, core::{idx::Idx, primitives::TensorBase, tensor::TensorError, untyped::UntypedTensor, value::{TensorValue, WeightValue}, MetaTensor, Shape, Strides}, grad::primitives::{GradTensor, GradTensorRef}};
 use std::{any::{Any, TypeId}, cell::RefCell};
 use std::collections::HashMap;
 
@@ -23,7 +23,42 @@ pub(crate) enum GradNode<T: TensorValue, B: Backend> {
     Leaf( GradTensorRef<T, B> ),
     None,
     // OPS
-    Add { left: NodeKey, right: NodeKey },
+    BroadcastAdd { 
+        left: NodeKey, 
+        right: NodeKey, 
+        lhs_strides: Strides, // strides so we know when to reduce
+        rhs_strides: Strides, 
+        lhs_shape: Shape,  // shapes so that we know when to squeeze
+        rhs_shape: Shape 
+    },
+    BroadcastSub { 
+        left: NodeKey, 
+        right: NodeKey, 
+        lhs_strides: Strides, // strides so we know when to reduce
+        rhs_strides: Strides, 
+        lhs_shape: Shape,  // shapes so that we know when to squeeze
+        rhs_shape: Shape 
+    },
+    BroadcastMul { 
+        left: NodeKey, 
+        right: NodeKey, 
+        lhs_input: TensorBase<T, B>,
+        rhs_input: TensorBase<T, B>,
+        lhs_strides: Strides, // strides so we know when to reduce
+        rhs_strides: Strides, 
+        lhs_shape: Shape,  // shapes so that we know when to squeeze
+        rhs_shape: Shape 
+    },
+    BroadcastDiv { 
+        left: NodeKey, 
+        right: NodeKey, 
+        lhs_input: TensorBase<T, B>,
+        rhs_input_reciprocal: TensorBase<T, B>,
+        lhs_strides: Strides, // strides so we know when to reduce
+        rhs_strides: Strides, 
+        lhs_shape: Shape,  // shapes so that we know when to squeeze
+        rhs_shape: Shape 
+    },
     AddScalar { input: NodeKey },
     MulScalar { input: NodeKey, scalar: T },
     DivScalar { input: NodeKey, scalar: T },
@@ -61,7 +96,10 @@ impl<T: WeightValue, B: Backend> GradNode<T, B> {
     #[inline]
     pub fn parents(&self) -> Vec<NodeKey> {
         match self {
-            GradNode::Add { left, right } => vec![left.clone(), right.clone()],
+            GradNode::BroadcastAdd { left, right, .. } => vec![left.clone(), right.clone()],
+            GradNode::BroadcastSub { left, right, .. } => vec![left.clone(), right.clone()],
+            GradNode::BroadcastMul { left, right, .. } => vec![left.clone(), right.clone()],
+            GradNode::BroadcastDiv { left, right, .. } => vec![left.clone(), right.clone()],
             GradNode::AddScalar { input } => vec![input.clone()],
             GradNode::MulScalar { input , ..} => vec![input.clone()],
             GradNode::DivScalar { input , ..} => vec![input.clone()],
@@ -81,7 +119,10 @@ impl<T: WeightValue, B: Backend> GradNode<T, B> {
         match self {
             GradNode::L1 { .. } => backwards::backwards_l1::<T, B>(self, upstream, ctx),
             GradNode::Leaf( .. ) => backwards::accumulate_grad::<T, B>(self, upstream, ctx),
-            GradNode::Add { .. } => backwards::backwards_add::<T, B>(self, upstream, ctx),
+            GradNode::BroadcastAdd { .. } => backwards::backwards_add::<T, B>(self, upstream, ctx),
+            GradNode::BroadcastSub { .. } => backwards::backwards_sub::<T, B>(self, upstream, ctx),
+            GradNode::BroadcastMul { .. } => backwards::backwards_mul::<T, B>(self, upstream, ctx),
+            GradNode::BroadcastDiv { .. } => backwards::backwards_div::<T, B>(self, upstream, ctx),
             GradNode::AddScalar { .. } => backwards::backwards_add_scalar::<T, B>(self, upstream, ctx),
             GradNode::MulScalar { .. } => backwards::backwards_mul_scalar::<T, B>(self, upstream, ctx),
             GradNode::DivScalar { .. } => backwards::backwards_div_scalar::<T, B>(self, upstream, ctx),

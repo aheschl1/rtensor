@@ -1,6 +1,6 @@
 use rand::distr::weighted::Weight;
 
-use crate::{backend::Backend, core::{idx::Idx, primitives::TensorBase, tensor::{TensorAccess, TensorError}, value::{TensorValue, WeightValue}}, grad::{GradContext, GradNode}};
+use crate::{backend::Backend, core::{idx::Idx, primitives::TensorBase, tensor::{TensorAccess, TensorError}, value::{TensorValue, WeightValue}, Shape, Strides}, grad::{GradContext, GradNode}, ops::reduction::{ReductionOp, TotalReductionOp}};
 
 
 pub(crate) fn accumulate_grad<T: WeightValue, B: Backend>(
@@ -27,14 +27,84 @@ pub(crate) fn accumulate_grad<T: WeightValue, B: Backend>(
 pub(crate) fn backwards_add<T: WeightValue, B: Backend>(
     node: &GradNode<T, B>, 
     upstream: &TensorBase<T, B>,
-    _ctx: &GradContext<T, B>
+    _ctx: &GradContext<T, B>,
 ) -> Result<Vec<TensorBase<T, B>>, TensorError>{
-    let GradNode::Add { left: _, right: _ } = node else {
+    let GradNode::BroadcastAdd { lhs_strides, rhs_strides, lhs_shape, rhs_shape, .. } = node else {
         return Err(TensorError::UnsupportedOperation("Invalid node type passed to Add backwards.".into()));
     };
 
-    // Gradient of addition is just the upstream gradient for both inputs
-    Ok(vec![upstream.clone(), upstream.clone()])
+    let mut lhs_grad = upstream.clone();
+    let mut rhs_grad = upstream.clone();
+    inverse_broadcast_gradient(&mut lhs_grad, lhs_strides, lhs_shape)?;
+    inverse_broadcast_gradient(&mut rhs_grad, rhs_strides, rhs_shape)?;
+
+    Ok(vec![lhs_grad, rhs_grad])
+}
+
+pub(crate) fn backwards_sub<T: WeightValue, B: Backend>(
+    node: &GradNode<T, B>, 
+    upstream: &TensorBase<T, B>,
+    _ctx: &GradContext<T, B>,
+) -> Result<Vec<TensorBase<T, B>>, TensorError>{
+    let GradNode::BroadcastSub { lhs_strides, rhs_strides, lhs_shape, rhs_shape, .. } = node else {
+        return Err(TensorError::UnsupportedOperation("Invalid node type passed to Sub backwards.".into()));
+    };
+
+    let mut lhs_grad = upstream.clone();
+    let mut rhs_grad = -upstream.clone();
+    inverse_broadcast_gradient(&mut lhs_grad, lhs_strides, lhs_shape)?;
+    inverse_broadcast_gradient(&mut rhs_grad, rhs_strides, rhs_shape)?;
+
+    Ok(vec![lhs_grad, rhs_grad])
+}
+
+pub(crate) fn backwards_mul<T: WeightValue, B: Backend>(
+    node: &GradNode<T, B>, 
+    upstream: &TensorBase<T, B>,
+    _ctx: &GradContext<T, B>,
+) -> Result<Vec<TensorBase<T, B>>, TensorError>{
+    let GradNode::BroadcastMul { 
+        lhs_input,
+        rhs_input,
+        lhs_strides, 
+        rhs_strides, 
+        lhs_shape, 
+        rhs_shape, .. 
+    } = node else {
+        return Err(TensorError::UnsupportedOperation("Invalid node type passed to Mul backwards.".into()));
+    };
+
+    let mut lhs_grad = upstream * rhs_input;
+    let mut rhs_grad = upstream * lhs_input;
+    inverse_broadcast_gradient(&mut lhs_grad, lhs_strides, lhs_shape)?;
+    inverse_broadcast_gradient(&mut rhs_grad, rhs_strides, rhs_shape)?;
+
+    Ok(vec![lhs_grad, rhs_grad])
+}
+
+pub(crate) fn backwards_div<T: WeightValue, B: Backend>(
+    node: &GradNode<T, B>, 
+    upstream: &TensorBase<T, B>,
+    _ctx: &GradContext<T, B>,
+) -> Result<Vec<TensorBase<T, B>>, TensorError>{
+    let GradNode::BroadcastDiv { 
+        lhs_input,
+        rhs_input_reciprocal,
+        lhs_strides, 
+        rhs_strides, 
+        lhs_shape, 
+        rhs_shape, .. 
+    } = node else {
+        return Err(TensorError::UnsupportedOperation("Invalid node type passed to Div backwards.".into()));
+    };
+
+    let mut lhs_grad = upstream * rhs_input_reciprocal;
+    // TODO replace with .square() method when available
+    let mut rhs_grad = upstream * -(lhs_input * rhs_input_reciprocal * rhs_input_reciprocal);
+    inverse_broadcast_gradient(&mut lhs_grad, lhs_strides, lhs_shape)?;
+    inverse_broadcast_gradient(&mut rhs_grad, rhs_strides, rhs_shape)?;
+
+    Ok(vec![lhs_grad, rhs_grad])
 }
 
 pub(crate) fn backwards_add_scalar<T: WeightValue, B: Backend>(
@@ -186,4 +256,32 @@ pub fn backwards_ln<T: WeightValue, B: Backend>(
     };
     let grad = x_reciprocal * upstream;
     Ok(vec![grad])
+}
+
+#[inline]
+/// collapse upstream according to broadcast strides
+/// the strides are zero along a dimension that was broadcasted
+/// we will do .sum(dim) along those dimensions. then, we need to squeeze those dimensions out
+fn inverse_broadcast_gradient<T: WeightValue, B: Backend>(
+    grad: &mut TensorBase<T, B>,
+    strides: &Strides,
+    shape: &Shape
+) -> Result<(), TensorError> {
+    // we need to use the shape differential
+    let shape_differential = grad.meta.shape.len() - shape.len();
+    
+    // reductions
+    for (dim, &stride) in strides.iter().enumerate() {
+        if stride == 0 {
+            grad.meta = grad.sum_at(dim)?.meta;
+        }
+    }
+    // squeezing, mutate only the meta to avoid reallocations
+    // reverse order to not mess up the dimensions
+    for (dim, &stride) in strides.iter().enumerate().rev() {
+        if stride == 0 && (dim < shape_differential || shape[dim - shape_differential] != 1) {
+            grad.meta = grad.squeeze_at(dim)?.meta;
+        }
+    }
+    Ok(())
 }

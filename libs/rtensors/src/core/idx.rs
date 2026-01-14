@@ -76,7 +76,7 @@ impl<const N: usize> From<&[Dim; N]> for Idx {
 // Single usize (1D)
 impl From<usize> for Idx {
     fn from(value: usize) -> Self {
-        Idx::Coord(vec![value])
+        Idx::At(value)
     }
 }
 

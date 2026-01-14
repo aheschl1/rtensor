@@ -15,6 +15,7 @@ impl<T: WeightValue, B: Backend> L1<T, B> for TensorBase<T, B> {
     }
 }
 
+// TODO capture broadcasting in L1 loss for backwards
 impl<T: WeightValue, B: Backend> L1<T, B> for GradTensor<T, B> {
     fn l1(&self, target: &Self) -> Self {
         let self_inner = self.borrow();
