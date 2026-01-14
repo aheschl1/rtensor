@@ -1,4 +1,3 @@
-use std::f32::consts::E;
 
 use crate::{
     backend::Backend,

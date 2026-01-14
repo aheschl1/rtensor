@@ -381,7 +381,7 @@ impl Backend for Cpu {
                     accum.accumulate(in_d[idx]);
                 } 
                 // out_d[out_idx] = result;
-                out_d[out_idx as usize] = accum.finalize(r as usize);
+                out_d[out_idx] = accum.finalize(r);
             }
         }
 

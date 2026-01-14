@@ -13,10 +13,7 @@ impl<T: WeightValue, B: Backend> Clone for GradTensor<T, B> {
     #[grad::when_enabled(ctx)]
     fn clone(&self) -> Self {
         let tensor = self.borrow().tensor.contiguous();
-        let grad = match &self.borrow().grad {
-            Some(g) => Some(g.contiguous()),
-            None => None,
-        };
+        let grad = self.borrow().grad.as_ref().map(|g| g.contiguous());
         let inner = GradTensorInner {
             tensor,
             grad,

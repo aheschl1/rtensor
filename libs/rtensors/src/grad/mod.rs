@@ -1,6 +1,6 @@
 use slotmap::{new_key_type, SecondaryMap};
 
-use crate::{backend::{cpu::Cpu, Backend, BackendMatMul}, core::{idx::Idx, primitives::TensorBase, tensor::TensorError, untyped::UntypedTensor, value::{TensorValue, WeightValue}, MetaTensor, Shape, Strides}, grad::primitives::{GradTensor, GradTensorRef}};
+use crate::{backend::{cpu::Cpu, Backend, BackendMatMul}, core::{idx::Idx, primitives::TensorBase, tensor::TensorError, value::{TensorValue, WeightValue}, Shape, Strides}, grad::primitives::{GradTensor, GradTensorRef}};
 #[cfg(feature = "cuda")]
 use crate::backend::cuda::Cuda;
 use std::{any::{Any, TypeId}, cell::RefCell};
@@ -104,23 +104,23 @@ impl<T: WeightValue, B: Backend> GradNode<T, B> {
     #[inline]
     pub fn parents(&self) -> Vec<NodeKey> {
         match self {
-            GradNode::BroadcastAdd { left, right, .. } => vec![left.clone(), right.clone()],
-            GradNode::BroadcastSub { left, right, .. } => vec![left.clone(), right.clone()],
-            GradNode::BroadcastMul { left, right, .. } => vec![left.clone(), right.clone()],
-            GradNode::BroadcastDiv { left, right, .. } => vec![left.clone(), right.clone()],
-            GradNode::AddScalar { input } => vec![input.clone()],
-            GradNode::MulScalar { input , ..} => vec![input.clone()],
-            GradNode::DivScalar { input , ..} => vec![input.clone()],
-            GradNode::Abs { input, .. } => vec![input.clone()],
-            GradNode::L1 { input, target, ..} => vec![input.clone(), target.clone()],
+            GradNode::BroadcastAdd { left, right, .. } => vec![*left, *right],
+            GradNode::BroadcastSub { left, right, .. } => vec![*left, *right],
+            GradNode::BroadcastMul { left, right, .. } => vec![*left, *right],
+            GradNode::BroadcastDiv { left, right, .. } => vec![*left, *right],
+            GradNode::AddScalar { input } => vec![*input],
+            GradNode::MulScalar { input , ..} => vec![*input],
+            GradNode::DivScalar { input , ..} => vec![*input],
+            GradNode::Abs { input, .. } => vec![*input],
+            GradNode::L1 { input, target, ..} => vec![*input, *target],
             GradNode::Leaf(_) | GradNode::None => vec![],
-            GradNode::Permute { input, .. } => vec![input.clone()],
-            GradNode::ReLU { input, .. } => vec![input.clone()],
-            GradNode::Negate { input } => vec![input.clone()],
-            GradNode::Sigmoid { input, .. } => vec![input.clone()],
-            GradNode::Sqrt { input, .. } => vec![input.clone()],
-            GradNode::Ln { input, .. } => vec![input.clone()],
-            GradNode::MatMul { left, right, .. } => vec![left.clone(), right.clone()],
+            GradNode::Permute { input, .. } => vec![*input],
+            GradNode::ReLU { input, .. } => vec![*input],
+            GradNode::Negate { input } => vec![*input],
+            GradNode::Sigmoid { input, .. } => vec![*input],
+            GradNode::Sqrt { input, .. } => vec![*input],
+            GradNode::Ln { input, .. } => vec![*input],
+            GradNode::MatMul { left, right, .. } => vec![*left, *right],
         }
     }
 
@@ -156,6 +156,12 @@ impl<T: WeightValue, B: Backend> GradNode<T, B> {
 pub struct GradContext<T: TensorValue, B: Backend> {
     // tape: Vec<NodeKey>, // holds references to all inner tensors that require gradients
     pub(crate) nodes: RefCell<slotmap::SlotMap<NodeKey, GradNode<T, B>>>,
+}
+
+impl<T: WeightValue, B: Backend> Default for GradContext<T, B> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<T: WeightValue, B: Backend> GradContext<T, B> {

@@ -1,6 +1,5 @@
 use std::ops::{Div, DivAssign};
 
-use rand::rand_core::le;
 
 use crate::{backend::Backend, core::{primitives::TensorBase, value::{TensorValue, WeightValue}, MetaTensor, MetaTensorView, TensorView, TensorViewMut}, grad::{primitives::GradTensor, GradNode}, ops::broadcast::compute_broadcasted_params};
 use crate::ops::base::BinaryOpType;
@@ -487,7 +486,7 @@ impl<T, B> std::ops::Div<GradTensor<T, B>> for GradTensor<T, B>
             left: self.node, 
             right: rhs.node,
             lhs_input: self.borrow().tensor.clone(),
-            rhs_input_reciprocal: rhs_input_reciprocal,
+            rhs_input_reciprocal,
             lhs_strides: broadcast_stra, 
             rhs_strides: broadcast_strb,
             lhs_shape: self.borrow().tensor.meta.shape.clone(),
@@ -514,7 +513,7 @@ impl<T, B> std::ops::Div<&GradTensor<T, B>> for GradTensor<T, B>
 
         let op = GradNode::BroadcastDiv { 
             lhs_input: self.borrow().tensor.clone(),
-            rhs_input_reciprocal: rhs_input_reciprocal,
+            rhs_input_reciprocal,
             left: self.node, 
             right: rhs.node, 
             lhs_strides: broadcast_stra, 
@@ -545,7 +544,7 @@ impl<T, B> std::ops::Div<&GradTensor<T, B>> for &GradTensor<T, B>
             left: self.node, 
             right: rhs.node, 
             lhs_input: self.borrow().tensor.clone(),
-            rhs_input_reciprocal: rhs_input_reciprocal,
+            rhs_input_reciprocal,
             lhs_strides: broadcast_stra, 
             rhs_strides: broadcast_strb,
             lhs_shape: self.borrow().tensor.meta.shape.clone(),
@@ -574,7 +573,7 @@ impl<T, B> std::ops::Div<GradTensor<T, B>> for &GradTensor<T, B>
             left: self.node, 
             right: rhs.node, 
             lhs_input: self.borrow().tensor.clone(),
-            rhs_input_reciprocal: rhs_input_reciprocal,
+            rhs_input_reciprocal,
             lhs_strides: broadcast_stra, 
             rhs_strides: broadcast_strb,
             lhs_shape: self.borrow().tensor.meta.shape.clone(),

@@ -18,10 +18,10 @@ pub fn when_enabled(attr: TokenStream, item: TokenStream) -> TokenStream {
             requires_grad_impl(&args, impl_block)
         },
         _ => {
-            return syn::Error::new_spanned(
+            syn::Error::new_spanned(
                 item,
                 "#[requires_grad] can only be applied to functions or impl blocks.",
-            ).to_compile_error().into();
+            ).to_compile_error().into()
         }
     }
 }

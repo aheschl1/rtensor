@@ -1,4 +1,4 @@
-use crate::{backend::{Backend, BackendMatMul}, core::{idx::Idx, primitives::TensorBase, tensor::{TensorAccess, TensorError}, value::{TensorValue, WeightValue}, Shape, Strides}, grad::{GradContext, GradNode}, ops::reduction::{ReductionOp, TotalReductionOp}};
+use crate::{backend::{Backend, BackendMatMul}, core::{idx::Idx, primitives::TensorBase, tensor::{TensorAccess, TensorError}, value::WeightValue, Shape, Strides}, grad::GradNode, ops::reduction::ReductionOp};
 use crate::ops::linalg::MatMul;
 
 pub(crate) fn accumulate_grad<T: WeightValue, B: Backend>(
@@ -15,7 +15,7 @@ pub(crate) fn accumulate_grad<T: WeightValue, B: Backend>(
         *existing_grad += upstream;
     } else {
         // First gradient assignment
-        grad_tensor.grad = Some(upstream.clone().into());
+        grad_tensor.grad = Some(upstream.clone());
     }
 
     Ok(vec![upstream.clone()])

@@ -1,6 +1,5 @@
-use std::{cell::RefCell, sync::Arc};
 
-use crate::{backend::Backend, core::{primitives::TensorBase, tensor::{TensorAccess, TensorAccessMut}, value::{TensorValue, WeightValue}, MetaTensorView}, grad::{self, primitives::GradTensor, GradNode}, ops::{reduction::{ReductionOp, TotalReductionOp}, unary::UnaryOp}};
+use crate::{backend::Backend, core::{primitives::TensorBase, tensor::{TensorAccess, TensorAccessMut}, value::WeightValue, MetaTensorView}, grad::{primitives::GradTensor, GradNode}, ops::{reduction::TotalReductionOp, unary::UnaryOp}};
 
 
 
@@ -10,8 +9,8 @@ trait L1<T: WeightValue, B: Backend> {
 
 impl<T: WeightValue, B: Backend> L1<T, B> for TensorBase<T, B> {
     fn l1(&self, target: &Self) -> Self {
-        let result = (self - target).abs().mean().expect("L1 loss computation failed");
-        result
+        
+        (self - target).abs().mean().expect("L1 loss computation failed")
     }
 }
 
