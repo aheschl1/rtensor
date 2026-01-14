@@ -199,8 +199,7 @@ impl DenseModel<f32, Cpu> {
         for i in 0..num_layers {
             let in_size = if i == 0 { input_size } else { hidden_size };
             let out_size = if i == num_layers - 1 { output_size } else { hidden_size };
-            let weight = Tensor::<f32>::uniform((in_size, out_size))
-                .expect("Failed to create uniform tensor").param();
+            let weight = Tensor::<f32>::uniform((in_size, out_size)).param();
             let bias = Tensor::<f32>::zeros((1, out_size)).param();
             layers.push(Layer { weight, bias });
         }
@@ -229,7 +228,7 @@ grad::with::<f32, Cpu>(|ctx| {
     let model = DenseModel::new(5, 10, 2, 10);
 
     let input = Tensor::<f32>::ones((1, 5)).grad();
-    let target = Tensor::<f32>::uniform((1, 2)).unwrap().grad();
+    let target = Tensor::<f32>::uniform((1, 2)).grad();
     
     let mut optim = SGD::<f32, Cpu>::new(0.01);
     model.register(&mut optim);
