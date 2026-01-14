@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::{backend::Backend, core::{MetaTensorView, Slice, TensorViewMut, primitives::TensorBase, tensor::{AsTensor, TensorAccess, TensorAccessMut}, value::TensorValue}};
+use crate::{backend::Backend, core::{MetaTensorView, Slice, TensorViewMut, primitives::TensorBase, tensor::{AsTensor, TensorAccess, TensorAccessMut}, value::{TensorValue, WeightValue}}, ops::unary::Abs};
 
 
 pub fn test_with_contiguous_2_elem_tensor<T, F, B>(definition: [T; 2], functor: F)
@@ -53,6 +53,17 @@ where
 // }
 
 
+fn eps_eq<T>(a: &T, b: &T)
+where 
+    T: TensorValue + WeightValue + Debug
+{
+    if(a.eps_eq(b, 0.001)) {
+
+    } else {
+        panic!("Epsilon comparison failed!\n\tleft: {a:?}\n\tright: {b:?}");
+    }
+}
+
 pub fn test_with_nd_strided_tensor<T, F, B>(definition: [T; 16], functor: F)
 where 
     T: TensorValue,
@@ -91,7 +102,7 @@ where
     B: Backend,
     F: FnOnce(&mut TensorBase<T, B>),
     FTr: Fn(T) -> T,
-    T: PartialEq<T> + Debug
+    T: PartialEq<T> + Debug + WeightValue
 {
     let mut base = TensorBase::<T, B>::from_buf(definition.to_vec(), (2, 1)).unwrap();
     let original = base.owned();
@@ -100,14 +111,8 @@ where
         let elem_original = original.get(pos.clone()).unwrap();
         let elem_modified = base.get(pos.clone()).unwrap();
 
-        let expected = truth(elem_original);
-        assert!(
-            (elem_modified - expected).absolute() <= T::TEST_TOLERANCE,
-            "Expected {:?}, got {:?} (tolerance: {:?})",
-            expected,
-            elem_modified,
-            T::TEST_TOLERANCE
-        );
+        eps_eq(&truth(elem_original), &elem_modified);
+        // assert_eq!(truth(elem_original), elem_modified);
     }
 }
 
@@ -125,7 +130,7 @@ where
     B: Backend,
     F: FnOnce(&mut TensorViewMut<'_, T, B>),
     FTr: Fn(T) -> T,
-    T: PartialEq<T> + Debug,
+    T: PartialEq<T> + Debug + WeightValue,
     // TensorBase<T, B>: Debug,
     // for<'a> TensorViewMut<'a, T, B>: Debug
 {
@@ -148,14 +153,9 @@ where
         let elem_original = slice_original.get(pos.clone()).unwrap();
         let elem_modified = slice_modified.get(pos.clone()).unwrap();
 
-        let expected = truth(elem_original);
-        assert!(
-            (elem_modified - expected).absolute() <= T::TEST_TOLERANCE,
-            "Expected {:?}, got {:?} (tolerance: {:?})",
-            expected,
-            elem_modified,
-            T::TEST_TOLERANCE
-        );
+
+        eps_eq(&truth(elem_original), &elem_modified);
+        // assert_eq!(truth(elem_original), elem_modified);
     }
 }
 
@@ -167,7 +167,7 @@ where
     B: Backend,
     F: FnOnce(&mut TensorViewMut<'_, T, B>),
     FTr: Fn(T) -> T,
-    T: PartialEq<T> + Debug
+    T: PartialEq<T> + Debug + WeightValue
 {
      let mut tensor = TensorBase::<T, B>::from_buf(definition.to_vec(), (4, 4, 1)).unwrap();
     let mut original = tensor.clone();
@@ -190,17 +190,15 @@ where
 
         let elem_original = original_l2.get(pos.clone()).unwrap();
         let elem_modified = l2.get(pos.clone()).unwrap();
-
-        let expected = truth(elem_original);
-        assert!(
-            (elem_modified - expected).absolute() <= T::TEST_TOLERANCE,
-            "Expected {:?}, got {:?} (tolerance: {:?})",
-            expected,
-            elem_modified,
-            T::TEST_TOLERANCE
-        );
+        
+        eps_eq(&truth(elem_original), &elem_modified);
+        // assert_eq!(truth(elem_original), elem_modified);
     }
 }
+
+
+
+
 
 #[cfg(test)]
 mod tests {

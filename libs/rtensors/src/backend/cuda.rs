@@ -1333,6 +1333,29 @@ impl Backend for Cuda {
     specify_trait_unary_cabal!{relu}
     specify_trait_unary_cabal!{abs}
     specify_trait_unary_cabal!{sqrt}
+    specify_trait_unary_cabal!{sin}
+    specify_trait_unary_cabal!{cos}
+    specify_trait_unary_cabal!{tan}
+    specify_trait_unary_cabal!{asin}
+    specify_trait_unary_cabal!{acos}
+    specify_trait_unary_cabal!{atan}
+
+
+    specify_trait_unary_cabal!{sinh}
+    specify_trait_unary_cabal!{cosh}
+    // specify_trait_unary_cabal!{tan}
+    specify_trait_unary_cabal!{asinh}
+    specify_trait_unary_cabal!{acosh}
+    specify_trait_unary_cabal!{atanh}
+
+    specify_trait_unary_cabal!{rsqrt}
+
+    specify_trait_unary_cabal!{ exp }
+    specify_trait_unary_cabal!{ sign }
+    specify_trait_unary_cabal!{ square }
+    specify_trait_unary_cabal!{ cube }
+    specify_trait_unary_cabal!{ reciprocal  }
+
     specify_trait_unary_cabal!{ln}
     specify_trait_unary_cabal!{expm1}
     specify_trait_unary_cabal!{ln1p}
@@ -2186,6 +2209,32 @@ mod tests {
             CudaTensor::<f64>::from_buf(vec![0.2, 0.3, 0.1, 0.3, 0.3, -0.1, -0.3, 0.3], (4, 2))
                 .unwrap();
         assert_eq!(cuda.max_at(&Idx::Item).unwrap().item().unwrap(), 0.3);
+    }
+
+    #[test]
+    pub fn test_reduce_total_argmax_case1() {
+         let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
+            CudaTensor::<f64>::from_buf(vec![
+                0.2, 0.3, 
+                0.1, 0.7, 
+                0.3, -0.1, 
+                -0.3, 0.3
+            ], (4, 2))
+                .unwrap();
+        assert_eq!(cuda.argmax().unwrap().item().unwrap(), 3);
+    }
+
+    #[test]
+    pub fn test_reduce_total_argmin_case1() {
+         let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
+            CudaTensor::<f64>::from_buf(vec![
+                0.2, 0.3, 
+                0.1, 0.7, 
+                0.3, -0.1, 
+                -0.3, 0.3
+            ], (4, 2))
+                .unwrap();
+        assert_eq!(cuda.argmin().unwrap().item().unwrap(), 6);
     }
 
     #[test]

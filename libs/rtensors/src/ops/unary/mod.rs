@@ -139,6 +139,57 @@ macro_rules! specify_unary_op_template {
 }
 
 specify_unary_op_template! {
+    (Sin) sin where T: WeightValue; |input, result, _ctx, grad_node| {
+        Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
+    },
+    (Cos) cos where T: WeightValue; |input, result, _ctx, grad_node| {
+        Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
+    },
+    (Tan) tan where T: WeightValue; |input, result, _ctx, grad_node| {
+        Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
+    },
+    (Asin) asin where T: WeightValue; |input, result, _ctx, grad_node| {
+        Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
+    },
+    (Acos) acos where T: WeightValue; |input, result, _ctx, grad_node| {
+        Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
+    },
+    (Atan) atan where T: WeightValue; |input, result, _ctx, grad_node| {
+        Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
+    },
+    (Sinh) sinh where T: WeightValue; |input, result, _ctx, grad_node| {
+        Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
+    },
+    (Cosh) cosh where T: WeightValue; |input, result, _ctx, grad_node| {
+        Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
+    },
+    (Asinh) asinh where T: WeightValue; |input, result, _ctx, grad_node| {
+        Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
+    },
+    (Acosh) acosh where T: WeightValue; |input, result, _ctx, grad_node| {
+        Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
+    },
+    (Atanh) atanh where T: WeightValue; |input, result, _ctx, grad_node| {
+        Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
+    },
+    (Rsqrt) rsqrt where T: WeightValue; |input, result, _ctx, grad_node| {
+        Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
+    },
+    (Reciprocal) reciprocal where T: WeightValue; |input, result, _ctx, grad_node| {
+        Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
+    },
+    (Square) square where T: WeightValue; |input, result, _ctx, grad_node| {
+        Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
+    },
+    (Cube) cube where T: WeightValue; |input, result, _ctx, grad_node| {
+        Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
+    },
+    (ExpV) exp where T: WeightValue; |input, result, _ctx, grad_node| {
+        Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
+    },
+    (Sign) sign where T: WeightValue; |input, result, _ctx, grad_node| {
+        Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
+    },
     (Abs) abs; |input, result, _ctx, grad_node| {
         let mut grad_map = TensorBase::<T, B>::zeros(input.shape());
         for coord in input.iter_coords() {
@@ -181,7 +232,6 @@ specify_unary_op_template! {
     },
     (Silu) silu where T: InvExp; |input, result, _ctx, grad_node| {
         Err(TensorError::UnsupportedOperation("Gradient for silu not yet implemented.".into()))
-
     },
     (Tanh) tanh where T: Exp, InvExp; |input, result, _ctx, grad_node| {
         Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
@@ -343,7 +393,7 @@ where
 mod tests {
     use crate::{
         backend::cpu::Cpu,
-        ops::unary::{Ceil, ExpM1, Floor, Ln1p, NatLog, Negate, Relu, Round, Sigmoid, Silu, Sqrt, Tanh, Trunc},
+        ops::unary::*,
         testing::{unary_assert_1d_strided, unary_assert_contiguous, unary_assert_nd_strided},
     };
 
@@ -622,6 +672,67 @@ mod tests {
     }
 
     #[test]
+    fn test_unary_floor_contiguous_f32() {
+        unary_assert_contiguous::<f32, _, _, Cpu>([1.7, 2.3], |f| f.floor(), |f| f.floor_inplace());
+    }
+
+    #[test]
+    fn test_unary_ceil_nd_strided_f32() {
+        unary_assert_nd_strided::<f32, _, _, Cpu>([1.3; 16], |f| f.ceil(), |f| f.ceil_inplace());
+    }
+
+    #[test]
+    fn test_unary_ceil_1d_strided_f32() {
+        unary_assert_1d_strided::<f32, _, _, Cpu>(
+            [1.3, 2.7, 3.1],
+            |f| f.ceil(),
+            |f| f.ceil_inplace(),
+        );
+    }
+
+    #[test]
+    fn test_unary_ceil_contiguous_f32() {
+        unary_assert_contiguous::<f32, _, _, Cpu>([1.3, 2.7], |f| f.ceil(), |f| f.ceil_inplace());
+    }
+
+    #[test]
+    fn test_unary_round_nd_strided_f32() {
+        unary_assert_nd_strided::<f32, _, _, Cpu>([1.4; 16], |f| f.round(), |f| f.round_inplace());
+    }
+
+    #[test]
+    fn test_unary_round_1d_strided_f32() {
+        unary_assert_1d_strided::<f32, _, _, Cpu>(
+            [1.4, 2.6, 3.5],
+            |f| f.round(),
+            |f| f.round_inplace(),
+        );
+    }
+
+    #[test]
+    fn test_unary_round_contiguous_f32() {
+        unary_assert_contiguous::<f32, _, _, Cpu>([1.4, 2.6], |f| f.round(), |f| f.round_inplace());
+    }
+
+    #[test]
+    fn test_unary_trunc_nd_strided_f32() {
+        unary_assert_nd_strided::<f32, _, _, Cpu>([-1.4; 16], |f| f.trunc(), |f| f.trunc_inplace());
+    }
+
+    #[test]
+    fn test_unary_trunc_1d_strided_f32() {
+        unary_assert_1d_strided::<f32, _, _, Cpu>(
+            [-1.4, 2.6, 3.5],
+            |f| f.trunc(),
+            |f| f.trunc_inplace(),
+        );
+    }
+
+    #[test]
+    fn test_unary_trunc_contiguous_f32() {
+        unary_assert_contiguous::<f32, _, _, Cpu>([-1.4, 2.6], |f| f.trunc(), |f| f.trunc_inplace());
+    }
+
     fn test_unary_round_contiguous_f32() {
         unary_assert_contiguous::<f32, _, _, Cpu>([1.4, 2.6], |f| f.round(), |f| f.round_inplace());
     }
@@ -682,6 +793,386 @@ mod cuda_tests {
             f.neg_inplace()
         });
     }
+
+    #[test]
+    fn test_unary_cos_continous_cuda() {
+        unary_assert_contiguous::<f64, _, _, Cuda>([1.0, 1.0], f64::cos, |f| {
+            f.cos_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_cos_1d_strided_cuda() {
+        unary_assert_1d_strided::<f64, _, _, Cuda>([1.0, 1.0, 1.0], f64::cos, |f| {
+            f.cos_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_cos_nd_strided_cuda() {
+        unary_assert_nd_strided::<f64, _, _, Cuda>([1.0; 16], f64::cos, |f| {
+            f.cos_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_sin_continous_cuda() {
+        unary_assert_contiguous::<f64, _, _, Cuda>([1.0, 1.0], f64::sin, |f| {
+            f.sin_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_sin_1d_strided_cuda() {
+        unary_assert_1d_strided::<f64, _, _, Cuda>([1.0, 1.0, 1.0], f64::sin, |f| {
+            f.sin_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_sin_nd_strided_cuda() {
+        unary_assert_nd_strided::<f64, _, _, Cuda>([1.0; 16], f64::sin, |f| {
+            f.sin_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_tan_continous_cuda() {
+        unary_assert_contiguous::<f64, _, _, Cuda>([1.0, 1.0], f64::tan, |f| {
+            f.tan_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_tan_1d_strided_cuda() {
+        unary_assert_1d_strided::<f64, _, _, Cuda>([1.0, 1.0, 1.0], f64::tan, |f| {
+            f.tan_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_tan_nd_strided_cuda() {
+        unary_assert_nd_strided::<f64, _, _, Cuda>([1.0; 16], f64::tan, |f| {
+            f.tan_inplace()
+        });
+    }
+
+
+    /*
+    ARCTRIG
+     */
+
+    #[test]
+    fn test_unary_acos_continous_cuda() {
+        unary_assert_contiguous::<f64, _, _, Cuda>([1.0, 1.0], f64::acos, |f| {
+            f.acos_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_acos_1d_strided_cuda() {
+        unary_assert_1d_strided::<f64, _, _, Cuda>([1.0, 1.0, 1.0], f64::acos, |f| {
+            f.acos_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_acos_nd_strided_cuda() {
+        unary_assert_nd_strided::<f64, _, _, Cuda>([1.0; 16], f64::acos, |f| {
+            f.acos_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_asin_continous_cuda() {
+        unary_assert_contiguous::<f64, _, _, Cuda>([1.0, 1.0], f64::asin, |f| {
+            f.asin_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_asin_1d_strided_cuda() {
+        unary_assert_1d_strided::<f64, _, _, Cuda>([1.0, 1.0, 1.0], f64::asin, |f| {
+            f.asin_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_asin_nd_strided_cuda() {
+        unary_assert_nd_strided::<f64, _, _, Cuda>([1.0; 16], f64::asin, |f| {
+            f.asin_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_atan_continous_cuda() {
+        unary_assert_contiguous::<f64, _, _, Cuda>([1.0, 1.0], f64::atan, |f| {
+            f.atan_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_atan_1d_strided_cuda() {
+        unary_assert_1d_strided::<f64, _, _, Cuda>([1.0, 1.0, 1.0], f64::atan, |f| {
+            f.atan_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_atan_nd_strided_cuda() {
+        unary_assert_nd_strided::<f64, _, _, Cuda>([1.0; 16], f64::atan, |f| {
+            f.atan_inplace()
+        });
+    }
+
+
+    /**
+     * 
+     * HYPERBOLIC ARC TRIG
+     */
+
+     #[test]
+    fn test_unary_cosh_continous_cuda() {
+        unary_assert_contiguous::<f64, _, _, Cuda>([1.0, 1.0], f64::cosh, |f| {
+            f.cosh_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_cosh_1d_strided_cuda() {
+        unary_assert_1d_strided::<f64, _, _, Cuda>([1.0, 1.0, 1.0], f64::cosh, |f| {
+            f.cosh_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_cosh_nd_strided_cuda() {
+        unary_assert_nd_strided::<f64, _, _, Cuda>([1.0; 16], f64::cosh, |f| {
+            f.cosh_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_sinh_continous_cuda() {
+        unary_assert_contiguous::<f64, _, _, Cuda>([1.0, 1.0], f64::sinh, |f| {
+            f.sinh_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_sinh_1d_strided_cuda() {
+        unary_assert_1d_strided::<f64, _, _, Cuda>([1.0, 1.0, 1.0], f64::sinh, |f| {
+            f.sinh_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_sinh_nd_strided_cuda() {
+        unary_assert_nd_strided::<f64, _, _, Cuda>([1.0; 16], f64::sinh, |f| {
+            f.sinh_inplace()
+        });
+    }
+
+   
+
+
+    /*
+    ARCTRIG
+     */
+
+    #[test]
+    fn test_unary_acosh_continous_cuda() {
+        unary_assert_contiguous::<f64, _, _, Cuda>([1.0, 1.0], f64::acosh, |f| {
+            f.acosh_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_acosh_1d_strided_cuda() {
+        unary_assert_1d_strided::<f64, _, _, Cuda>([1.0, 1.0, 1.0], f64::acosh, |f| {
+            f.acosh_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_acosh_nd_strided_cuda() {
+        unary_assert_nd_strided::<f64, _, _, Cuda>([1.0; 16], f64::acosh, |f| {
+            f.acosh_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_asinh_continous_cuda() {
+        unary_assert_contiguous::<f64, _, _, Cuda>([1.0, 1.0], f64::asinh, |f| {
+            f.asinh_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_asinh_1d_strided_cuda() {
+        unary_assert_1d_strided::<f64, _, _, Cuda>([1.0, 1.0, 1.0], f64::asinh, |f| {
+            f.asinh_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_asinh_nd_strided_cuda() {
+        unary_assert_nd_strided::<f64, _, _, Cuda>([0.5; 16], f64::asinh, |f| {
+            f.asinh_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_atanh_continous_cuda() {
+        unary_assert_contiguous::<f64, _, _, Cuda>([0.5, 0.25], f64::atanh, |f| {
+            f.atanh_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_atanh_1d_strided_cuda() {
+        unary_assert_1d_strided::<f64, _, _, Cuda>([0.125, 0.5, 0.25], f64::atanh, |f| {
+            f.atanh_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_atanh_nd_strided_cuda() {
+        unary_assert_nd_strided::<f64, _, _, Cuda>([0.5; 16], f64::atanh, |f| {
+            f.atanh_inplace()
+        });
+    }
+
+
+    /*
+    RSQRT */
+
+    #[test]
+    fn test_unary_rsqrt_continous_cuda() {
+        unary_assert_contiguous::<f64, _, _, Cuda>([0.5, 0.25], |f| (1. / f.sqrt()), |f| {
+            f.rsqrt_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_rsqrt_1d_strided_cuda() {
+        unary_assert_1d_strided::<f64, _, _, Cuda>([0.125, 0.5, 0.25], |f| (1. / f.sqrt()), |f| {
+            f.rsqrt_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_rsqrt_nd_strided_cuda() {
+        unary_assert_nd_strided::<f64, _, _, Cuda>([0.5; 16], |f| (1. / f.sqrt()), |f| {
+            f.rsqrt_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_sign_continous_cuda() {
+        unary_assert_contiguous::<f64, _, _, Cuda>([0.5, 0.25], f64::signum, |f| {
+            f.sign_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_sign_1d_strided_cuda() {
+        unary_assert_1d_strided::<f64, _, _, Cuda>([0.125, 0.5, 0.25], f64::signum, |f| {
+            f.sign_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_sign_nd_strided_cuda() {
+        unary_assert_nd_strided::<f64, _, _, Cuda>([0.5; 16], f64::signum, |f| {
+            f.sign_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_exp_continous_cuda() {
+        unary_assert_contiguous::<f64, _, _, Cuda>([0.5, 0.25], f64::exp, |f| {
+            f.exp_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_exp_1d_strided_cuda() {
+        unary_assert_1d_strided::<f64, _, _, Cuda>([0.125, 0.5, 0.25], f64::exp, |f| {
+            f.exp_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_exp_nd_strided_cuda() {
+        unary_assert_nd_strided::<f64, _, _, Cuda>([0.5; 16], f64::exp, |f| {
+            f.exp_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_square_continous_cuda() {
+        unary_assert_contiguous::<f64, _, _, Cuda>([0.5, 0.25], |f| f * f, |f| {
+            f.square_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_square_1d_strided_cuda() {
+        unary_assert_1d_strided::<f64, _, _, Cuda>([0.125, 0.5, 0.25], |f| f * f, |f| {
+            f.square_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_square_nd_strided_cuda() {
+        unary_assert_nd_strided::<f64, _, _, Cuda>([0.5; 16], |f| f * f, |f| {
+            f.square_inplace()
+        });
+    }
+
+     #[test]
+    fn test_unary_cube_continous_cuda() {
+        unary_assert_contiguous::<f64, _, _, Cuda>([0.5, 0.25], |f| f * f * f, |f| {
+            f.cube_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_cube_1d_strided_cuda() {
+        unary_assert_1d_strided::<f64, _, _, Cuda>([0.125, 0.5, 0.25], |f| f * f * f, |f| {
+            f.cube_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_cube_nd_strided_cuda() {
+        unary_assert_nd_strided::<f64, _, _, Cuda>([0.5; 16], |f| f * f * f, |f| {
+            f.cube_inplace()
+        });
+    }
+
+     #[test]
+    fn test_unary_reciprocal_continous_cuda() {
+        unary_assert_contiguous::<f64, _, _, Cuda>([0.5, 0.25], |f| 1. / f, |f| {
+            f.reciprocal_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_reciprocal_1d_strided_cuda() {
+        unary_assert_1d_strided::<f64, _, _, Cuda>([0.125, 0.5, 0.25], |f| 1. / f, |f| {
+            f.reciprocal_inplace()
+        });
+    }
+
+    #[test]
+    fn test_unary_reciprocal_nd_strided_cuda() {
+        unary_assert_nd_strided::<f64, _, _, Cuda>([0.5; 16], |f| 1. / f, |f| {
+            f.reciprocal_inplace()
+        });
+    }
+
 
     #[test]
     fn test_unary_abs_continous_cuda() {

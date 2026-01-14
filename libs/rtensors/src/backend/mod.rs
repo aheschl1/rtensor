@@ -303,6 +303,46 @@ pub trait Backend: Send + Sync + 'static + Clone + Debug {
     specify_trait_scalar_cabal!{leaky_relu}
     specify_trait_scalar_cabal!{elu where T: WeightValue}
 
+    specify_trait_unary_cabal!{sin where T: WeightValue}
+    specify_trait_unary_cabal!{cos where T: WeightValue}
+    specify_trait_unary_cabal!{tan where T: WeightValue}
+    specify_trait_unary_cabal!{asin where T: WeightValue}
+    specify_trait_unary_cabal!{acos where T: WeightValue}
+    specify_trait_unary_cabal!{atan where T: WeightValue}
+    
+    specify_trait_unary_cabal!{sinh where T: WeightValue}
+    specify_trait_unary_cabal!{cosh where T: WeightValue}
+    // specify_trait_unary_cabal!{tan where T: WeightValue}
+    specify_trait_unary_cabal!{asinh where T: WeightValue}
+    specify_trait_unary_cabal!{acosh where T: WeightValue}
+    specify_trait_unary_cabal!{atanh where T: WeightValue}
+
+    specify_trait_unary_cabal!{ rsqrt where T: WeightValue }
+
+    specify_trait_unary_cabal!{ reciprocal where T: WeightValue }
+    specify_trait_unary_cabal!{ square where T: WeightValue }
+    specify_trait_unary_cabal!{ cube where T: WeightValue }
+    specify_trait_unary_cabal!{ exp where T: WeightValue }
+    specify_trait_unary_cabal!{ sign where T: WeightValue }
+
+    specify_trait_unary_cabal!{ln where T: WeightValue}
+    specify_trait_unary_cabal!{expm1 where T: Exp}
+    specify_trait_unary_cabal!{ln1p where T: WeightValue}
+    specify_trait_unary_cabal!{floor where T: WeightValue}
+    specify_trait_unary_cabal!{ceil where T: WeightValue}
+    specify_trait_unary_cabal!{round where T: WeightValue}
+    specify_trait_unary_cabal!{trunc where T: WeightValue}
+
+    // Scalar binary operations
+    specify_trait_scalar_cabal!{add}
+    specify_trait_scalar_cabal!{sub}
+    specify_trait_scalar_cabal!{mul}
+    specify_trait_scalar_cabal!{div}
+    specify_trait_scalar_cabal!{log where T: WeightValue}
+    specify_trait_scalar_cabal!{log1p where T: WeightValue}
+    specify_trait_scalar_cabal!{leaky_relu}
+    specify_trait_scalar_cabal!{elu where T: WeightValue}
+
     fn apply_reduce_contiguous_flat<T: WeightValue>(
         &self, 
         src: &Self::Buf<T>, 

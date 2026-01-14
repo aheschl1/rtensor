@@ -47,6 +47,7 @@ pub trait WeightValue :
     fn from_usize(value: usize) -> Self {
         Self::from_f32(value as f32)
     }
+    fn eps_eq(&self, other: &Self, epsilon: f32) -> bool;
 }
 
 // FROM f32 IS A PLACEHOLDER FOR ADVANCED RANDOMNESS LOGIC LATER
@@ -69,6 +70,11 @@ impl WeightValue for f32 {
     #[inline(always)]
     fn square_root(&self) -> Self {
         self.sqrt()
+    }
+    
+    #[inline]
+    fn eps_eq(&self, other: &Self, epsilon: f32) -> bool {
+        (*self - *other).abs() < epsilon
     }
 
     #[inline(always)]
@@ -133,7 +139,11 @@ impl WeightValue for f64 {
     fn square_root(&self) -> Self {
         self.sqrt()
     }
-
+    
+    #[inline]
+    fn eps_eq(&self, other: &Self, epsilon: f32) -> bool {
+        (*self - *other).abs() < epsilon as f64
+    }
     #[inline(always)]
     fn nat_log(&self) -> Self {
         self.ln()
