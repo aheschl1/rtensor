@@ -285,6 +285,23 @@ pub trait Backend: Send + Sync + 'static + Clone + Debug {
     specify_trait_unary_cabal!{tanh where T: Exp + InvExp}
     specify_trait_unary_cabal!{abs}
     specify_trait_unary_cabal!{sqrt where T: SquareRoot}
+    specify_trait_unary_cabal!{ln where T: WeightValue}
+    specify_trait_unary_cabal!{expm1 where T: Exp}
+    specify_trait_unary_cabal!{ln1p where T: WeightValue}
+    specify_trait_unary_cabal!{floor where T: WeightValue}
+    specify_trait_unary_cabal!{ceil where T: WeightValue}
+    specify_trait_unary_cabal!{round where T: WeightValue}
+    specify_trait_unary_cabal!{trunc where T: WeightValue}
+
+    // Scalar binary operations
+    specify_trait_scalar_cabal!{add}
+    specify_trait_scalar_cabal!{sub}
+    specify_trait_scalar_cabal!{mul}
+    specify_trait_scalar_cabal!{div}
+    specify_trait_scalar_cabal!{log where T: WeightValue}
+    specify_trait_scalar_cabal!{log1p where T: WeightValue}
+    specify_trait_scalar_cabal!{leaky_relu}
+    specify_trait_scalar_cabal!{elu where T: WeightValue}
 
     specify_trait_unary_cabal!{sin where T: WeightValue}
     specify_trait_unary_cabal!{cos where T: WeightValue}
