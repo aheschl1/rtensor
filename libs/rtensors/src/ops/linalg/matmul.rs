@@ -1,12 +1,15 @@
-use crate::{backend::BackendMatMul, core::{meta::ContiguityTypes, primitives::TensorBase, shape_to_stride, tensor::{AsTensor, AsView, TensorAccess, TensorError}, value::TensorValue, Dim, MetaTensor, MetaTensorView, Shape, Strides}, ops::linalg::MatMul};
+use crate::{backend::BackendMatMul, core::{meta::ContiguityTypes, primitives::TensorBase, shape_to_stride, tensor::{seal, AsTensor, AsView, TensorAccess, TensorError}, value::{TensorValue, WeightValue}, Dim, MetaTensor, MetaTensorView, Shape, Strides}, grad::{primitives::GradTensor, GradNode}, ops::linalg::MatMul};
 
+// broadcasting state:
+// does not broadcast batch dims, they must match exactly
 impl<L, R, T, B> MatMul<R, T, B> for L
 where
     T: TensorValue,
     B: BackendMatMul<T>,
-    L: AsView<T, B>,
-    R: AsView<T, B>,
+    L: AsView<T, B> + seal::Sealed,
+    R: AsView<T, B> + seal::Sealed,
 {
+    type Output = TensorBase<T, B>;
     // in progress. contiguity rules are as follows:
     // (ignore batch for a second)
     // 1. inner most dim of lhs (K) must be contiguous (stride=1)
@@ -174,6 +177,38 @@ where
     }
 
 }
+
+
+impl<T, B> MatMul<GradTensor<T, B>, T, B> for GradTensor<T, B> 
+where
+    T: WeightValue,
+    B: BackendMatMul<T>,
+{
+
+    type Output = GradTensor<T, B>;
+
+    fn matmul(&self, rhs: &GradTensor<T, B>) -> Result<GradTensor<T, B>, TensorError> {
+        let value = self.borrow().tensor.matmul(&rhs.borrow().tensor)?;
+        let op = GradNode::MatMul {
+            left: self.node,
+            right: rhs.node,
+            left_input: self.borrow().tensor.contiguous(),
+            right_input: rhs.borrow().tensor.contiguous(),
+        };
+        Ok(GradTensor::from_op(value, op))
+    }
+
+    fn dot(&self, rhs: &GradTensor<T, B>) -> Result<GradTensor<T, B>, TensorError> {
+        let result = self.borrow().tensor.dot(&rhs.borrow().tensor)?;
+        let op = GradNode::MatMul {
+            left: self.node,
+            right: rhs.node,
+            left_input: self.borrow().tensor.contiguous(),
+            right_input: rhs.borrow().tensor.contiguous(),
+        };
+        Ok(GradTensor::from_op(result, op))
+    }
+} 
 
 
 // we are only concerned with the last two dims for matmul

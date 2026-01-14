@@ -1,4 +1,6 @@
 
+use std::fmt::Debug;
+
 use crate::{core::{meta::ContiguityTypes, primops::{Exp, InvExp, SquareRoot}, tensor::TensorError, value::{TensorValue, WeightValue}, Dim, MetaTensor, MetaTensorView}, ops::{base::BinaryOpType, reduction::ReductionOpTypes}};
 
 pub mod cpu;
@@ -211,8 +213,8 @@ macro_rules! specify_trait_scalar_cabal {
 }
 
 
-pub trait Backend: Send + Sync + 'static + Clone {
-    type Buf<T: TensorValue>: Send + Sync;
+pub trait Backend: Send + Sync + 'static + Clone + Debug {
+    type Buf<T: TensorValue>: Send + Sync + Debug;
 
     fn device_type() -> crate::core::primitives::DeviceType;
     fn alloc_from_slice<T: TensorValue>(&self, src: Box<[T]>) -> Result<Self::Buf<T>, TensorError>;
@@ -295,6 +297,7 @@ pub trait Backend: Send + Sync + 'static + Clone {
     specify_trait_scalar_cabal!{add}
     specify_trait_scalar_cabal!{sub}
     specify_trait_scalar_cabal!{mul}
+    specify_trait_scalar_cabal!{div}
     specify_trait_scalar_cabal!{log where T: WeightValue}
     specify_trait_scalar_cabal!{log1p where T: WeightValue}
     specify_trait_scalar_cabal!{leaky_relu}

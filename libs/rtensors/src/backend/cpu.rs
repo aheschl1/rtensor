@@ -310,6 +310,7 @@ impl Backend for Cpu {
     impl_cpu_scalar!{ add, _scalar_add }
     impl_cpu_scalar!{ sub, _scalar_sub }
     impl_cpu_scalar!{ mul, _scalar_mul }
+    impl_cpu_scalar!{ div, _scalar_div }
     impl_cpu_scalar!{ log, _scalar_log where T: WeightValue }
     impl_cpu_scalar!{ log1p, _scalar_log1p where T: WeightValue }
     impl_cpu_scalar!{ leaky_relu, _scalar_leaky_relu }
@@ -494,6 +495,11 @@ fn _scalar_sub<T: TensorValue>(x: &mut T, value: T) -> T {
 #[inline]
 fn _scalar_mul<T: TensorValue>(x: &mut T, value: T) -> T {
     *x * value
+}
+
+#[inline]
+fn _scalar_div<T: TensorValue>(x: &mut T, value: T) -> T {
+    *x / value
 }
 
 #[inline]
@@ -938,7 +944,7 @@ mod tests {
         let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cpu::Cpu> =
             Tensor::<f64>::from_buf(vec![0.2, 0.3, 0.1, 0.3, 0.3, -0.1, -0.3, 0.3], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.total_sum().unwrap().item().unwrap(), 1.0999999999999999);
+        assert_eq!(cuda.sum().unwrap().item().unwrap(), 1.0999999999999999);
     }
 
     #[test]
@@ -946,7 +952,7 @@ mod tests {
          let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cpu::Cpu> =
             Tensor::<f64>::from_buf(vec![0.2, 0.3, 0.1, 0.3, 0.3, -0.1, -0.3, 0.3], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.max(&Idx::Item).unwrap().item().unwrap(), 0.3);
+        assert_eq!(cuda.max_at(&Idx::Item).unwrap().item().unwrap(), 0.3);
     }
 
      #[test]
@@ -954,7 +960,7 @@ mod tests {
          let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cpu::Cpu> =
             Tensor::<f64>::from_buf(vec![0.2, 0.3, 0.1, -0.9, 0.3, -0.1, -0.3, 0.3], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.min(&Idx::Item).unwrap().item().unwrap(), -0.9);
+        assert_eq!(cuda.min_at(&Idx::Item).unwrap().item().unwrap(), -0.9);
     }
 
 
@@ -963,7 +969,7 @@ mod tests {
          let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cpu::Cpu> =
             Tensor::<f64>::from_buf(vec![1., 2., 3., 4., 5., 6., 7., 8.], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.prod(&Idx::Item).unwrap().item().unwrap(), 40320.);
+        assert_eq!(cuda.prod_at(&Idx::Item).unwrap().item().unwrap(), 40320.);
     }
 
     // #[test]
@@ -1031,7 +1037,7 @@ mod tests {
                 1., 0.
             ], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.sum(&Idx::At(0))?, Tensor::from_buf(vec![4., 1.], (1, 2))?);
+        assert_eq!(cuda.sum_at(&Idx::At(0))?, Tensor::from_buf(vec![4., 1.], (1, 2))?);
         Ok(())
     }
 
@@ -1044,7 +1050,7 @@ mod tests {
                 1., 2., 
                 -1., 4.
             ], (4, 2)).unwrap();
-        assert_eq!(cuda.max(&Idx::At(0))?, Tensor::from_buf(vec![6., 8.], (1, 2))?);
+        assert_eq!(cuda.max_at(&Idx::At(0))?, Tensor::from_buf(vec![6., 8.], (1, 2))?);
         Ok(())
     }
 
@@ -1058,7 +1064,7 @@ mod tests {
                 -1., 4.
             ], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.min(&Idx::At(0))?, Tensor::from_buf(vec![-1., 2.], (1, 2))?);
+        assert_eq!(cuda.min_at(&Idx::At(0))?, Tensor::from_buf(vec![-1., 2.], (1, 2))?);
         Ok(())
     }
 
@@ -1070,7 +1076,7 @@ mod tests {
             1., 2.,
             -1., 4.
         ], (4, 2)).unwrap();
-        assert_eq!(cuda.prod(&Idx::At(0))?, Tensor::from_buf(vec![-18., 320.], (1, 2))?);
+        assert_eq!(cuda.prod_at(&Idx::At(0))?, Tensor::from_buf(vec![-18., 320.], (1, 2))?);
         Ok(())
     }
 
@@ -1084,7 +1090,7 @@ mod tests {
                 7., 8.
             ], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.mean(&Idx::At(0))?, Tensor::from_buf(vec![4.0, 5.0], (1, 2))?);
+        assert_eq!(cuda.mean_at(&Idx::At(0))?, Tensor::from_buf(vec![4.0, 5.0], (1, 2))?);
         Ok(())
     }
 
@@ -1099,7 +1105,7 @@ mod tests {
                 7., 8.
             ], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.mean(&Idx::At(1))?, Tensor::from_buf(vec![1.5, 3.5, 5.5, 7.5], (4, 1))?);
+        assert_eq!(cuda.mean_at(&Idx::At(1))?, Tensor::from_buf(vec![1.5, 3.5, 5.5, 7.5], (4, 1))?);
         Ok(())
     }
 
@@ -1187,7 +1193,7 @@ mod tests {
 
         println!("Original: {:?}", cuda);
 
-        let result = cuda.sum(&Idx::At(1));
+        let result = cuda.sum_at(&Idx::At(1));
         println!("Result: {:?}", result.unwrap());
         
         // let mut out: crate::core::primitives::TensorBase<f64, Cuda> = CudaTensor::from_buf(vec![0.0f64, 0.0f64], (2,))

@@ -1,16 +1,20 @@
+use std::f32::consts::E;
+
 use crate::{
     backend::Backend,
     core::{
-        TensorView, TensorViewMut, primitives::TensorBase, primops::{Exp, InvExp, SquareRoot}, tensor::{AsTensor, AsViewMut}, value::{TensorValue, WeightValue}
-    },
+        primitives::TensorBase, primops::{Exp, InvExp, SquareRoot}, tensor::{AsTensor, AsViewMut, TensorAccess, TensorAccessMut, TensorError}, value::{TensorValue, WeightValue}, MetaTensorView, TensorView, TensorViewMut
+    }, grad::GradNode,
 };
-
+use crate::grad::primitives::GradTensor;
+use crate::core::tensor::seal;
+use crate::grad;
 
 macro_rules! specify_unary_op_template {
     (
         $(
-            ($name:ident) $op:ident $(where T: $first:path $(, $extra:path)*)?;
-        )+
+            ($name:ident) $op:ident $(where T: $first:path $(, $extra:path)*)?; |$input:ident, $result:ident, $ctx:ident, $grad_node:ident| $grad_fn:block
+        ),+ $(,)?
     ) => {
 
         paste::paste! {
@@ -68,7 +72,7 @@ macro_rules! specify_unary_op_template {
 
 
 
-            impl<T: TensorValue, B: Backend, V: AsViewMut<T, B>> InplaceUnaryOp<T, B> for V
+            impl<T: TensorValue, B: Backend, V: AsViewMut<T, B> + seal::Sealed> InplaceUnaryOp<T, B> for V
             {
                 $(
                     fn [<apply_ $op>](&mut self)
@@ -83,7 +87,7 @@ macro_rules! specify_unary_op_template {
             }
 
             
-            impl<T: TensorValue, B: Backend, V: AsTensor<T, B>> UnaryOp<T, B> for V {
+            impl<T: TensorValue, B: Backend, V: AsTensor<T, B> + seal::Sealed> UnaryOp<T, B> for V {
                 $(
                     fn $op(&self) -> TensorBase<T, B>
                     where
@@ -97,27 +101,133 @@ macro_rules! specify_unary_op_template {
                     }
                 )+
             }
-           
+            
+            pub trait UnaryGradOp<T: WeightValue, B: Backend> {
+                $(
+                    fn $op(&self) -> GradTensor<T, B>
+                    where
+                    $(
+                        T: $first $(+ $extra)*
+                    )?;
+                )+
+            }
+
+            // impl for GradTensor<T, B> and where T: WeightValue
+            impl<T: TensorValue + WeightValue, B: Backend> UnaryGradOp<T, B> for GradTensor<T, B> {
+                $(
+                    #[grad::when_enabled($ctx)]
+                    fn $op(&self) -> GradTensor<T, B>
+                    where
+                    $(
+                        T: $first $(+ $extra)*
+                    )?
+                    {
+                        #[allow(unused_variables)]
+                        let _temp = self.borrow();
+                        let $input = &_temp.tensor;
+                        let $result = $input.$op();
+                        let $grad_node = self.node;
+                        let node: Result<GradNode<T, B>, TensorError> = $grad_fn;
+                        GradTensor::from_op($result, node.expect("Failed to apply gradient operation"))
+                    }
+                )+
+            }
+
         }
         
     };
 }
 
 specify_unary_op_template! {
-    (Abs) abs;
-    (Relu) relu;
-    (Sigmoid) sigmoid where T: InvExp;
-    (Silu) silu where T: InvExp;
-    (Tanh) tanh where T: Exp, InvExp;
-    (Sqrt) sqrt where T: SquareRoot;
-    (Negate) neg where T: std::ops::Neg<Output = T>;
-    (NatLog) ln where T: WeightValue;
-    (ExpM1) expm1 where T: Exp;
-    (Ln1p) ln1p where T: WeightValue;
-    (Floor) floor where T: WeightValue;
-    (Ceil) ceil where T: WeightValue;
-    (Round) round where T: WeightValue;
-    (Trunc) trunc where T: WeightValue;
+    (Abs) abs; |input, result, _ctx, grad_node| {
+        let mut grad_map = TensorBase::<T, B>::zeros(input.shape());
+        for coord in input.iter_coords() {
+            let val = input.get(&coord).unwrap();
+            if val > T::ZERO {
+                grad_map.set(&coord, T::ONE);
+            } else {
+                grad_map.set(&coord, -T::ONE);
+            }
+        }
+
+        let node = GradNode::Abs {
+            input: grad_node,
+            grad_map,
+        };
+        Ok(node)   
+    },
+    (Relu) relu; |input, result, _ctx, grad_node| {
+        let mut grad_map = TensorBase::<T, B>::zeros(input.shape());
+        for coord in input.iter_coords() {
+            let val = input.get(&coord).unwrap();
+            if val > T::ZERO {
+                grad_map.set(&coord, T::ONE);
+            } else {
+                grad_map.set(&coord, T::ZERO);
+            }
+        }
+
+        let node = GradNode::ReLU {
+            input: grad_node,
+            grad_map,
+        };
+        Ok(node)    
+    },
+    (Sigmoid) sigmoid where T: InvExp; |input, result, _ctx, grad_node| {
+        Ok(GradNode::Sigmoid {
+            input: grad_node,
+            result: result.clone()
+        })
+    },
+    (Silu) silu where T: InvExp; |input, result, _ctx, grad_node| {
+        Err(TensorError::UnsupportedOperation("Gradient for silu not yet implemented.".into()))
+
+    },
+    (Tanh) tanh where T: Exp, InvExp; |input, result, _ctx, grad_node| {
+        Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
+    },
+    (Sqrt) sqrt where T: SquareRoot; |input, result, _ctx, grad_node| {
+        Ok(GradNode::Sqrt {
+            input: grad_node,
+            output: result.clone(),
+        })
+    },
+    (Negate) neg where T: std::ops::Neg<Output = T>; |input, result, ctx, grad_node| {
+        Ok(GradNode::Negate {
+            input: grad_node,
+        })
+    },
+    (NatLog) ln where T: WeightValue; |input, result, _ctx, grad_node| {
+        // compute x.reciprocal
+        // TODO use unary .reciprocal op when available
+        let mut r = TensorBase::<T, B>::zeros(input.shape());
+        for coord in input.iter_coords() {
+            let val = input.get(&coord).unwrap();
+            r.set(&coord, T::ONE / val);
+        }
+        Ok(GradNode::Ln {
+            input: grad_node,
+            x_reciprocal: r,
+        })
+    },
+    (ExpM1) expm1 where T: Exp; |input, result, _ctx, grad_node| {
+        Err(TensorError::UnsupportedOperation("Gradient for expm1 not yet implemented.".into()))
+    },
+    (Ln1p) ln1p where T: WeightValue; |input, result, _ctx, grad_node| {
+        Err(TensorError::UnsupportedOperation("Gradient for ln1p not yet implemented.".into()))
+    },
+    (Floor) floor where T: WeightValue; |input, result, _ctx, grad_node| {
+        Err(TensorError::UnsupportedOperation("Gradient for floor not yet implemented.".into()))
+    },
+    (Ceil) ceil where T: WeightValue; |input, result, _ctx, grad_node| {
+        Err(TensorError::UnsupportedOperation("Gradient for ceil not yet implemented.".into()))
+    },
+    (Round) round where T: WeightValue; |input, result, _ctx, grad_node| {
+        Err(TensorError::UnsupportedOperation("Gradient for round not yet implemented.".into()))
+    },
+    (Trunc) trunc where T: WeightValue; |input, result, _ctx, grad_node| {
+        Err(TensorError::UnsupportedOperation("Gradient for trunc not yet implemented.".into()))
+    },
 }
 
 impl<T, B> std::ops::Neg for TensorBase<T, B>
@@ -159,6 +269,72 @@ where
         let mut result = self.owned();
         result.neg_inplace();
         result
+    }
+}
+
+impl<T, B> std::ops::Neg for &TensorBase<T, B>
+where
+    T: TensorValue + std::ops::Neg<Output = T>,
+    B: Backend,
+{
+    type Output = TensorBase<T, B>;
+
+    fn neg(self) -> Self::Output {
+        let mut result = self.owned();
+        result.neg_inplace();
+        result
+    }
+}
+
+impl<'a, T, B> std::ops::Neg for &TensorView<'a, T, B>
+where
+    T: TensorValue + std::ops::Neg<Output = T>,
+    B: Backend,
+{
+    type Output = TensorBase<T, B>;
+
+    fn neg(self) -> Self::Output {
+        let mut result = self.owned();
+        result.neg_inplace();
+        result
+    }
+}
+
+impl<'a, T, B> std::ops::Neg for &TensorViewMut<'a, T, B>
+where
+    T: TensorValue + std::ops::Neg<Output = T>,
+    B: Backend,
+{
+    type Output = TensorBase<T, B>;
+
+    fn neg(self) -> Self::Output {
+        let mut result = self.owned();
+        result.neg_inplace();
+        result
+    }
+}
+
+impl<T, B> std::ops::Neg for GradTensor<T, B>
+where
+    T: WeightValue,
+    B: Backend,
+{
+    type Output = GradTensor<T, B>;
+
+    fn neg(self) -> Self::Output {
+        UnaryGradOp::neg(&self)
+    }
+}
+
+impl<T, B> std::ops::Neg for &GradTensor<T, B>
+where
+    T: WeightValue,
+    B: Backend,
+{
+    type Output = GradTensor<T, B>;
+
+    fn neg(self) -> Self::Output {
+        UnaryGradOp::neg(self)
     }
 }
 

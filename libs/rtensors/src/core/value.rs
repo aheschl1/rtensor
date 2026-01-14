@@ -10,6 +10,7 @@ pub trait TensorValue:
     Default +
     TypeConstants +
     DeviceRepr +
+    std::fmt::Debug +
     Send + Sync + 
     PartialEq + PartialOrd +
     std::ops::Add<Output = Self> + 
@@ -184,6 +185,7 @@ pub trait TensorValue:
     TypeConstants +
     Send + Sync +
     PartialEq + PartialOrd +
+    std::fmt::Debug +
     std::ops::Add<Output = Self> + 
     std::ops::Sub<Output = Self> + 
     std::ops::Mul<Output = Self> +

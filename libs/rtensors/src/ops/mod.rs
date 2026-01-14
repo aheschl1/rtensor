@@ -82,6 +82,15 @@ mod tests {
     }
 
     #[test]
+    fn test_div() {
+        let mut tensor = TensorBase::<f32, Cpu>::from_buf(vec![1., 2., 3.], vec![3]).unwrap();
+        let mut view = tensor.view_mut();
+        view /= 5.;
+        let expected = TensorBase::<f32, Cpu>::from_buf(vec![0.2, 0.4, 0.6], vec![3]).unwrap();
+        assert_eq!(tensor.buf.clone(), expected.buf);
+    }
+
+    #[test]
     fn test_mul_ref() {
         let mut tensor = TensorBase::<i32, Cpu>::from_buf(vec![1, 2, 3], vec![3]).unwrap();
         let value = 10;
@@ -1411,6 +1420,70 @@ mod tests {
         }
     }
 
+    // ============================================================================
+    // BROADCAST DIVISION TESTS
+    // ============================================================================
+
+    #[test]
+    fn test_broadcast_div_scalar_to_tensor() {
+        let veca = Tensor::<f32>::from_buf(vec![10.0], vec![]).unwrap(); // scalar
+        let vecb = Tensor::<f32>::from_buf(vec![2.0; 6], vec![2, 3]).unwrap();
+        
+        let vecc = veca / vecb.view();
+        
+        assert_eq!(vecc.shape().clone(), vec![2, 3]);
+        for i in 0..2 {
+            for j in 0..3 {
+                assert_eq!(vecc.buf[i * 3 + j], 5.0); // 10.0 / 2.0
+            }
+        }
+    }
+
+    #[test]
+    fn test_broadcast_div_3d_vector_along_last_dim() {
+        let veca = Tensor::<f32>::ones((2, 3, 4));
+        let vecb = Tensor::<f32>::from_buf(vec![1.0, 2.0, 4.0, 8.0], vec![4]).unwrap();
+        
+        let vecc = veca / vecb.view();
+        
+        assert_eq!(vecc.shape().clone(), vec![2, 3, 4]);
+        for i in 0..2 {
+            for j in 0..3 {
+                for k in 0..4 {
+                    let expected = 1.0 / (1 << k) as f32; // 1.0, 0.5, 0.25, 0.125
+                    assert_eq!(vecc.buf[i * 12 + j * 4 + k], expected);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_broadcast_div_in_place() {
+        let mut veca = Tensor::<f32>::from_buf(vec![10.0, 20.0, 30.0, 40.0], vec![4]).unwrap();
+        let vecb = Tensor::<f32>::from_buf(vec![2.0], vec![]).unwrap(); // scalar
+        
+        veca /= vecb.view();
+        
+        assert_eq!(veca.buf[0], 5.0);
+        assert_eq!(veca.buf[1], 10.0);
+        assert_eq!(veca.buf[2], 15.0);
+        assert_eq!(veca.buf[3], 20.0);
+    }
+
+    #[test]
+    fn test_broadcast_div_2d_matrices() {
+        let veca = Tensor::<f32>::from_buf(vec![100.0, 200.0, 300.0, 400.0], vec![2, 2]).unwrap();
+        let vecb = Tensor::<f32>::from_buf(vec![10.0, 20.0], vec![1, 2]).unwrap();
+        
+        let vecc = veca / vecb.view();
+        
+        assert_eq!(vecc.shape().clone(), vec![2, 2]);
+        assert_eq!(vecc.buf[0], 10.0);  // 100 / 10
+        assert_eq!(vecc.buf[1], 10.0);  // 200 / 20
+        assert_eq!(vecc.buf[2], 30.0);  // 300 / 10
+        assert_eq!(vecc.buf[3], 20.0);  // 400 / 20
+    }
+
     // --- FAILING BROADCAST TESTS (Should Not Work) ---
 
     #[test]
@@ -2687,6 +2760,15 @@ mod cuda_tests {
         let mut view = tensor.view_mut();
         view *= 4;
         let expected = Tensor::<i32>::from_buf(vec![4, 8, 12], vec![3]).unwrap();
+        assert_eq!(tensor.cpu().unwrap(), expected);
+    }
+
+    #[test]
+    fn test_div_cuda() {
+        let mut tensor = CudaTensor::<f32>::from_buf(vec![1., 2., 3.], vec![3]).unwrap();
+        let mut view = tensor.view_mut();
+        view /= 4.;
+        let expected = Tensor::<f32>::from_buf(vec![0.25, 0.5, 0.75], vec![3]).unwrap();
         assert_eq!(tensor.cpu().unwrap(), expected);
     }
 
@@ -5084,8 +5166,165 @@ mod cuda_tests {
         assert_eq!(a.view().get(vec![0]).unwrap(), 10.0);
         assert_eq!(a.view().get(vec![1]).unwrap(), 18.0);
     }
-}
 
+    // ==================== DIVISION BROADCASTING TESTS ====================
+
+    #[test]
+    fn test_broadcast_div_scalar_to_vector_cuda() {
+        // (3,) / scalar -> (3,)
+        let veca = CudaTensor::<f32>::from_buf(vec![10.0, 20.0, 30.0], vec![3]).unwrap();
+        let scalar = 5.0;
+        
+        let vecc = veca / scalar;
+        
+        assert_eq!(*vecc.shape(), vec![3]);
+        assert_eq!(vecc.cpu().unwrap(), Tensor::<f32>::from_buf(vec![2.0, 4.0, 6.0], vec![3]).unwrap());
+    }
+
+    #[test]
+    fn test_broadcast_div_vector_to_matrix_cuda() {
+        // (2, 3) / (3,) -> (2, 3)
+        let veca = CudaTensor::<f32>::from_buf(vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0], vec![2, 3]).unwrap();
+        let vecb = CudaTensor::<f32>::from_buf(vec![2.0, 4.0, 5.0], vec![3]).unwrap();
+        
+        let vecc = veca / vecb.view();
+        
+        assert_eq!(*vecc.shape(), vec![2, 3]);
+        assert_eq!(vecc.cpu().unwrap(), Tensor::<f32>::from_buf(vec![5.0, 5.0, 6.0, 20.0, 12.5, 12.0], vec![2, 3]).unwrap());
+    }
+
+    #[test]
+    fn test_broadcast_div_column_to_matrix_cuda() {
+        // (2, 3) / (2, 1) -> (2, 3)
+        let veca = CudaTensor::<f32>::from_buf(vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0], vec![2, 3]).unwrap();
+        let vecb = CudaTensor::<f32>::from_buf(vec![2.0, 10.0], vec![2, 1]).unwrap();
+        
+        let vecc = veca / vecb.view();
+        
+        assert_eq!(*vecc.shape(), vec![2, 3]);
+        assert_eq!(vecc.cpu().unwrap(), Tensor::<f32>::from_buf(vec![5.0, 10.0, 15.0, 4.0, 5.0, 6.0], vec![2, 3]).unwrap());
+    }
+
+    #[test]
+    fn test_broadcast_div_3d_singleton_cuda() {
+        // (2, 3, 4) / (1, 1, 4) -> (2, 3, 4)
+        let data_a: Vec<f32> = (1..=24).map(|i| (i * 2) as f32).collect();
+        let veca = CudaTensor::<f32>::from_buf(data_a, vec![2, 3, 4]).unwrap();
+        let vecb = CudaTensor::<f32>::from_buf(vec![2.0, 4.0, 8.0, 16.0], vec![1, 1, 4]).unwrap();
+        
+        let vecc = veca / vecb.view();
+        
+        assert_eq!(*vecc.shape(), vec![2, 3, 4]);
+        // First row: [2, 4, 6, 8] / [2, 4, 8, 16] = [1, 1, 0.75, 0.5]
+        assert_eq!(vecc.view().get(vec![0, 0, 0]).unwrap(), 1.0);
+        assert_eq!(vecc.view().get(vec![0, 0, 1]).unwrap(), 1.0);
+        assert_eq!(vecc.view().get(vec![0, 0, 2]).unwrap(), 0.75);
+        assert_eq!(vecc.view().get(vec![0, 0, 3]).unwrap(), 0.5);
+    }
+
+    #[test]
+    fn test_broadcast_div_different_ranks_cuda() {
+        // (3, 4) / (4,) -> (3, 4)
+        let data_a: Vec<f32> = (1..=12).map(|i| (i * 10) as f32).collect();
+        let veca = CudaTensor::<f32>::from_buf(data_a, vec![3, 4]).unwrap();
+        let vecb = CudaTensor::<f32>::from_buf(vec![2.0, 5.0, 10.0, 20.0], vec![4]).unwrap();
+        
+        let vecc = veca / vecb.view();
+        
+        assert_eq!(*vecc.shape(), vec![3, 4]);
+        // First row: [10, 20, 30, 40] / [2, 5, 10, 20] = [5, 4, 3, 2]
+        assert_eq!(vecc.view().get(vec![0, 0]).unwrap(), 5.0);
+        assert_eq!(vecc.view().get(vec![0, 1]).unwrap(), 4.0);
+        assert_eq!(vecc.view().get(vec![0, 2]).unwrap(), 3.0);
+        assert_eq!(vecc.view().get(vec![0, 3]).unwrap(), 2.0);
+    }
+
+    #[test]
+    fn test_broadcast_div_tensorview_cuda() {
+        // Test with TensorView (immutable view)
+        let veca = CudaTensor::<f32>::from_buf(vec![100.0, 200.0, 300.0, 400.0], vec![2, 2]).unwrap();
+        let vecb = CudaTensor::<f32>::from_buf(vec![10.0, 20.0], vec![2, 1]).unwrap();
+        
+        let vecc = veca.view() / vecb.view();
+        
+        assert_eq!(*vecc.shape(), vec![2, 2]);
+        assert_eq!(vecc.cpu().unwrap(), Tensor::<f32>::from_buf(vec![10.0, 20.0, 15.0, 20.0], vec![2, 2]).unwrap());
+    }
+
+    #[test]
+    fn test_broadcast_div_tensorviewmut_cuda() {
+        // Test with TensorViewMut
+        let mut veca = CudaTensor::<f32>::from_buf(vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0], vec![2, 3]).unwrap();
+        let mut vecb = CudaTensor::<f32>::from_buf(vec![2.0, 4.0, 5.0], vec![3]).unwrap();
+        
+        let vecc = veca.view_mut() / vecb.view_mut();
+        
+        assert_eq!(*vecc.shape(), vec![2, 3]);
+        assert_eq!(vecc.cpu().unwrap(), Tensor::<f32>::from_buf(vec![5.0, 5.0, 6.0, 20.0, 12.5, 12.0], vec![2, 3]).unwrap());
+    }
+
+    #[test]
+    fn test_broadcast_div_tensorbase_owned_cuda() {
+        // Test with owned TensorBase
+        let veca = CudaTensor::<f32>::from_buf(vec![100.0, 200.0, 300.0, 400.0], vec![2, 2]).unwrap();
+        let vecb = CudaTensor::<f32>::from_buf(vec![10.0, 100.0], vec![2]).unwrap();
+        
+        let vecc = veca / vecb;
+        
+        assert_eq!(*vecc.shape(), vec![2, 2]);
+        assert_eq!(vecc.cpu().unwrap(), Tensor::<f32>::from_buf(vec![10.0, 2.0, 30.0, 4.0], vec![2, 2]).unwrap());
+    }
+
+    #[test]
+    fn test_broadcast_div_high_dimensional_cuda() {
+        // (2, 1, 3, 1) / (1, 4, 1, 5) -> (2, 4, 3, 5)
+        let veca = CudaTensor::<f32>::from_buf(vec![10.0; 6], vec![2, 1, 3, 1]).unwrap();
+        let vecb = CudaTensor::<f32>::from_buf(vec![2.0; 20], vec![1, 4, 1, 5]).unwrap();
+        
+        let vecc = veca / vecb.view();
+        
+        assert_eq!(*vecc.shape(), vec![2, 4, 3, 5]);
+        // All should be 10.0 / 2.0 = 5.0
+        assert_eq!(vecc.view().get(vec![0, 0, 0, 0]).unwrap(), 5.0);
+        assert_eq!(vecc.view().get(vec![1, 3, 2, 4]).unwrap(), 5.0);
+    }
+
+    #[test]
+    fn test_broadcast_div_in_place_cuda() {
+        let mut veca = CudaTensor::<f32>::from_buf(vec![100.0, 200.0, 300.0, 400.0], vec![2, 2]).unwrap();
+        let vecb = CudaTensor::<f32>::from_buf(vec![10.0, 20.0], vec![2]).unwrap();
+        
+        veca /= vecb.view();
+        
+        assert_eq!(veca.cpu().unwrap(), Tensor::<f32>::from_buf(vec![10.0, 10.0, 30.0, 20.0], vec![2, 2]).unwrap());
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_broadcast_div_incompatible_cuda() {
+        // (2, 3) and (4,) are incompatible (3 != 4)
+        let veca = CudaTensor::<f32>::ones((2, 3));
+        let vecb = CudaTensor::<f32>::ones((4,));
+        
+        let _vecc = veca / vecb.view();
+    }
+
+    #[test]
+    fn test_tensorviewmut_div_assign_tensorbase_cuda() {
+        let mut a = CudaTensor::<f32>::from_buf(vec![100.0, 200.0, 300.0, 400.0, 500.0, 600.0], vec![2, 3]).unwrap();
+        let b = CudaTensor::<f32>::from_buf(vec![10.0, 20.0, 30.0], vec![3]).unwrap();
+        {
+            let mut view = a.view_mut();
+            view /= b;
+        }
+        assert_eq!(a.view().get(vec![0, 0]).unwrap(), 10.0);
+        assert_eq!(a.view().get(vec![0, 1]).unwrap(), 10.0);
+        assert_eq!(a.view().get(vec![0, 2]).unwrap(), 10.0);
+        assert_eq!(a.view().get(vec![1, 0]).unwrap(), 40.0);
+        assert_eq!(a.view().get(vec![1, 1]).unwrap(), 25.0);
+        assert_eq!(a.view().get(vec![1, 2]).unwrap(), 20.0);
+    }
+}
 
 
 #[cfg(feature = "remote")]
