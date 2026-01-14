@@ -202,53 +202,56 @@ pub enum NormType {
 }
 
 pub trait TotalReductionOp<T: TensorValue, B: Backend>: Sized + ReductionOp<T, B> {
-    fn total_sum(&self) -> Result<TensorBase<T, B>, TensorError> {self.sum(Idx::Item)}
-    fn total_prod(&self) -> Result<TensorBase<T, B>, TensorError> {self.prod(Idx::Item)}
-    fn total_mean(&self) -> Result<TensorBase<T, B>, TensorError> {self.mean(Idx::Item)}
-    fn total_max(&self) -> Result<TensorBase<T, B>, TensorError>{self.max(Idx::Item)}
-    fn total_min(&self) -> Result<TensorBase<T, B>, TensorError>{self.min(Idx::Item)}
-    fn total_var(&self) -> Result<TensorBase<T, B>, TensorError>{self.var(Idx::Item)}
-    fn total_pop_var(&self) -> Result<TensorBase<T, B>, TensorError>{self.pop_var(Idx::Item)}
-    fn total_std(&self, unbiased: bool) -> Result<TensorBase<T, B>, TensorError>{self.std(Idx::Item, unbiased)}
-    fn total_norm(&self, norm: NormType) -> Result<TensorBase<T, B>, TensorError>{self.norm(Idx::Item, norm)}
-    fn total_logsumexp(&self) -> Result<TensorBase<T, B>, TensorError>{self.logsumexp(Idx::Item)}
-    fn total_l1_norm(&self) -> Result<TensorBase<T, B>, TensorError> {
-        self.norm(Idx::Item, NormType::L1)
+    fn sum(&self) -> Result<TensorBase<T, B>, TensorError> {self.sum_at(Idx::Item)}
+    fn prod(&self) -> Result<TensorBase<T, B>, TensorError> {self.prod_at(Idx::Item)}
+    fn mean(&self) -> Result<TensorBase<T, B>, TensorError> {self.mean_at(Idx::Item)}
+    fn max(&self) -> Result<TensorBase<T, B>, TensorError>{self.max_at(Idx::Item)}
+    fn min(&self) -> Result<TensorBase<T, B>, TensorError>{self.min_at(Idx::Item)}
+    fn var(&self) -> Result<TensorBase<T, B>, TensorError>{self.var_at(Idx::Item)}
+    fn pop_var(&self) -> Result<TensorBase<T, B>, TensorError>{self.pop_var_at(Idx::Item)}
+    fn std(&self, unbiased: bool) -> Result<TensorBase<T, B>, TensorError>{self.std_at(Idx::Item, unbiased)}
+    fn norm(&self, norm: NormType) -> Result<TensorBase<T, B>, TensorError>{self.norm_at(Idx::Item, norm)}
+    fn logsumexp(&self) -> Result<TensorBase<T, B>, TensorError>{self.logsumexp_at(Idx::Item)}
+    fn l1_norm(&self) -> Result<TensorBase<T, B>, TensorError> {
+        self.norm_at(Idx::Item, NormType::L1)
     }
-    fn total_l2_norm(&self) -> Result<TensorBase<T, B>, TensorError> {
-        self.norm(Idx::Item, NormType::L2)
+    fn l2_norm(&self) -> Result<TensorBase<T, B>, TensorError> {
+        self.norm_at(Idx::Item, NormType::L2)
+    }
+    fn argmax(&self) -> Result<TensorBase<u64, B>, TensorError> {
+        self.argmax_at(Idx::Item)
+    }
+    fn argmin(&self) -> Result<TensorBase<u64, B>, TensorError> {
+        self.argmin_at(Idx::Item)
     }
     fn total_argmax(&self) -> Result<TensorBase<u64, B>, TensorError> {
         self.argmax(Idx::Item)
-    }
-    fn total_argmin(&self) -> Result<TensorBase<u64, B>, TensorError> {
-        self.argmin(Idx::Item)
     }
 }
 
 pub trait ReductionOp<T: TensorValue, B: Backend> : Sized {
     
-    fn sum(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError>;
-    fn prod(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError>;
-    fn mean(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError>;
-    fn max(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError>;
-    fn min(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError>;
-    fn var(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError>;
-    fn pop_var(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError>;
-    fn std(&self, axes: impl Into<Idx>, unbiased: bool) -> Result<TensorBase<T, B>, TensorError>;
-    fn norm(&self, axes: impl Into<Idx>, norm: NormType) -> Result<TensorBase<T, B>, TensorError>;
-    fn logsumexp(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError>;
+    fn sum_at(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError>;
+    fn prod_at(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError>;
+    fn mean_at(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError>;
+    fn max_at(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError>;
+    fn min_at(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError>;
+    fn var_at(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError>;
+    fn pop_var_at(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError>;
+    fn std_at(&self, axes: impl Into<Idx>, unbiased: bool) -> Result<TensorBase<T, B>, TensorError>;
+    fn norm_at(&self, axes: impl Into<Idx>, norm: NormType) -> Result<TensorBase<T, B>, TensorError>;
+    fn logsumexp_at(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError>;
 
-    fn l1_norm(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError> {
-        self.norm(axes, NormType::L1)
+    fn l1_norm_at(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError> {
+        self.norm_at(axes, NormType::L1)
     }
 
-    fn l2_norm(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError> {
-        self.norm(axes, NormType::L2)
+    fn l2_norm_at(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError> {
+        self.norm_at(axes, NormType::L2)
     }
 
-    fn argmax(&self, axes: impl Into<Idx>) -> Result<TensorBase<u64, B>, TensorError>;
-    fn argmin(&self, axes: impl Into<Idx>) -> Result<TensorBase<u64, B>, TensorError>;
+    fn argmax_at(&self, axes: impl Into<Idx>) -> Result<TensorBase<u64, B>, TensorError>;
+    fn argmin_at(&self, axes: impl Into<Idx>) -> Result<TensorBase<u64, B>, TensorError>;
 }
 
 impl<T: TensorValue, B: Backend, V> TotalReductionOp<T, B> for V where V: ReductionOp<T, B>{}
@@ -338,7 +341,7 @@ impl<T: WeightValue, B: Backend, V> ReductionOp<T, B> for V
 where
     V: AsView<T, B>,
 {
-    fn sum(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError> {
+    fn sum_at(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError> {
         let axes = axes.into();
         let t = self.view();
         if !t.is_contiguous() {
@@ -349,7 +352,7 @@ where
         }
     }
 
-    fn prod(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError> {
+    fn prod_at(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError> {
         let axes = axes.into();
         let t = self.view();
         if !t.is_contiguous() {
@@ -360,7 +363,7 @@ where
         }
     }
 
-    fn max(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError> {
+    fn max_at(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError> {
         let axes = axes.into();
         let t = self.view();
         if !t.is_contiguous() {
@@ -371,7 +374,7 @@ where
         }
     }
 
-    fn min(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError> {
+    fn min_at(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError> {
         let axes = axes.into();
         let t = self.view();
         if !t.is_contiguous() {
@@ -382,7 +385,7 @@ where
         }
     }
 
-    fn mean(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError> {
+    fn mean_at(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError> {
         let axes = axes.into();
         let t = self.view();
         if !t.is_contiguous() {
@@ -392,7 +395,7 @@ where
             do_reduce(ReductionOpTypes::Mean, &axes, &t)
         }
     }
-    fn var(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError> {
+    fn var_at(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError> {
         let axes = axes.into();
         let code = ReductionOpTypes::Variance { unbiased: true };
         let t = self.view();
@@ -403,7 +406,7 @@ where
             do_reduce(code, &axes, &t)
         }
     }
-    fn pop_var(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError> {
+    fn pop_var_at(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError> {
         let axes = axes.into();
         let code = ReductionOpTypes::Variance { unbiased: false };
         let t = self.view();
@@ -414,7 +417,7 @@ where
             do_reduce(code, &axes, &t)
         }
     }
-    fn std(&self, axes: impl Into<Idx>, unbiased: bool) -> Result<TensorBase<T, B>, TensorError> {
+    fn std_at(&self, axes: impl Into<Idx>, unbiased: bool) -> Result<TensorBase<T, B>, TensorError> {
         let axes = axes.into();
         let code = ReductionOpTypes::Stdev { unbiased };
         let t = self.view();
@@ -425,7 +428,7 @@ where
             do_reduce(code, &axes, &t)
         }
     }
-    fn logsumexp(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError> {
+    fn logsumexp_at(&self, axes: impl Into<Idx>) -> Result<TensorBase<T, B>, TensorError> {
         let axes = axes.into();
         let t = self.view();
         if !t.is_contiguous() {
@@ -435,7 +438,7 @@ where
             do_reduce(ReductionOpTypes::LogSumExp, &axes, &t)
         }
     }
-    fn norm(&self, axes: impl Into<Idx>, norm: NormType) -> Result<TensorBase<T, B>, TensorError> {
+    fn norm_at(&self, axes: impl Into<Idx>, norm: NormType) -> Result<TensorBase<T, B>, TensorError> {
         let axes = axes.into();
         let code = ReductionOpTypes::Norm(norm);
         let t = self.view();
@@ -446,7 +449,7 @@ where
             do_reduce(code, &axes, &t)
         }
     }
-    fn argmax(&self, axes: impl Into<Idx>) -> Result<TensorBase<u64, B>, TensorError> {
+    fn argmax_at(&self, axes: impl Into<Idx>) -> Result<TensorBase<u64, B>, TensorError> {
         let axes = axes.into();
         let code = ReductionOpTypes::ArgMax;
         let t = self.view();
@@ -457,7 +460,7 @@ where
             do_argmax(code, &axes, &t)
         }
     }
-    fn argmin(&self, axes: impl Into<Idx>) -> Result<TensorBase<u64, B>, TensorError> {
+    fn argmin_at(&self, axes: impl Into<Idx>) -> Result<TensorBase<u64, B>, TensorError> {
         let axes = axes.into();
         let code = ReductionOpTypes::ArgMin;
         let t = self.view();
@@ -484,16 +487,12 @@ fn materialize_output<T: TensorValue, B: Backend>(input: &MetaTensor, backend: B
 fn reduction_output_meta(input: MetaTensor, axes: &Idx) -> MetaTensor {
     let mut output_shape = Vec::new();
 
-
     let idx_num = match axes {
         Idx::Item => 0,
         Idx::At(x) => *x,
         _ => panic!("Weird multi dimension reductions are not avaiable.")
     };
-
-
-
-
+    
     for d in 0..input.rank() {
         if d == idx_num {
             // PyTorch and Numpy have a keep dim argument that removes this.
@@ -503,14 +502,6 @@ fn reduction_output_meta(input: MetaTensor, axes: &Idx) -> MetaTensor {
 
         }
     }
-
-    // for (i, &dim) in input.shape.iter().enumerate() {
-    //     println!("i={i}, dim={dim}");
-    //     if i < idx_num {
-    //         output_shape.push(dim);
-    //     }
-    // }
-    println!("materialziing output: {:?}", output_shape);
     let output_shape: Shape = Shape::from(output_shape);
     let strides = shape_to_stride(&output_shape);
 

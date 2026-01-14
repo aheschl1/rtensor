@@ -1,9 +1,9 @@
 # rtensors
 
-Tensor primitives with CUDA and CPU backends. Remote execution protocol built in at backend level.
+Tensor primitives and autograd with CUDA and CPU backends. Remote execution protocol built in at backend level.
 Uses BLAS, cuBLAS, and custom kernels.
 
-Goal is high performance ML stack with minimal dependencies, and the flexibility of numpy.
+Goal is high performance ML stack with minimal dependencies, for inference and training.
 
 ## Creating Tensors
 
@@ -177,6 +177,70 @@ let result = a_gpu.matmul(&b_gpu).unwrap();
 let a = Tensor::<f32>::ones((3,));
 let b = Tensor::<f32>::from_buf(vec![4.0, 5.0, 6.0], (3,)).unwrap();
 let result = a.dot(&b).unwrap();  // scalar: 15.0
+```
+
+## Autograd
+
+See the below example of training a dense neural network with multiple layers.
+
+```rust
+struct Layer<T: WeightValue, B: Backend> {
+    pub weight: GradTensor<T, B>,
+    pub bias: GradTensor<T, B>,
+}
+
+struct DenseModel<T: WeightValue, B: Backend> {
+    pub layers: Vec<Layer<T, B>>,
+}
+
+impl DenseModel<f32, Cpu> {
+    fn new(input_size: usize, hidden_size: usize, output_size: usize, num_layers: usize) -> Self {
+        let mut layers = Vec::new();
+        for i in 0..num_layers {
+            let in_size = if i == 0 { input_size } else { hidden_size };
+            let out_size = if i == num_layers - 1 { output_size } else { hidden_size };
+            let weight = Tensor::<f32>::uniform((in_size, out_size)).param();
+            let bias = Tensor::<f32>::zeros((1, out_size)).param();
+            layers.push(Layer { weight, bias });
+        }
+        Self { layers }
+    }
+
+    fn forward(&self, mut x: GradTensor<f32, Cpu>) -> GradTensor<f32, Cpu> {
+        for (i, layer) in self.layers.iter().enumerate() {
+            x = x.matmul(&layer.weight).unwrap() + &layer.bias;
+            if i != self.layers.len() - 1 {
+                x = x.relu();
+            }
+        }
+        x.sigmoid()
+    }
+
+    fn register(&self, optim: &mut SGD<f32, Cpu>) {
+        for layer in &self.layers {
+            optim.register_parameter(&layer.weight).unwrap();
+            optim.register_parameter(&layer.bias).unwrap();
+        }
+    }
+}
+
+grad::with::<f32, Cpu>(|ctx| {
+    let model = DenseModel::new(5, 10, 2, 10);
+
+    let input = Tensor::<f32>::ones((1, 5)).grad();
+    let target = Tensor::<f32>::uniform((1, 2)).grad();
+    
+    let mut optim = SGD::<f32, Cpu>::new(0.01);
+    model.register(&mut optim);
+    for _ in 0..10 {
+        let output = model.forward(input.clone());
+        let loss = l1_loss(&output, &target);
+        println!("Loss: {:?}", loss.borrow().tensor.item());
+        ctx.backwards(&loss).unwrap();
+        optim.step().unwrap();
+    }
+});
+
 ```
 
 ## Remote Backend

@@ -190,8 +190,6 @@ where
 
         let elem_original = original_l2.get(pos.clone()).unwrap();
         let elem_modified = l2.get(pos.clone()).unwrap();
-
-
         
         eps_eq(&truth(elem_original), &elem_modified);
         // assert_eq!(truth(elem_original), elem_modified);

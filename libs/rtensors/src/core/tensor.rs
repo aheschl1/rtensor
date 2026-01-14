@@ -1,5 +1,4 @@
-
-use crate::{backend::Backend, core::{idx::Idx, meta::is_contiguous_relaxed, primitives::{DeviceType, TensorBase}, value::{TensorValue, WeightValue}, Dim, MetaTensor, MetaTensorView, Shape, Strides, TensorView, TensorViewMut}};
+use crate::{backend::Backend, core::{idx::Idx, meta::is_contiguous_relaxed, primitives::{DeviceType, TensorBase}, value::{TensorValue, WeightValue}, Dim, MetaTensor, MetaTensorView, Shape, Strides, TensorView, TensorViewMut}, grad::{self, primitives::GradTensor}};
 use super::slice::{Slice, compute_sliced_parameters};
 use thiserror::Error;
 
@@ -41,9 +40,24 @@ pub enum TensorError {
     #[error("cuda error: {0}")]
     CudaError(String),
 
+    
+    #[error("gradient error: {0}")]
+    GradError(String),
+
     #[cfg(feature = "remote")]
     #[error("connection not open: {0}")]
     RemoteError(String),
+}
+
+pub(crate) mod seal {
+    use crate::{backend::Backend, core::{primitives::{TensorBase}, value::TensorValue, TensorView, TensorViewMut}};
+
+    pub(crate) trait Sealed {}
+    // impl<T: WeightValue, B: Backend> Sealed for GradTensor<T, B> {}
+    impl<T: TensorValue, B: Backend> Sealed for TensorBase<T, B> {}
+    impl<T: TensorValue, B: Backend> Sealed for &TensorBase<T, B> {}
+    impl<T: TensorValue, B: Backend> Sealed for TensorView<'_, T, B> {}
+    impl<T: TensorValue, B: Backend> Sealed for TensorViewMut<'_, T, B> {}
 }
 
 /// Provides immutable view access to tensor data.
@@ -80,6 +94,14 @@ pub trait AsTensor<T: TensorValue, B: Backend> {
     
     /// Ensures the tensor has a contiguous memory layout, copying if needed.
     fn contiguous(&self) -> TensorBase<T, B>;
+}
+
+
+pub trait WithGrad<T: WeightValue, B: Backend> {
+    /// Gives the most restrictive gradient tensor available for the type.
+    fn grad(self) -> GradTensor<T, B>;
+    /// Returns a gradient tensor which is a leaf.
+    fn param(self) -> GradTensor<T, B>;
 }
 
 impl<T: TensorValue, B: Backend> AsView<T, B> for TensorBase<T, B> {
@@ -345,7 +367,7 @@ pub trait TensorAccessMut<T: TensorValue, B: Backend>: TensorAccess<T, B> {
 }
 
 impl<T: TensorValue, B: Backend, V> TensorAccess<T, B> for V
-where B: Backend, V: AsView<T, B>
+where B: Backend, V: AsView<T, B> + seal::Sealed
 {
     /// Returns a reference to the element at a logical index, converting
     /// coordinates into a buffer position via stride and offset.
@@ -437,7 +459,7 @@ where B: Backend, V: AsView<T, B>
 }
 
 impl<T: TensorValue, B: Backend, V> TensorAccessMut<T, B> for V
-where V: AsViewMut<T, B>
+where V: AsViewMut<T, B> + seal::Sealed
 {
     /// Creates a new mutable view by fixing `dim` to `idx`, effectively
     /// removing that dimension and adjusting shape/stride/offset accordingly.
@@ -515,7 +537,7 @@ pub trait RandomTensor<T: TensorValue + rand::distr::uniform::SampleUniform, B: 
     fn uniform(shape: impl Into<Shape>) -> Result<TensorBase<T, B>, TensorError>;
 }
 
-impl<T: TensorValue + WeightValue, B: Backend> RandomTensor<T, B> for TensorBase<T, B> {
+impl<T: WeightValue, B: Backend> RandomTensor<T, B> for TensorBase<T, B> {
     fn uniform(shape: impl Into<Shape>) -> Result<TensorBase<T, B>, TensorError> {
         let shape = shape.into();
         // random vector of size shape.size(), fill with uniform random values
@@ -536,6 +558,48 @@ impl<T: TensorValue + WeightValue, B: Backend> RandomTensor<T, B> for TensorBase
             stride,
             0
         )))
+    }
+}
+
+impl<T: WeightValue, B: Backend> WithGrad<T, B> for TensorBase<T, B> {
+    fn grad(self) -> GradTensor<T, B> {
+        GradTensor::input(self)
+    }
+
+    fn param(self) -> GradTensor<T, B> {
+        GradTensor::leaf(self)
+    }
+}
+
+impl<T: WeightValue, B: Backend> WithGrad<T, B> for GradTensor<T, B> {
+    fn grad(self) -> GradTensor<T, B> {
+        self
+    }
+
+    #[grad::when_enabled(ctx)]
+    fn param(self) -> GradTensor<T, B> {
+        if self.is_leaf() {
+            self
+        } else {
+            // includes a copy
+            ctx.make_leaf(self.inner)
+        }
+    }
+}
+
+impl<T: WeightValue, B: Backend> WithGrad<T, B> for &GradTensor<T, B> {
+    fn grad(self) -> GradTensor<T, B> {
+        self.clone()
+    }
+
+    #[grad::when_enabled(ctx)]
+    fn param(self) -> GradTensor<T, B> {
+        if self.is_leaf() {
+            self.clone()
+        } else {
+            // includes a copy
+            ctx.make_leaf(self.inner.clone())
+        }
     }
 }
 

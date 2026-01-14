@@ -10,6 +10,7 @@ pub trait TensorValue:
     Default +
     TypeConstants +
     DeviceRepr +
+    std::fmt::Debug +
     Send + Sync + 
     PartialEq + PartialOrd +
     std::ops::Add<Output = Self> + 
@@ -33,7 +34,16 @@ pub trait WeightValue :
 {
     fn from_f32(value: f32) -> Self;
     fn vexp(&self) -> Self;
+    fn vexpm1(&self) -> Self;
     fn square_root(&self) -> Self;
+    fn nat_log(&self) -> Self;
+    fn nat_log1p(&self) -> Self;
+    fn vfloor(&self) -> Self;
+    fn vceil(&self) -> Self;
+    fn vround(&self) -> Self;
+    fn vtrunc(&self) -> Self;
+    fn vlog(&self, base: Self) -> Self;
+    fn vlog1p(&self, base: Self) -> Self;
     fn from_usize(value: usize) -> Self {
         Self::from_f32(value as f32)
     }
@@ -46,16 +56,66 @@ impl WeightValue for f32 {
     fn from_f32(value: f32) -> Self {
         value
     }
-    
+
+    #[inline(always)]
     fn vexp(&self) -> Self {
         self.exp()
     }
-    
+
+    #[inline(always)]
+    fn vexpm1(&self) -> Self {
+        self.exp_m1()
+    }
+
+    #[inline(always)]
     fn square_root(&self) -> Self {
         self.sqrt()
     }
+    
+    #[inline]
     fn eps_eq(&self, other: &Self, epsilon: f32) -> bool {
         (*self - *other).abs() < epsilon
+    }
+
+    #[inline(always)]
+    fn nat_log(&self) -> Self {
+        self.ln()
+    }
+
+    #[inline(always)]
+    fn nat_log1p(&self) -> Self {
+        self.ln_1p()
+    }
+
+    #[inline(always)]
+    fn vfloor(&self) -> Self {
+        self.floor()
+    }
+
+    #[inline(always)]
+    fn vceil(&self) -> Self {
+        self.ceil()
+    }
+
+    #[inline(always)]
+    fn vround(&self) -> Self {
+        self.round()
+    }
+
+    #[inline(always)]
+    fn vtrunc(&self) -> Self {
+        self.trunc()
+    }
+    
+    #[inline(always)]
+    fn vlog(&self, base: Self) -> Self {
+        self.log(base)
+    }
+
+    #[inline(always)]
+    fn vlog1p(&self, base: Self) -> Self {
+        // (self + Self::ONE).log(base)
+        self.ln_1p() / base.ln()
     }
 }
 
@@ -64,17 +124,64 @@ impl WeightValue for f64 {
     fn from_f32(value: f32) -> Self {
         value as f64
     }
-    
+
+    #[inline(always)]
     fn vexp(&self) -> Self {
         self.exp()
     }
-    
+
+    #[inline(always)]
+    fn vexpm1(&self) -> Self {
+        self.exp_m1()
+    }
+
+    #[inline(always)]
     fn square_root(&self) -> Self {
         self.sqrt()
     }
-
+    
+    #[inline]
     fn eps_eq(&self, other: &Self, epsilon: f32) -> bool {
         (*self - *other).abs() < epsilon as f64
+    }
+    #[inline(always)]
+    fn nat_log(&self) -> Self {
+        self.ln()
+    }
+
+    #[inline(always)]
+    fn nat_log1p(&self) -> Self {
+        self.ln_1p()
+    }
+
+    #[inline(always)]
+    fn vfloor(&self) -> Self {
+        self.floor()
+    }
+
+    #[inline(always)]
+    fn vceil(&self) -> Self {
+        self.ceil()
+    }
+
+    #[inline(always)]
+    fn vround(&self) -> Self {
+        self.round()
+    }
+
+    #[inline(always)]
+    fn vtrunc(&self) -> Self {
+        self.trunc()
+    }
+
+    #[inline(always)]
+    fn vlog(&self, base: Self) -> Self {
+        self.log(base)
+    }
+
+    #[inline(always)]
+    fn vlog1p(&self, base: Self) -> Self {
+        self.ln_1p() / base.ln()
     }
 }
 
@@ -88,6 +195,7 @@ pub trait TensorValue:
     TypeConstants +
     Send + Sync +
     PartialEq + PartialOrd +
+    std::fmt::Debug +
     std::ops::Add<Output = Self> + 
     std::ops::Sub<Output = Self> + 
     std::ops::Mul<Output = Self> +
@@ -107,6 +215,7 @@ pub trait TypeConstants {
     const ONE: Self;
     const MIN: Self;
     const MAX: Self;
+    const TEST_TOLERANCE: Self;
 }
 
 
@@ -121,12 +230,13 @@ macro_rules! impl_tensor_values {
 }
 
 macro_rules! impl_default {
-    ($type:ty, $zero:expr, $one:expr, $min:expr, $max:expr) => {
+    ($type:ty, $zero:expr, $one:expr, $min:expr, $max:expr, $tolerance:expr) => {
         impl TypeConstants for $type {
             const ZERO: Self = $zero;
             const ONE: Self = $one;
             const MIN: Self = $min;
             const MAX: Self = $max;
+            const TEST_TOLERANCE: Self = $tolerance;
         }
     };
 }
@@ -148,19 +258,19 @@ impl_tensor_values!(
     // (usize, DType::U64)
 );
 
-impl_default!(f32, 0.0f32, 1.0f32, f32::MIN, f32::MAX);
-impl_default!(f64, 0.0f64, 1.0f64, f64::MIN, f64::MAX);
-impl_default!(i8, 0i8, 1i8, i8::MIN, i8::MAX);
-impl_default!(i16, 0i16, 1i16, i16::MIN, i16::MAX);
-impl_default!(i32, 0i32, 1i32, i32::MIN, i32::MAX);
-impl_default!(i64, 0i64, 1i64, i64::MIN, i64::MAX);
-impl_default!(i128, 0i128, 1i128, i128::MIN, i128::MAX);
+impl_default!(f32, 0.0f32, 1.0f32, f32::MIN, f32::MAX, 0.00001f32);
+impl_default!(f64, 0.0f64, 1.0f64, f64::MIN, f64::MAX, 0.00001f64);
+impl_default!(i8, 0i8, 1i8, i8::MIN, i8::MAX, 0i8);
+impl_default!(i16, 0i16, 1i16, i16::MIN, i16::MAX, 0i16);
+impl_default!(i32, 0i32, 1i32, i32::MIN, i32::MAX, 0i32);
+impl_default!(i64, 0i64, 1i64, i64::MIN, i64::MAX, 0i64);
+impl_default!(i128, 0i128, 1i128, i128::MIN, i128::MAX, 0i128);
 // impl_default!(isize, 0isize, 1isize, isize::MIN, isize::MAX);
-impl_default!(u8, 0u8, 1u8, u8::MIN, u8::MAX);
-impl_default!(u16, 0u16, 1u16, u16::MIN, u16::MAX);
-impl_default!(u32, 0u32, 1u32, u32::MIN, u32::MAX);
-impl_default!(u64, 0u64, 1u64, u64::MIN, u64::MAX);
-impl_default!(u128, 0u128, 1u128, u128::MIN, u128::MAX);
+impl_default!(u8, 0u8, 1u8, u8::MIN, u8::MAX, 0u8);
+impl_default!(u16, 0u16, 1u16, u16::MIN, u16::MAX, 0u16);
+impl_default!(u32, 0u32, 1u32, u32::MIN, u32::MAX, 0u32);
+impl_default!(u64, 0u64, 1u64, u64::MIN, u64::MAX, 0u64);
+impl_default!(u128, 0u128, 1u128, u128::MIN, u128::MAX, 0u128);
 // impl_default!(usize, 0usize, 1usize, usize::MIN, usize::MAX);
 
 pub trait Absolute {
@@ -298,6 +408,7 @@ pub mod types {
         const ONE: Self = Self::TRUE;
         const MIN: Self = Self::FALSE;
         const MAX: Self = Self::TRUE;
+        const TEST_TOLERANCE: Self = Self::FALSE;
     }
 
     impl std::ops::Add for boolean {

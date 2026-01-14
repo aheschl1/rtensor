@@ -390,7 +390,7 @@ fn cuda_mean_reduction_benchmark() -> Result<(), pyo3::PyErr> {
         "MeanReduction_100x100",
         {
             let a = CudaTensor::<f64>::ones((100, 100));
-            a.total_mean().unwrap()
+            a.mean().unwrap()
         },
         |py, torch|,
         {
@@ -408,7 +408,7 @@ fn cuda_mean_reduction_benchmark() -> Result<(), pyo3::PyErr> {
         "MeanReduction_500x500",
         {
             let a = CudaTensor::<f64>::ones((500, 500));
-            a.total_mean().unwrap()
+            a.mean().unwrap()
         },
         |py, torch|,
         {
@@ -426,7 +426,7 @@ fn cuda_mean_reduction_benchmark() -> Result<(), pyo3::PyErr> {
         "MeanReduction_1000x1000",
         {
             let a = CudaTensor::<f64>::ones((1000, 1000));
-            a.total_mean().unwrap()
+            a.mean().unwrap()
         },
         |py, torch|,
         {

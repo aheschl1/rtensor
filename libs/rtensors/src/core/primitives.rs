@@ -1,12 +1,17 @@
+use std::cell::RefCell;
+use std::fmt::Debug;
 use std::marker::PhantomData;
 #[cfg(feature = "remote")]
 use std::net::IpAddr;
+use std::sync::Arc;
 
 
 use crate::backend::Backend;
 use crate::backend::cpu::Cpu;
+use crate::core::value::WeightValue;
+use crate::grad::{self, GradNode, NodeKey};
 use crate::core::value::TensorValue;
-use crate::core::{MetaTensor, MetaTensorView, Shape, shape_to_stride};
+use crate::core::{shape_to_stride, MetaTensor, MetaTensorView, Shape};
 use crate::core::tensor::{TensorError, compute_squeezed_parameters};
 
 /// A generic tensor with backend-specific storage.
@@ -18,7 +23,6 @@ pub struct TensorBase<T: TensorValue, B: Backend> {
     pub(crate) backend: B,
     pub(crate) buf: B::Buf<T>,
     pub(crate) meta: MetaTensor,
-    _t: PhantomData<T>,
 }
 
 impl<B: Backend, T: TensorValue> Clone for TensorBase<T, B> {
@@ -29,7 +33,6 @@ impl<B: Backend, T: TensorValue> Clone for TensorBase<T, B> {
             backend: new_backend,
             buf: new_buffer,
             meta: self.meta.clone(),
-            _t: PhantomData,
         }
 
     }
@@ -188,8 +191,7 @@ where
         Self {
             backend,
             buf: raw,
-            meta,
-            _t: PhantomData,
+            meta
         }
     }
 
@@ -227,8 +229,7 @@ where
         Ok(Self {
             backend,
             buf: buffer,
-            meta: MetaTensor::new(shape, stride, 0),
-            _t: PhantomData,
+            meta: MetaTensor::new(shape, stride, 0)
         })
     }
 
@@ -326,7 +327,6 @@ where
         self.meta.shape = new_shape;
         self.meta.strides = new_strides;
     }
-
 }
 
 #[cfg(feature = "remote")]

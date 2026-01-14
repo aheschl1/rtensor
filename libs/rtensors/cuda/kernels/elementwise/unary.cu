@@ -12,6 +12,62 @@ struct SigmoidOp {
     }
 };
 
+struct SiluOp {
+    template<typename  T>
+    __device__ __forceinline__ T operator()(T x) const {
+         return x / ((T) 1 + exp(-x));
+    }
+};
+
+struct LnOp {
+    template<typename  T>
+    __device__ __forceinline__ T operator()(T x) const {
+         return log(x);
+    }
+};
+
+struct Ln1pOp {
+    template<typename  T>
+    __device__ __forceinline__ T operator()(T x) const {
+         return log1p(x);
+    }
+};
+
+struct FloorOp {
+    template<typename  T>
+    __device__ __forceinline__ T operator()(T x) const {
+         return floor(x);
+    }
+};
+
+struct CeilOp {
+    template<typename  T>
+    __device__ __forceinline__ T operator()(T x) const {
+         return ceil(x);
+    }
+};
+
+struct RoundOp {
+    template<typename  T>
+    __device__ __forceinline__ T operator()(T x) const {
+         return round(x);
+    }
+};
+
+struct TruncOp {
+    template<typename  T>
+    __device__ __forceinline__ T operator()(T x) const {
+         return trunc(x);
+    }
+};
+
+struct ExpM1Op {
+    template<typename  T>
+    __device__ __forceinline__ T operator()(T x) const {
+         return expm1(x);
+    }
+};
+
 struct ReluOp {
     template<typename T>
     __device__ __forceinline__ T operator()(T x) const {
@@ -344,6 +400,9 @@ void launch_unary_strided_op(
 DECLARE_UNARY_LAUNCHERS(sigmoid, SigmoidOp, float,  f32)
 DECLARE_UNARY_LAUNCHERS(sigmoid, SigmoidOp, double, f64)
 
+DECLARE_UNARY_LAUNCHERS(silu, SiluOp, float,  f32)
+DECLARE_UNARY_LAUNCHERS(silu, SiluOp, double, f64)
+
 // negate: all signed + floats
 DECLARE_UNARY_LAUNCHERS(negate, NegateOp, float,   f32)
 DECLARE_UNARY_LAUNCHERS(negate, NegateOp, double,  f64)
@@ -371,6 +430,27 @@ DECLARE_UNARY_LAUNCHERS(abs, AbsOp, double, f64)
 
 DECLARE_UNARY_LAUNCHERS(sqrt, SqrtOp, float,  f32)
 DECLARE_UNARY_LAUNCHERS(sqrt, SqrtOp, double, f64)
+
+DECLARE_UNARY_LAUNCHERS(ln, LnOp, float,  f32)
+DECLARE_UNARY_LAUNCHERS(ln, LnOp, double, f64)
+
+DECLARE_UNARY_LAUNCHERS(ln1p, Ln1pOp, float,  f32)
+DECLARE_UNARY_LAUNCHERS(ln1p, Ln1pOp, double, f64)
+
+DECLARE_UNARY_LAUNCHERS(floor, FloorOp, float,  f32)
+DECLARE_UNARY_LAUNCHERS(floor, FloorOp, double, f64)
+
+DECLARE_UNARY_LAUNCHERS(ceil, CeilOp, float,  f32)
+DECLARE_UNARY_LAUNCHERS(ceil, CeilOp, double, f64)
+
+DECLARE_UNARY_LAUNCHERS(round, RoundOp, float,  f32)
+DECLARE_UNARY_LAUNCHERS(round, RoundOp, double, f64)
+
+DECLARE_UNARY_LAUNCHERS(trunc, TruncOp, float,  f32)
+DECLARE_UNARY_LAUNCHERS(trunc, TruncOp, double, f64)
+
+DECLARE_UNARY_LAUNCHERS(expm1, ExpM1Op, float,  f32)
+DECLARE_UNARY_LAUNCHERS(expm1, ExpM1Op, double, f64)
 
 
 DECLARE_UNARY_LAUNCHERS(sin, SinOp, float,  f32)

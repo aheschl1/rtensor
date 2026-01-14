@@ -50,12 +50,13 @@ const CUDA_BACKENDS: LazyLock<Vec<Cuda>> = LazyLock::new(|| {
     backends
 });
 
+#[derive(Debug)]
 pub struct CudaBuf<T: TensorValue> {
     pub(crate) ptr: CudaSlice<T>,
     pub(crate) len: usize,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Cuda {
     pub(crate) ctx: Arc<CudaContext>,
     pub(crate) cublas: Arc<CudaBlas>,
@@ -238,6 +239,340 @@ macro_rules! specify_trait_unary_cabal {
     };
 }
 
+macro_rules! specify_trait_scalar_cabal {
+    // ===== entry: no extra bounds (all types) =====
+    ( $op:ident ) => {
+        specify_trait_scalar_cabal! { @impl_all_types $op, }
+    };
+
+    // ===== entry: with extra bounds (float-only) =====
+    ( $op:ident where T: $($extra:tt)+ ) => {
+        specify_trait_scalar_cabal! { @impl_float_only $op, + $($extra)+ }
+    };
+
+    // ===== implementation for all types =====
+    ( @impl_all_types $op:ident, $($extra_bounds:tt)* ) => {
+        paste::paste! {
+            fn [<scalar_apply_ $op _contiguous>]<T: TensorValue $($extra_bounds)*>(
+                &self,
+                buf: &mut Self::Buf<T>,
+                value: T,
+                start: usize,
+                len: usize,
+            ) -> Result<(), TensorError> {
+                let stream = self.stream();
+
+                macro_rules! launch {
+                    ($launch_fn:ident, $t:ty) => {{
+                        let concrete_value: $t = unsafe { std::mem::transmute_copy(&value) };
+                        let (raw_ptr, _) = buf.ptr.device_ptr(&stream);
+                        let data_ptr = raw_ptr as *mut $t;
+                        let data_ptr = unsafe { data_ptr.add(start) };
+                        unsafe { $launch_fn(data_ptr, len, concrete_value, DEFAULT_BLOCK_SIZE); }
+                        self.dirty();
+                        Ok(())
+                    }};
+                }
+
+                match std::any::TypeId::of::<T>() {
+                    id if id == std::any::TypeId::of::<f32>() =>
+                        launch!([<launch_ $op _contiguous_f32>], f32),
+                    id if id == std::any::TypeId::of::<f64>() =>
+                        launch!([<launch_ $op _contiguous_f64>], f64),
+                    id if id == std::any::TypeId::of::<u8>() =>
+                        launch!([<launch_ $op _contiguous_u8>], u8),
+                    id if id == std::any::TypeId::of::<u16>() =>
+                        launch!([<launch_ $op _contiguous_u16>], u16),
+                    id if id == std::any::TypeId::of::<u32>() =>
+                        launch!([<launch_ $op _contiguous_u32>], u32),
+                    id if id == std::any::TypeId::of::<u64>() =>
+                        launch!([<launch_ $op _contiguous_u64>], u64),
+                    id if id == std::any::TypeId::of::<u128>() =>
+                        launch!([<launch_ $op _contiguous_u128>], u128),
+                    id if id == std::any::TypeId::of::<i8>() =>
+                        launch!([<launch_ $op _contiguous_i8>], i8),
+                    id if id == std::any::TypeId::of::<i16>() =>
+                        launch!([<launch_ $op _contiguous_i16>], i16),
+                    id if id == std::any::TypeId::of::<i32>() =>
+                        launch!([<launch_ $op _contiguous_i32>], i32),
+                    id if id == std::any::TypeId::of::<i64>() =>
+                        launch!([<launch_ $op _contiguous_i64>], i64),
+                    id if id == std::any::TypeId::of::<i128>() =>
+                        launch!([<launch_ $op _contiguous_i128>], i128),
+                    id if id == std::any::TypeId::of::<types::boolean>() =>
+                        launch!([<launch_ $op _contiguous_boolean>], bool),
+                    _ => Err(TensorError::CudaError(format!(
+                        "Unsupported type for CUDA {} operation",
+                        stringify!($op),
+                    ))),
+                }
+            }
+
+            fn [<scalar_apply_ $op _1d_strided>]<T: TensorValue $($extra_bounds)*>(
+                &self,
+                buf: &mut Self::Buf<T>,
+                value: T,
+                offset: usize,
+                stride: isize,
+                len: usize,
+            ) -> Result<(), TensorError> {
+                let stream = self.stream();
+
+                macro_rules! launch {
+                    ($launch_fn:ident, $t:ty) => {{
+                        let concrete_value: $t = unsafe { std::mem::transmute_copy(&value) };
+                        let (raw_ptr, _) = buf.ptr.device_ptr(&stream);
+                        let data_ptr = raw_ptr as *mut $t;
+                        unsafe { $launch_fn(data_ptr, offset, stride, len, concrete_value, DEFAULT_BLOCK_SIZE); }
+                        self.dirty();
+                        Ok(())
+                    }};
+                }
+
+                match std::any::TypeId::of::<T>() {
+                    id if id == std::any::TypeId::of::<f32>() =>
+                        launch!([<launch_ $op _strided_f32>], f32),
+                    id if id == std::any::TypeId::of::<f64>() =>
+                        launch!([<launch_ $op _strided_f64>], f64),
+                    id if id == std::any::TypeId::of::<u8>() =>
+                        launch!([<launch_ $op _strided_u8>], u8),
+                    id if id == std::any::TypeId::of::<u16>() =>
+                        launch!([<launch_ $op _strided_u16>], u16),
+                    id if id == std::any::TypeId::of::<u32>() =>
+                        launch!([<launch_ $op _strided_u32>], u32),
+                    id if id == std::any::TypeId::of::<u64>() =>
+                        launch!([<launch_ $op _strided_u64>], u64),
+                    id if id == std::any::TypeId::of::<u128>() =>
+                        launch!([<launch_ $op _strided_u128>], u128),
+                    id if id == std::any::TypeId::of::<i8>() =>
+                        launch!([<launch_ $op _strided_i8>], i8),
+                    id if id == std::any::TypeId::of::<i16>() =>
+                        launch!([<launch_ $op _strided_i16>], i16),
+                    id if id == std::any::TypeId::of::<i32>() =>
+                        launch!([<launch_ $op _strided_i32>], i32),
+                    id if id == std::any::TypeId::of::<i64>() =>
+                        launch!([<launch_ $op _strided_i64>], i64),
+                    id if id == std::any::TypeId::of::<i128>() =>
+                        launch!([<launch_ $op _strided_i128>], i128),
+                    id if id == std::any::TypeId::of::<types::boolean>() =>
+                        launch!([<launch_ $op _strided_boolean>], bool),
+                    _ => Err(TensorError::CudaError(format!(
+                        "Unsupported type for CUDA {} operation",
+                        stringify!($op),
+                    ))),
+                }
+            }
+
+            fn [<scalar_apply_ $op _nd>]<T: TensorValue $($extra_bounds)*>(
+                &self,
+                buf: &mut Self::Buf<T>,
+                value: T,
+                offset: usize,
+                shape: &[usize],
+                stride: &[isize],
+            ) -> Result<(), TensorError> {
+                let stream = self.stream();
+                let rank = shape.len();
+                let size = shape.iter().product::<usize>();
+
+                // allocate device memory for shape/stride
+                let shape_buf = self.alloc_from_slice(
+                    shape.iter().copied().map(|x| x as u64).collect::<Vec<u64>>().into_boxed_slice()
+                )?;
+                let stride_buf = self.alloc_from_slice(
+                    stride.iter().copied().map(|x| x as i64).collect::<Vec<i64>>().into_boxed_slice()
+                )?;
+
+                let (stride_ptr, _) = stride_buf.ptr.device_ptr(&stream);
+                let (shape_ptr,  _) = shape_buf.ptr.device_ptr(&stream);
+
+                macro_rules! launch {
+                    ($launch_fn:ident, $t:ty) => {{
+                        let concrete_value: $t = unsafe { std::mem::transmute_copy(&value) };
+                        let (raw_ptr, _) = buf.ptr.device_ptr(&stream);
+                        let data_ptr = raw_ptr as *mut $t;
+                        unsafe {
+                            $launch_fn(
+                                data_ptr,
+                                offset,
+                                stride_ptr as *const isize,
+                                shape_ptr  as *const usize,
+                                rank,
+                                size,
+                                concrete_value,
+                                DEFAULT_BLOCK_SIZE,
+                            );
+                        }
+                        self.dirty();
+                        Ok(())
+                    }};
+                }
+
+                match std::any::TypeId::of::<T>() {
+                    id if id == std::any::TypeId::of::<f32>() =>
+                        launch!([<launch_ $op _nd_affine_f32>], f32),
+                    id if id == std::any::TypeId::of::<f64>() =>
+                        launch!([<launch_ $op _nd_affine_f64>], f64),
+                    id if id == std::any::TypeId::of::<u8>() =>
+                        launch!([<launch_ $op _nd_affine_u8>], u8),
+                    id if id == std::any::TypeId::of::<u16>() =>
+                        launch!([<launch_ $op _nd_affine_u16>], u16),
+                    id if id == std::any::TypeId::of::<u32>() =>
+                        launch!([<launch_ $op _nd_affine_u32>], u32),
+                    id if id == std::any::TypeId::of::<u64>() =>
+                        launch!([<launch_ $op _nd_affine_u64>], u64),
+                    id if id == std::any::TypeId::of::<u128>() =>
+                        launch!([<launch_ $op _nd_affine_u128>], u128),
+                    id if id == std::any::TypeId::of::<i8>() =>
+                        launch!([<launch_ $op _nd_affine_i8>], i8),
+                    id if id == std::any::TypeId::of::<i16>() =>
+                        launch!([<launch_ $op _nd_affine_i16>], i16),
+                    id if id == std::any::TypeId::of::<i32>() =>
+                        launch!([<launch_ $op _nd_affine_i32>], i32),
+                    id if id == std::any::TypeId::of::<i64>() =>
+                        launch!([<launch_ $op _nd_affine_i64>], i64),
+                    id if id == std::any::TypeId::of::<i128>() =>
+                        launch!([<launch_ $op _nd_affine_i128>], i128),
+                    id if id == std::any::TypeId::of::<types::boolean>() =>
+                        launch!([<launch_ $op _nd_affine_boolean>], bool),
+                    _ => Err(TensorError::CudaError(format!(
+                        "Unsupported type for CUDA {} operation",
+                        stringify!($op),
+                    ))),
+                }
+            }
+        }
+    };
+
+    // ===== implementation for float-only types =====
+    ( @impl_float_only $op:ident, $($extra_bounds:tt)* ) => {
+        paste::paste! {
+            fn [<scalar_apply_ $op _contiguous>]<T: TensorValue $($extra_bounds)*>(
+                &self,
+                buf: &mut Self::Buf<T>,
+                value: T,
+                start: usize,
+                len: usize,
+            ) -> Result<(), TensorError> {
+                let stream = self.stream();
+
+                macro_rules! launch {
+                    ($launch_fn:ident, $t:ty) => {{
+                        let concrete_value: $t = unsafe { std::mem::transmute_copy(&value) };
+                        let (raw_ptr, _) = buf.ptr.device_ptr(&stream);
+                        let data_ptr = raw_ptr as *mut $t;
+                        let data_ptr = unsafe { data_ptr.add(start) };
+                        unsafe { $launch_fn(data_ptr, len, concrete_value, DEFAULT_BLOCK_SIZE); }
+                        self.dirty();
+                        Ok(())
+                    }};
+                }
+
+                match std::any::TypeId::of::<T>() {
+                    id if id == std::any::TypeId::of::<f32>() =>
+                        launch!([<launch_ $op _contiguous_f32>], f32),
+                    id if id == std::any::TypeId::of::<f64>() =>
+                        launch!([<launch_ $op _contiguous_f64>], f64),
+                    _ => Err(TensorError::CudaError(format!(
+                        "Unsupported type for CUDA {} operation (float-only)",
+                        stringify!($op),
+                    ))),
+                }
+            }
+
+            fn [<scalar_apply_ $op _1d_strided>]<T: TensorValue $($extra_bounds)*>(
+                &self,
+                buf: &mut Self::Buf<T>,
+                value: T,
+                offset: usize,
+                stride: isize,
+                len: usize,
+            ) -> Result<(), TensorError> {
+                let stream = self.stream();
+
+                macro_rules! launch {
+                    ($launch_fn:ident, $t:ty) => {{
+                        let concrete_value: $t = unsafe { std::mem::transmute_copy(&value) };
+                        let (raw_ptr, _) = buf.ptr.device_ptr(&stream);
+                        let data_ptr = raw_ptr as *mut $t;
+                        unsafe { $launch_fn(data_ptr, offset, stride, len, concrete_value, DEFAULT_BLOCK_SIZE); }
+                        self.dirty();
+                        Ok(())
+                    }};
+                }
+
+                match std::any::TypeId::of::<T>() {
+                    id if id == std::any::TypeId::of::<f32>() =>
+                        launch!([<launch_ $op _strided_f32>], f32),
+                    id if id == std::any::TypeId::of::<f64>() =>
+                        launch!([<launch_ $op _strided_f64>], f64),
+                    _ => Err(TensorError::CudaError(format!(
+                        "Unsupported type for CUDA {} operation (float-only)",
+                        stringify!($op),
+                    ))),
+                }
+            }
+
+            fn [<scalar_apply_ $op _nd>]<T: TensorValue $($extra_bounds)*>(
+                &self,
+                buf: &mut Self::Buf<T>,
+                value: T,
+                offset: usize,
+                shape: &[usize],
+                stride: &[isize],
+            ) -> Result<(), TensorError> {
+                let stream = self.stream();
+                let rank = shape.len();
+                let size = shape.iter().product::<usize>();
+
+                // allocate device memory for shape/stride
+                let shape_buf = self.alloc_from_slice(
+                    shape.iter().copied().map(|x| x as u64).collect::<Vec<u64>>().into_boxed_slice()
+                )?;
+                let stride_buf = self.alloc_from_slice(
+                    stride.iter().copied().map(|x| x as i64).collect::<Vec<i64>>().into_boxed_slice()
+                )?;
+
+                let (stride_ptr, _) = stride_buf.ptr.device_ptr(&stream);
+                let (shape_ptr,  _) = shape_buf.ptr.device_ptr(&stream);
+
+                macro_rules! launch {
+                    ($launch_fn:ident, $t:ty) => {{
+                        let concrete_value: $t = unsafe { std::mem::transmute_copy(&value) };
+                        let (raw_ptr, _) = buf.ptr.device_ptr(&stream);
+                        let data_ptr = raw_ptr as *mut $t;
+                        unsafe {
+                            $launch_fn(
+                                data_ptr,
+                                offset,
+                                stride_ptr as *const isize,
+                                shape_ptr  as *const usize,
+                                rank,
+                                size,
+                                concrete_value,
+                                DEFAULT_BLOCK_SIZE,
+                            );
+                        }
+                        self.dirty();
+                        Ok(())
+                    }};
+                }
+
+                match std::any::TypeId::of::<T>() {
+                    id if id == std::any::TypeId::of::<f32>() =>
+                        launch!([<launch_ $op _nd_affine_f32>], f32),
+                    id if id == std::any::TypeId::of::<f64>() =>
+                        launch!([<launch_ $op _nd_affine_f64>], f64),
+                    _ => Err(TensorError::CudaError(format!(
+                        "Unsupported type for CUDA {} operation (float-only)",
+                        stringify!($op),
+                    ))),
+                }
+            }
+        }
+    };
+}
+
 
 
 impl Backend for Cuda {
@@ -394,272 +729,272 @@ impl Backend for Cuda {
         Ok(host_buf.into_boxed_slice())
     }
 
-    fn apply_elementwise_binary_contiguous<T: TensorValue>(
-        &self,
-        buf: &mut Self::Buf<T>,
-        op: (BinaryOpType, T),
-        start: usize,
-        len: usize,
-    ) -> Result<(), TensorError> {
-        let op_code = op.0.to_op_code();
-        let value = op.1;
-        let stream = self.stream();
+    // fn apply_elementwise_binary_contiguous<T: TensorValue>(
+    //     &self,
+    //     buf: &mut Self::Buf<T>,
+    //     op: (BinaryOpType, T),
+    //     start: usize,
+    //     len: usize,
+    // ) -> Result<(), TensorError> {
+    //     let op_code = op.0.to_op_code();
+    //     let value = op.1;
+    //     let stream = self.stream();
 
-        macro_rules! launch_elementwise {
-            ($launch_fn:ident, $t:ty) => {{
-                // transmute value from T to actual type
-                let concrete_value: $t = unsafe { std::mem::transmute_copy(&value) };
+    //     macro_rules! launch_elementwise {
+    //         ($launch_fn:ident, $t:ty) => {{
+    //             // transmute value from T to actual type
+    //             let concrete_value: $t = unsafe { std::mem::transmute_copy(&value) };
 
-                let (raw_ptr, _) = buf.ptr.device_ptr(&stream);
-                let data_ptr = raw_ptr as *mut $t;
-                let data_ptr = unsafe { data_ptr.add(start) };
+    //             let (raw_ptr, _) = buf.ptr.device_ptr(&stream);
+    //             let data_ptr = raw_ptr as *mut $t;
+    //             let data_ptr = unsafe { data_ptr.add(start) };
 
-                unsafe {
-                    $launch_fn(
-                        data_ptr as *mut $t,
-                        len,
-                        op_code,
-                        concrete_value,
-                        DEFAULT_BLOCK_SIZE,
-                    );
-                }
-                self.dirty();
-                Ok(())
-            }};
-        }
+    //             unsafe {
+    //                 $launch_fn(
+    //                     data_ptr as *mut $t,
+    //                     len,
+    //                     op_code,
+    //                     concrete_value,
+    //                     DEFAULT_BLOCK_SIZE,
+    //                 );
+    //             }
+    //             self.dirty();
+    //             Ok(())
+    //         }};
+    //     }
 
-        // Dispatch based on type
-        let tid = std::any::TypeId::of::<T>();
-        match tid {
-            id if id == std::any::TypeId::of::<f32>() => {
-                launch_elementwise!(launch_elementwise_contiguous_f32, f32)
-            }
-            id if id == std::any::TypeId::of::<f64>() => {
-                launch_elementwise!(launch_elementwise_contiguous_f64, f64)
-            }
-            id if id == std::any::TypeId::of::<u8>() => {
-                launch_elementwise!(launch_elementwise_contiguous_u8, u8)
-            }
-            id if id == std::any::TypeId::of::<u16>() => {
-                launch_elementwise!(launch_elementwise_contiguous_u16, u16)
-            }
-            id if id == std::any::TypeId::of::<u32>() => {
-                launch_elementwise!(launch_elementwise_contiguous_u32, u32)
-            }
-            id if id == std::any::TypeId::of::<u64>() => {
-                launch_elementwise!(launch_elementwise_contiguous_u64, u64)
-            }
-            id if id == std::any::TypeId::of::<u128>() => {
-                launch_elementwise!(launch_elementwise_contiguous_u128, u128)
-            }
-            id if id == std::any::TypeId::of::<i8>() => {
-                launch_elementwise!(launch_elementwise_contiguous_i8, i8)
-            }
-            id if id == std::any::TypeId::of::<i16>() => {
-                launch_elementwise!(launch_elementwise_contiguous_i16, i16)
-            }
-            id if id == std::any::TypeId::of::<i32>() => {
-                launch_elementwise!(launch_elementwise_contiguous_i32, i32)
-            }
-            id if id == std::any::TypeId::of::<i64>() => {
-                launch_elementwise!(launch_elementwise_contiguous_i64, i64)
-            }
-            id if id == std::any::TypeId::of::<i128>() => {
-                launch_elementwise!(launch_elementwise_contiguous_i128, i128)
-            }
-            id if id == std::any::TypeId::of::<types::boolean>() => {
-                launch_elementwise!(launch_elementwise_contiguous_boolean, bool)
-            }
-            _ => Err(TensorError::CudaError(
-                "Unsupported type for CUDA elementwise operation".to_string(),
-            )),
-        }
-    }
+    //     // Dispatch based on type
+    //     let tid = std::any::TypeId::of::<T>();
+    //     match tid {
+    //         id if id == std::any::TypeId::of::<f32>() => {
+    //             launch_elementwise!(launch_elementwise_contiguous_f32, f32)
+    //         }
+    //         id if id == std::any::TypeId::of::<f64>() => {
+    //             launch_elementwise!(launch_elementwise_contiguous_f64, f64)
+    //         }
+    //         id if id == std::any::TypeId::of::<u8>() => {
+    //             launch_elementwise!(launch_elementwise_contiguous_u8, u8)
+    //         }
+    //         id if id == std::any::TypeId::of::<u16>() => {
+    //             launch_elementwise!(launch_elementwise_contiguous_u16, u16)
+    //         }
+    //         id if id == std::any::TypeId::of::<u32>() => {
+    //             launch_elementwise!(launch_elementwise_contiguous_u32, u32)
+    //         }
+    //         id if id == std::any::TypeId::of::<u64>() => {
+    //             launch_elementwise!(launch_elementwise_contiguous_u64, u64)
+    //         }
+    //         id if id == std::any::TypeId::of::<u128>() => {
+    //             launch_elementwise!(launch_elementwise_contiguous_u128, u128)
+    //         }
+    //         id if id == std::any::TypeId::of::<i8>() => {
+    //             launch_elementwise!(launch_elementwise_contiguous_i8, i8)
+    //         }
+    //         id if id == std::any::TypeId::of::<i16>() => {
+    //             launch_elementwise!(launch_elementwise_contiguous_i16, i16)
+    //         }
+    //         id if id == std::any::TypeId::of::<i32>() => {
+    //             launch_elementwise!(launch_elementwise_contiguous_i32, i32)
+    //         }
+    //         id if id == std::any::TypeId::of::<i64>() => {
+    //             launch_elementwise!(launch_elementwise_contiguous_i64, i64)
+    //         }
+    //         id if id == std::any::TypeId::of::<i128>() => {
+    //             launch_elementwise!(launch_elementwise_contiguous_i128, i128)
+    //         }
+    //         id if id == std::any::TypeId::of::<types::boolean>() => {
+    //             launch_elementwise!(launch_elementwise_contiguous_boolean, bool)
+    //         }
+    //         _ => Err(TensorError::CudaError(
+    //             "Unsupported type for CUDA elementwise operation".to_string(),
+    //         )),
+    //     }
+    // }
 
-    fn apply_elementwise_binary_1d_strided<T: TensorValue>(
-        &self,
-        buf: &mut Self::Buf<T>,
-        op: (BinaryOpType, T),
-        start: usize,
-        stride: isize,
-        len: usize,
-    ) -> Result<(), TensorError> {
-        let op_code = op.0.to_op_code();
-        let value = op.1;
-        let stream = self.stream();
+    // fn apply_elementwise_binary_1d_strided<T: TensorValue>(
+    //     &self,
+    //     buf: &mut Self::Buf<T>,
+    //     op: (BinaryOpType, T),
+    //     start: usize,
+    //     stride: isize,
+    //     len: usize,
+    // ) -> Result<(), TensorError> {
+    //     let op_code = op.0.to_op_code();
+    //     let value = op.1;
+    //     let stream = self.stream();
 
-        macro_rules! launch_elementwise {
-            ($launch_fn:ident, $t:ty) => {{
-                // transmute value from T to actual type
-                let concrete_value: $t = unsafe { std::mem::transmute_copy(&value) };
-                let (data_ptr, _) = buf.ptr.device_ptr(&stream);
+    //     macro_rules! launch_elementwise {
+    //         ($launch_fn:ident, $t:ty) => {{
+    //             // transmute value from T to actual type
+    //             let concrete_value: $t = unsafe { std::mem::transmute_copy(&value) };
+    //             let (data_ptr, _) = buf.ptr.device_ptr(&stream);
 
-                unsafe {
-                    $launch_fn(
-                        data_ptr as *mut $t,
-                        start,
-                        stride,
-                        len,
-                        op_code,
-                        concrete_value,
-                        DEFAULT_BLOCK_SIZE,
-                    );
-                }
-                self.dirty();
-                Ok(())
-            }};
-        }
+    //             unsafe {
+    //                 $launch_fn(
+    //                     data_ptr as *mut $t,
+    //                     start,
+    //                     stride,
+    //                     len,
+    //                     op_code,
+    //                     concrete_value,
+    //                     DEFAULT_BLOCK_SIZE,
+    //                 );
+    //             }
+    //             self.dirty();
+    //             Ok(())
+    //         }};
+    //     }
 
-        // Dispatch based on type
-        match std::any::TypeId::of::<T>() {
-            id if id == std::any::TypeId::of::<f32>() => {
-                launch_elementwise!(launch_elementwise_strided_f32, f32)
-            }
-            id if id == std::any::TypeId::of::<f64>() => {
-                launch_elementwise!(launch_elementwise_strided_f64, f64)
-            }
-            id if id == std::any::TypeId::of::<u8>() => {
-                launch_elementwise!(launch_elementwise_strided_u8, u8)
-            }
-            id if id == std::any::TypeId::of::<u16>() => {
-                launch_elementwise!(launch_elementwise_strided_u16, u16)
-            }
-            id if id == std::any::TypeId::of::<u32>() => {
-                launch_elementwise!(launch_elementwise_strided_u32, u32)
-            }
-            id if id == std::any::TypeId::of::<u64>() => {
-                launch_elementwise!(launch_elementwise_strided_u64, u64)
-            }
-            id if id == std::any::TypeId::of::<u128>() => {
-                launch_elementwise!(launch_elementwise_strided_u128, u128)
-            }
-            id if id == std::any::TypeId::of::<i8>() => {
-                launch_elementwise!(launch_elementwise_strided_i8, i8)
-            }
-            id if id == std::any::TypeId::of::<i16>() => {
-                launch_elementwise!(launch_elementwise_strided_i16, i16)
-            }
-            id if id == std::any::TypeId::of::<i32>() => {
-                launch_elementwise!(launch_elementwise_strided_i32, i32)
-            }
-            id if id == std::any::TypeId::of::<i64>() => {
-                launch_elementwise!(launch_elementwise_strided_i64, i64)
-            }
-            id if id == std::any::TypeId::of::<i128>() => {
-                launch_elementwise!(launch_elementwise_strided_i128, i128)
-            }
-            id if id == std::any::TypeId::of::<types::boolean>() => {
-                launch_elementwise!(launch_elementwise_strided_boolean, bool)
-            }
-            _ => Err(TensorError::CudaError(
-                "Unsupported type for CUDA elementwise operation".to_string(),
-            )),
-        }
-    }
+    //     // Dispatch based on type
+    //     match std::any::TypeId::of::<T>() {
+    //         id if id == std::any::TypeId::of::<f32>() => {
+    //             launch_elementwise!(launch_elementwise_strided_f32, f32)
+    //         }
+    //         id if id == std::any::TypeId::of::<f64>() => {
+    //             launch_elementwise!(launch_elementwise_strided_f64, f64)
+    //         }
+    //         id if id == std::any::TypeId::of::<u8>() => {
+    //             launch_elementwise!(launch_elementwise_strided_u8, u8)
+    //         }
+    //         id if id == std::any::TypeId::of::<u16>() => {
+    //             launch_elementwise!(launch_elementwise_strided_u16, u16)
+    //         }
+    //         id if id == std::any::TypeId::of::<u32>() => {
+    //             launch_elementwise!(launch_elementwise_strided_u32, u32)
+    //         }
+    //         id if id == std::any::TypeId::of::<u64>() => {
+    //             launch_elementwise!(launch_elementwise_strided_u64, u64)
+    //         }
+    //         id if id == std::any::TypeId::of::<u128>() => {
+    //             launch_elementwise!(launch_elementwise_strided_u128, u128)
+    //         }
+    //         id if id == std::any::TypeId::of::<i8>() => {
+    //             launch_elementwise!(launch_elementwise_strided_i8, i8)
+    //         }
+    //         id if id == std::any::TypeId::of::<i16>() => {
+    //             launch_elementwise!(launch_elementwise_strided_i16, i16)
+    //         }
+    //         id if id == std::any::TypeId::of::<i32>() => {
+    //             launch_elementwise!(launch_elementwise_strided_i32, i32)
+    //         }
+    //         id if id == std::any::TypeId::of::<i64>() => {
+    //             launch_elementwise!(launch_elementwise_strided_i64, i64)
+    //         }
+    //         id if id == std::any::TypeId::of::<i128>() => {
+    //             launch_elementwise!(launch_elementwise_strided_i128, i128)
+    //         }
+    //         id if id == std::any::TypeId::of::<types::boolean>() => {
+    //             launch_elementwise!(launch_elementwise_strided_boolean, bool)
+    //         }
+    //         _ => Err(TensorError::CudaError(
+    //             "Unsupported type for CUDA elementwise operation".to_string(),
+    //         )),
+    //     }
+    // }
 
-    fn apply_elementwise_binary_nd<T: TensorValue>(
-        &self,
-        buf: &mut Self::Buf<T>,
-        op: (BinaryOpType, T),
-        offset: usize,
-        shape: &[usize],
-        stride: &[isize],
-    ) -> Result<(), TensorError> {
-        let op_code = op.0.to_op_code();
-        let value = op.1;
-        let stream = self.stream();
-        let rank = shape.len();
-        let size = shape.iter().product::<usize>();
-        // we need ptr to stridde and shape
-        let shape_buf = self.alloc_from_slice(
-            shape
-                .to_vec()
-                .into_iter()
-                .map(|x| x as u64)
-                .collect::<Vec<u64>>()
-                .into_boxed_slice(),
-        )?;
-        let stride_buf = self.alloc_from_slice(
-            stride
-                .to_vec()
-                .into_iter()
-                .map(|x| x as i64)
-                .collect::<Vec<i64>>()
-                .into_boxed_slice(),
-        )?;
+    // fn apply_elementwise_binary_nd<T: TensorValue>(
+    //     &self,
+    //     buf: &mut Self::Buf<T>,
+    //     op: (BinaryOpType, T),
+    //     offset: usize,
+    //     shape: &[usize],
+    //     stride: &[isize],
+    // ) -> Result<(), TensorError> {
+    //     let op_code = op.0.to_op_code();
+    //     let value = op.1;
+    //     let stream = self.stream();
+    //     let rank = shape.len();
+    //     let size = shape.iter().product::<usize>();
+    //     // we need ptr to stridde and shape
+    //     let shape_buf = self.alloc_from_slice(
+    //         shape
+    //             .to_vec()
+    //             .into_iter()
+    //             .map(|x| x as u64)
+    //             .collect::<Vec<u64>>()
+    //             .into_boxed_slice(),
+    //     )?;
+    //     let stride_buf = self.alloc_from_slice(
+    //         stride
+    //             .to_vec()
+    //             .into_iter()
+    //             .map(|x| x as i64)
+    //             .collect::<Vec<i64>>()
+    //             .into_boxed_slice(),
+    //     )?;
 
-        let (stride_ptr, _) = stride_buf.ptr.device_ptr(&stream);
-        let (shape_ptr, _) = shape_buf.ptr.device_ptr(&stream);
+    //     let (stride_ptr, _) = stride_buf.ptr.device_ptr(&stream);
+    //     let (shape_ptr, _) = shape_buf.ptr.device_ptr(&stream);
 
-        macro_rules! launch_elementwise {
-            ($launch_fn:ident, $t:ty) => {{
-                // transmute value from T to actual type
-                let concrete_value: $t = unsafe { std::mem::transmute_copy(&value) };
-                let (data_ptr, _) = buf.ptr.device_ptr(&stream);
+    //     macro_rules! launch_elementwise {
+    //         ($launch_fn:ident, $t:ty) => {{
+    //             // transmute value from T to actual type
+    //             let concrete_value: $t = unsafe { std::mem::transmute_copy(&value) };
+    //             let (data_ptr, _) = buf.ptr.device_ptr(&stream);
 
-                unsafe {
-                    $launch_fn(
-                        data_ptr as *mut $t,
-                        offset,
-                        stride_ptr as *const isize,
-                        shape_ptr as *const usize,
-                        rank,
-                        size,
-                        op_code,
-                        concrete_value,
-                        DEFAULT_BLOCK_SIZE,
-                    );
-                }
-                self.dirty();
-                Ok(())
-            }};
-        }
+    //             unsafe {
+    //                 $launch_fn(
+    //                     data_ptr as *mut $t,
+    //                     offset,
+    //                     stride_ptr as *const isize,
+    //                     shape_ptr as *const usize,
+    //                     rank,
+    //                     size,
+    //                     op_code,
+    //                     concrete_value,
+    //                     DEFAULT_BLOCK_SIZE,
+    //                 );
+    //             }
+    //             self.dirty();
+    //             Ok(())
+    //         }};
+    //     }
 
-        match std::any::TypeId::of::<T>() {
-            id if id == std::any::TypeId::of::<f32>() => {
-                launch_elementwise!(launch_elementwise_nd_affine_f32, f32)
-            }
-            id if id == std::any::TypeId::of::<f64>() => {
-                launch_elementwise!(launch_elementwise_nd_affine_f64, f64)
-            }
-            id if id == std::any::TypeId::of::<u8>() => {
-                launch_elementwise!(launch_elementwise_nd_affine_u8, u8)
-            }
-            id if id == std::any::TypeId::of::<u16>() => {
-                launch_elementwise!(launch_elementwise_nd_affine_u16, u16)
-            }
-            id if id == std::any::TypeId::of::<u32>() => {
-                launch_elementwise!(launch_elementwise_nd_affine_u32, u32)
-            }
-            id if id == std::any::TypeId::of::<u64>() => {
-                launch_elementwise!(launch_elementwise_nd_affine_u64, u64)
-            }
-            id if id == std::any::TypeId::of::<u128>() => {
-                launch_elementwise!(launch_elementwise_nd_affine_u128, u128)
-            }
-            id if id == std::any::TypeId::of::<i8>() => {
-                launch_elementwise!(launch_elementwise_nd_affine_i8, i8)
-            }
-            id if id == std::any::TypeId::of::<i16>() => {
-                launch_elementwise!(launch_elementwise_nd_affine_i16, i16)
-            }
-            id if id == std::any::TypeId::of::<i32>() => {
-                launch_elementwise!(launch_elementwise_nd_affine_i32, i32)
-            }
-            id if id == std::any::TypeId::of::<i64>() => {
-                launch_elementwise!(launch_elementwise_nd_affine_i64, i64)
-            }
-            id if id == std::any::TypeId::of::<i128>() => {
-                launch_elementwise!(launch_elementwise_nd_affine_i128, i128)
-            }
-            id if id == std::any::TypeId::of::<types::boolean>() => {
-                launch_elementwise!(launch_elementwise_nd_affine_boolean, bool)
-            }
-            _ => Err(TensorError::CudaError(
-                "Unsupported type for CUDA elementwise operation".to_string(),
-            )),
-        }
-    }
+    //     match std::any::TypeId::of::<T>() {
+    //         id if id == std::any::TypeId::of::<f32>() => {
+    //             launch_elementwise!(launch_elementwise_nd_affine_f32, f32)
+    //         }
+    //         id if id == std::any::TypeId::of::<f64>() => {
+    //             launch_elementwise!(launch_elementwise_nd_affine_f64, f64)
+    //         }
+    //         id if id == std::any::TypeId::of::<u8>() => {
+    //             launch_elementwise!(launch_elementwise_nd_affine_u8, u8)
+    //         }
+    //         id if id == std::any::TypeId::of::<u16>() => {
+    //             launch_elementwise!(launch_elementwise_nd_affine_u16, u16)
+    //         }
+    //         id if id == std::any::TypeId::of::<u32>() => {
+    //             launch_elementwise!(launch_elementwise_nd_affine_u32, u32)
+    //         }
+    //         id if id == std::any::TypeId::of::<u64>() => {
+    //             launch_elementwise!(launch_elementwise_nd_affine_u64, u64)
+    //         }
+    //         id if id == std::any::TypeId::of::<u128>() => {
+    //             launch_elementwise!(launch_elementwise_nd_affine_u128, u128)
+    //         }
+    //         id if id == std::any::TypeId::of::<i8>() => {
+    //             launch_elementwise!(launch_elementwise_nd_affine_i8, i8)
+    //         }
+    //         id if id == std::any::TypeId::of::<i16>() => {
+    //             launch_elementwise!(launch_elementwise_nd_affine_i16, i16)
+    //         }
+    //         id if id == std::any::TypeId::of::<i32>() => {
+    //             launch_elementwise!(launch_elementwise_nd_affine_i32, i32)
+    //         }
+    //         id if id == std::any::TypeId::of::<i64>() => {
+    //             launch_elementwise!(launch_elementwise_nd_affine_i64, i64)
+    //         }
+    //         id if id == std::any::TypeId::of::<i128>() => {
+    //             launch_elementwise!(launch_elementwise_nd_affine_i128, i128)
+    //         }
+    //         id if id == std::any::TypeId::of::<types::boolean>() => {
+    //             launch_elementwise!(launch_elementwise_nd_affine_boolean, bool)
+    //         }
+    //         _ => Err(TensorError::CudaError(
+    //             "Unsupported type for CUDA elementwise operation".to_string(),
+    //         )),
+    //     }
+    // }
 
     fn broadcast<T: TensorValue>(
         &self,
@@ -1020,6 +1355,25 @@ impl Backend for Cuda {
     specify_trait_unary_cabal!{ square }
     specify_trait_unary_cabal!{ cube }
     specify_trait_unary_cabal!{ reciprocal  }
+
+    specify_trait_unary_cabal!{ln}
+    specify_trait_unary_cabal!{expm1}
+    specify_trait_unary_cabal!{ln1p}
+    specify_trait_unary_cabal!{floor}
+    specify_trait_unary_cabal!{ceil}
+    specify_trait_unary_cabal!{round}
+    specify_trait_unary_cabal!{trunc}
+    specify_trait_unary_cabal!{silu}
+
+    // Scalar binary operations
+    specify_trait_scalar_cabal!{add}
+    specify_trait_scalar_cabal!{sub}
+    specify_trait_scalar_cabal!{mul}
+    specify_trait_scalar_cabal!{div}
+    specify_trait_scalar_cabal!{log where T: WeightValue}
+    specify_trait_scalar_cabal!{log1p where T: WeightValue}
+    specify_trait_scalar_cabal!{leaky_relu}
+    specify_trait_scalar_cabal!{elu where T: WeightValue}
 
     fn apply_sigmoid_contiguous<T: TensorValue + InvExp>(
         &self,
@@ -1846,7 +2200,7 @@ mod tests {
         let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
             CudaTensor::<f64>::from_buf(vec![0.2, 0.3, 0.1, 0.3, 0.3, -0.1, -0.3, 0.3], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.total_sum().unwrap().item().unwrap(), 1.1);
+        assert_eq!(cuda.sum().unwrap().item().unwrap(), 1.1);
     }
 
     #[test]
@@ -1854,7 +2208,7 @@ mod tests {
          let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
             CudaTensor::<f64>::from_buf(vec![0.2, 0.3, 0.1, 0.3, 0.3, -0.1, -0.3, 0.3], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.max(&Idx::Item).unwrap().item().unwrap(), 0.3);
+        assert_eq!(cuda.max_at(&Idx::Item).unwrap().item().unwrap(), 0.3);
     }
 
     #[test]
@@ -1867,7 +2221,7 @@ mod tests {
                 -0.3, 0.3
             ], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.total_argmax().unwrap().item().unwrap(), 3);
+        assert_eq!(cuda.argmax().unwrap().item().unwrap(), 3);
     }
 
     #[test]
@@ -1880,7 +2234,15 @@ mod tests {
                 -0.3, 0.3
             ], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.total_argmin().unwrap().item().unwrap(), 6);
+        assert_eq!(cuda.argmin().unwrap().item().unwrap(), 6);
+    }
+
+    #[test]
+    pub fn test_reduce_total_argmax_case1() {
+         let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
+            CudaTensor::<f64>::from_buf(vec![0.2, 0.3, 0.1, 0.7, 0.3, -0.1, -0.3, 0.3], (4, 2))
+                .unwrap();
+        assert_eq!(cuda.total_argmax().unwrap().item().unwrap(), 3);
     }
 
      #[test]
@@ -1888,7 +2250,7 @@ mod tests {
          let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
             CudaTensor::<f64>::from_buf(vec![0.2, 0.3, 0.1, -0.9, 0.3, -0.1, -0.3, 0.3], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.min(&Idx::Item).unwrap().item().unwrap(), -0.9);
+        assert_eq!(cuda.min_at(&Idx::Item).unwrap().item().unwrap(), -0.9);
     }
 
 
@@ -1897,7 +2259,7 @@ mod tests {
          let cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
             CudaTensor::<f64>::from_buf(vec![1., 2., 3., 4., 5., 6., 7., 8.], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.prod(&Idx::Item).unwrap().item().unwrap(), 40320.);
+        assert_eq!(cuda.prod_at(&Idx::Item).unwrap().item().unwrap(), 40320.);
     }
 
     #[test]
@@ -1910,7 +2272,7 @@ mod tests {
                 7., 8.
             ], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.mean(&Idx::Item).unwrap().item().unwrap(), 4.5);
+        assert_eq!(cuda.mean_at(&Idx::Item).unwrap().item().unwrap(), 4.5);
     }
 
     #[test]
@@ -1918,7 +2280,7 @@ mod tests {
          let cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
             CudaTensor::<f64>::from_buf(vec![1., 2., 3., 4., 5., 6., 7., 8.], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.var(&Idx::Item).unwrap().item().unwrap(), 6.0);
+        assert_eq!(cuda.var_at(&Idx::Item).unwrap().item().unwrap(), 6.0);
     }
 
     #[test]
@@ -1926,7 +2288,7 @@ mod tests {
          let cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
             CudaTensor::<f64>::from_buf(vec![1., 2., 3., 4., 5., 6., 7., 8.], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.pop_var(&Idx::Item).unwrap().item().unwrap(), 5.25);
+        assert_eq!(cuda.pop_var_at(&Idx::Item).unwrap().item().unwrap(), 5.25);
     }
 
     #[test]
@@ -1934,7 +2296,7 @@ mod tests {
          let cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
             CudaTensor::<f64>::from_buf(vec![1., 2., 3., 4., 5., 6., 7., 8.], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.std(&Idx::Item, true).unwrap().item().unwrap(), 2.449489742783178);
+        assert_eq!(cuda.std_at(&Idx::Item, true).unwrap().item().unwrap(), 2.449489742783178);
     }
 
     #[test]
@@ -1942,7 +2304,7 @@ mod tests {
          let cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
             CudaTensor::<f64>::from_buf(vec![1., 2., 3., 4., 5., 6., 7., 8.], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.std(&Idx::Item, false).unwrap().item().unwrap(), 2.29128784747792);
+        assert_eq!(cuda.std_at(&Idx::Item, false).unwrap().item().unwrap(), 2.29128784747792);
     }
 
     #[test]
@@ -1950,7 +2312,7 @@ mod tests {
          let cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
             CudaTensor::<f64>::from_buf(vec![1., 2., 3., 4., 5., 6., 7., 8.], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.norm(&Idx::Item, NormType::L1).unwrap().item().unwrap(), 36.);
+        assert_eq!(cuda.norm_at(&Idx::Item, NormType::L1).unwrap().item().unwrap(), 36.);
     }
 
     #[test]
@@ -1958,7 +2320,7 @@ mod tests {
          let cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
             CudaTensor::<f64>::from_buf(vec![1., 2., 3., 4., 5., 6., 7., 8.], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.norm(&Idx::Item, NormType::L2).unwrap().item().unwrap(), 14.2828568570857);
+        assert_eq!(cuda.norm_at(&Idx::Item, NormType::L2).unwrap().item().unwrap(), 14.2828568570857);
     }
 
     #[test]
@@ -1966,7 +2328,7 @@ mod tests {
         let cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
             CudaTensor::<f64>::from_buf(vec![1., 0., 1., 0., 1., 1., 1., 0.], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.sum(&Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![4., 1.], (1, 2))?.cpu()?);
+        assert_eq!(cuda.sum_at(&Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![4., 1.], (1, 2))?.cpu()?);
         Ok(())
     }
 
@@ -1975,7 +2337,7 @@ mod tests {
         let cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
             CudaTensor::<f64>::from_buf(vec![3., 5., 6., 8., 1., 2., -1., 4.], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.max(&Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![6., 8.], (1, 2))?.cpu()?);
+        assert_eq!(cuda.max_at(&Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![6., 8.], (1, 2))?.cpu()?);
         Ok(())
     }
 
@@ -1984,7 +2346,7 @@ mod tests {
         let cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
             CudaTensor::<f64>::from_buf(vec![3., 5., 6., 8., 1., 2., -1., 4.], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.min(&Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![-1., 2.], (1, 2))?.cpu()?);
+        assert_eq!(cuda.min_at(&Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![-1., 2.], (1, 2))?.cpu()?);
         Ok(())
     }
 
@@ -1998,7 +2360,7 @@ mod tests {
             ], 
             (4, 2))
                 .unwrap();
-        assert_eq!(cuda.prod(&Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![-18., 320.], (1, 2))?.cpu()?);
+        assert_eq!(cuda.prod_at(&Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![-18., 320.], (1, 2))?.cpu()?);
         Ok(())
     }
 
@@ -2007,7 +2369,7 @@ mod tests {
         let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
             CudaTensor::<f64>::from_buf(vec![1.,  2., 3., 4., 5., 6., 7., 8.], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.mean(&Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![4.0, 5.0], (1, 2))?.cpu()?);
+        assert_eq!(cuda.mean_at(&Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![4.0, 5.0], (1, 2))?.cpu()?);
         Ok(())
     }
 
@@ -2020,7 +2382,7 @@ mod tests {
                 9., 6., 
                 7., 1.
             ], (4, 2)).unwrap();
-        assert_eq!(cuda.argmax(&Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![2, 2], (1, 2))?.cpu()?);
+        assert_eq!(cuda.argmax_at(&Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![2, 2], (1, 2))?.cpu()?);
         Ok(())
     }
 
@@ -2035,7 +2397,7 @@ mod tests {
                 9., 6., 
                 -7., 1.], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.argmin(&Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![3, 0], (1, 2))?.cpu()?);
+        assert_eq!(cuda.argmin_at(&Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![3, 0], (1, 2))?.cpu()?);
         Ok(())
     }
 
@@ -2045,7 +2407,7 @@ mod tests {
         let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
             CudaTensor::<f64>::from_buf(vec![1.,  2., 3., 4., 5., 6., 7., 8.], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.mean(&Idx::At(1))?.cpu()?, CudaTensor::from_buf(vec![1.5, 3.5, 5.5, 7.5], (4, 1))?.cpu()?);
+        assert_eq!(cuda.mean_at(&Idx::At(1))?.cpu()?, CudaTensor::from_buf(vec![1.5, 3.5, 5.5, 7.5], (4, 1))?.cpu()?);
         Ok(())
     }
 
@@ -2061,7 +2423,7 @@ mod tests {
                 7., 8.
             ], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.var(&Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![6.666666666666667, 6.666666666666667], (1, 2))?.cpu()?);
+        assert_eq!(cuda.var_at(&Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![6.666666666666667, 6.666666666666667], (1, 2))?.cpu()?);
         Ok(())
     }
 
@@ -2070,7 +2432,7 @@ mod tests {
         let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
             CudaTensor::<f64>::from_buf(vec![1.,  2., 3., 4., 5., 6., 7., 8.], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.pop_var(&Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![5., 5.], (1, 2))?.cpu()?);
+        assert_eq!(cuda.pop_var_at(&Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![5., 5.], (1, 2))?.cpu()?);
         Ok(())
     }
 
@@ -2079,7 +2441,7 @@ mod tests {
         let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
             CudaTensor::<f64>::from_buf(vec![1.,  2., 3., 4., 5., 6., 7., 8.], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.std(&Idx::At(0), true)?.cpu()?, CudaTensor::from_buf(vec![2.581988897471611, 2.581988897471611], (1, 2))?.cpu()?);
+        assert_eq!(cuda.std_at(&Idx::At(0), true)?.cpu()?, CudaTensor::from_buf(vec![2.581988897471611, 2.581988897471611], (1, 2))?.cpu()?);
         Ok(())
     }
 
@@ -2088,7 +2450,7 @@ mod tests {
         let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
             CudaTensor::<f64>::from_buf(vec![1.,  2., 3., 4., 5., 6., 7., 8.], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.std(&Idx::At(0), false)?.cpu()?, CudaTensor::from_buf(vec![2.23606797749979, 2.23606797749979], (1, 2))?.cpu()?);
+        assert_eq!(cuda.std_at(&Idx::At(0), false)?.cpu()?, CudaTensor::from_buf(vec![2.23606797749979, 2.23606797749979], (1, 2))?.cpu()?);
         Ok(())
     }
 
@@ -2097,7 +2459,7 @@ mod tests {
         let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
             CudaTensor::<f64>::from_buf(vec![1.,  2., 3., 4., 5., 6., 7., 8.], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.logsumexp(&Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![7.145077938960783, 8.145077938960782], (1, 2))?.cpu()?);
+        assert_eq!(cuda.logsumexp_at(&Idx::At(0))?.cpu()?, CudaTensor::from_buf(vec![7.145077938960783, 8.145077938960782], (1, 2))?.cpu()?);
         Ok(())
     }
 
@@ -2106,7 +2468,7 @@ mod tests {
         let mut cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
             CudaTensor::<f64>::from_buf(vec![1.,  2., 3., 4., 5., 6., 7., 8.], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.norm(&Idx::At(0), NormType::L1)?.cpu()?, CudaTensor::from_buf(vec![16., 20.], (1, 2))?.cpu()?);
+        assert_eq!(cuda.norm_at(&Idx::At(0), NormType::L1)?.cpu()?, CudaTensor::from_buf(vec![16., 20.], (1, 2))?.cpu()?);
         Ok(())
     }
 
@@ -2115,7 +2477,7 @@ mod tests {
         let cuda: crate::core::primitives::TensorBase<f64, crate::backend::cuda::Cuda> =
             CudaTensor::<f64>::from_buf(vec![1.,  2., 3., 4., 5., 6., 7., 8.], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.norm(&Idx::At(0), NormType::L2)?.cpu()?, CudaTensor::from_buf(vec![9.16515138991168, 10.954451150103322], (1, 2))?.cpu()?);
+        assert_eq!(cuda.norm_at(&Idx::At(0), NormType::L2)?.cpu()?, CudaTensor::from_buf(vec![9.16515138991168, 10.954451150103322], (1, 2))?.cpu()?);
         Ok(())
     }
 
@@ -2124,7 +2486,7 @@ mod tests {
         let cuda: crate::core::primitives::TensorBase<f32, crate::backend::cuda::Cuda> =
             CudaTensor::<f32>::from_buf(vec![1.,  2., 3., 4., 5., 6., 7., 8.], (4, 2))
                 .unwrap();
-        assert_eq!(cuda.norm(&Idx::At(0), NormType::L2)?.cpu()?, CudaTensor::from_buf(vec![9.165152, 10.954452], (1, 2))?.cpu()?);
+        assert_eq!(cuda.norm_at(&Idx::At(0), NormType::L2)?.cpu()?, CudaTensor::from_buf(vec![9.165152, 10.954452], (1, 2))?.cpu()?);
         Ok(())
     }
 
@@ -2138,7 +2500,7 @@ mod tests {
 
         println!("Original: {:?}", cuda.cpu());
 
-        let result = cuda.sum(&Idx::At(1));
+        let result = cuda.sum_at(&Idx::At(1));
         println!("Result: {:?}", result.unwrap().cpu());
 
         // let mut out: crate::core::primitives::TensorBase<f64, Cuda> = CudaTensor::from_buf(vec![0.0f64, 0.0f64], (2,))

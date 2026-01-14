@@ -18,6 +18,7 @@ use crate::core::Dim;
 /// // Single value
 /// let idx: Idx = 5.into();
 /// ```
+#[derive(Debug, Clone)]
 pub enum Idx {
     /// Multi-dimensional coordinates
     Coord(Vec<Dim>),
@@ -45,6 +46,12 @@ impl From<Vec<Dim>> for Idx {
     }
 }
 
+impl From<&Vec<Dim>> for Idx {
+    fn from(value: &Vec<Dim>) -> Self {
+        Idx::Coord(value.clone())
+    }
+}
+
 // Array slice implementation
 impl From<&[Dim]> for Idx {
     fn from(value: &[Dim]) -> Self {
@@ -69,7 +76,7 @@ impl<const N: usize> From<&[Dim; N]> for Idx {
 // Single usize (1D)
 impl From<usize> for Idx {
     fn from(value: usize) -> Self {
-        Idx::Coord(vec![value])
+        Idx::At(value)
     }
 }
 
