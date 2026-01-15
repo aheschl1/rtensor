@@ -1,6 +1,6 @@
 use slotmap::{new_key_type, SecondaryMap};
 
-use crate::{backend::{cpu::Cpu, Backend, BackendMatMul}, core::{idx::Idx, primitives::TensorBase, tensor::TensorError, untyped::UntypedTensor, value::{TensorValue, WeightValue}, MetaTensor, Shape, Strides}, grad::primitives::{GradTensor, GradTensorRef}};
+use crate::{backend::{cpu::Cpu, Backend, BackendMatMul}, core::{idx::Idx, primitives::TensorBase, tensor::TensorError, value::{TensorValue, WeightValue}, Shape, Strides}, grad::primitives::{GradTensor, GradTensorRef}};
 #[cfg(feature = "cuda")]
 use crate::backend::cuda::Cuda;
 use std::{any::{Any, TypeId}, cell::RefCell};
@@ -70,6 +70,17 @@ pub(crate) enum GradNode<T: TensorValue, B: Backend> {
     Negate { input: NodeKey },
     Sqrt { input: NodeKey, output: TensorBase<T, B> },
     Ln { input: NodeKey, x_reciprocal: TensorBase<T, B> }, // store 1/x for backward
+    Sin { input: NodeKey, input_tensor: TensorBase<T, B> },
+    Cos { input: NodeKey, input_tensor: TensorBase<T, B> },
+    Tan { input: NodeKey, input_tensor: TensorBase<T, B> },
+    Tanh { input: NodeKey, result: TensorBase<T, B> },
+    Exp { input: NodeKey, result: TensorBase<T, B> },
+    Square { input: NodeKey, input_tensor: TensorBase<T, B> },
+    Cube { input: NodeKey, input_tensor: TensorBase<T, B> },
+    Reciprocal { input: NodeKey, input_tensor: TensorBase<T, B> },
+    Rsqrt { input: NodeKey, result: TensorBase<T, B> },
+    Sinh { input: NodeKey, input_tensor: TensorBase<T, B> },
+    Cosh { input: NodeKey, input_tensor: TensorBase<T, B> },
     MatMul {
         left: NodeKey,
         right: NodeKey,
@@ -104,28 +115,39 @@ impl<T: WeightValue, B: Backend> GradNode<T, B> {
     #[inline]
     pub fn parents(&self) -> Vec<NodeKey> {
         match self {
-            GradNode::BroadcastAdd { left, right, .. } => vec![left.clone(), right.clone()],
-            GradNode::BroadcastSub { left, right, .. } => vec![left.clone(), right.clone()],
-            GradNode::BroadcastMul { left, right, .. } => vec![left.clone(), right.clone()],
-            GradNode::BroadcastDiv { left, right, .. } => vec![left.clone(), right.clone()],
-            GradNode::AddScalar { input } => vec![input.clone()],
-            GradNode::MulScalar { input , ..} => vec![input.clone()],
-            GradNode::DivScalar { input , ..} => vec![input.clone()],
-            GradNode::Abs { input, .. } => vec![input.clone()],
-            GradNode::L1 { input, target, ..} => vec![input.clone(), target.clone()],
+            GradNode::BroadcastAdd { left, right, .. } => vec![*left, *right],
+            GradNode::BroadcastSub { left, right, .. } => vec![*left, *right],
+            GradNode::BroadcastMul { left, right, .. } => vec![*left, *right],
+            GradNode::BroadcastDiv { left, right, .. } => vec![*left, *right],
+            GradNode::AddScalar { input } => vec![*input],
+            GradNode::MulScalar { input , ..} => vec![*input],
+            GradNode::DivScalar { input , ..} => vec![*input],
+            GradNode::Abs { input, .. } => vec![*input],
+            GradNode::L1 { input, target, ..} => vec![*input, *target],
             GradNode::Leaf(_) | GradNode::None => vec![],
-            GradNode::Permute { input, .. } => vec![input.clone()],
-            GradNode::ReLU { input, .. } => vec![input.clone()],
-            GradNode::Negate { input } => vec![input.clone()],
-            GradNode::Sigmoid { input, .. } => vec![input.clone()],
-            GradNode::Sqrt { input, .. } => vec![input.clone()],
-            GradNode::Ln { input, .. } => vec![input.clone()],
-            GradNode::MatMul { left, right, .. } => vec![left.clone(), right.clone()],
+            GradNode::Permute { input, .. } => vec![*input],
+            GradNode::ReLU { input, .. } => vec![*input],
+            GradNode::Negate { input } => vec![*input],
+            GradNode::Sigmoid { input, .. } => vec![*input],
+            GradNode::Sqrt { input, .. } => vec![*input],
+            GradNode::Ln { input, .. } => vec![*input],
+            GradNode::Sin { input, .. } => vec![*input],
+            GradNode::Cos { input, .. } => vec![*input],
+            GradNode::Tan { input, .. } => vec![*input],
+            GradNode::Tanh { input, .. } => vec![*input],
+            GradNode::Exp { input, .. } => vec![*input],
+            GradNode::Square { input, .. } => vec![*input],
+            GradNode::Cube { input, .. } => vec![*input],
+            GradNode::Reciprocal { input, .. } => vec![*input],
+            GradNode::Rsqrt { input, .. } => vec![*input],
+            GradNode::Sinh { input, .. } => vec![*input],
+            GradNode::Cosh { input, .. } => vec![*input],
+            GradNode::MatMul { left, right, .. } => vec![*left, *right],
         }
     }
 
     fn backwards(&self, upstream: &TensorBase<T, B>, _ctx: &GradContext<T, B>) -> Result<Vec<TensorBase<T, B>>, TensorError> 
-    where 
+    where
         B: BackendMatMul<T>
     {
         match self {
@@ -146,6 +168,17 @@ impl<T: WeightValue, B: Backend> GradNode<T, B> {
             GradNode::Abs { .. } => backwards::backwards_abs::<T, B>(self, upstream),
             GradNode::Sqrt { .. } => backwards::backwards_sqrt::<T, B>(self, upstream),
             GradNode::Ln { .. } => backwards::backwards_ln::<T, B>(self, upstream),
+            GradNode::Sin { .. } => backwards::backwards_sin::<T, B>(self, upstream),
+            GradNode::Cos { .. } => backwards::backwards_cos::<T, B>(self, upstream),
+            GradNode::Tan { .. } => backwards::backwards_tan::<T, B>(self, upstream),
+            GradNode::Tanh { .. } => backwards::backwards_tanh::<T, B>(self, upstream),
+            GradNode::Exp { .. } => backwards::backwards_exp::<T, B>(self, upstream),
+            GradNode::Square { .. } => backwards::backwards_square::<T, B>(self, upstream),
+            GradNode::Cube { .. } => backwards::backwards_cube::<T, B>(self, upstream),
+            GradNode::Reciprocal { .. } => backwards::backwards_reciprocal::<T, B>(self, upstream),
+            GradNode::Rsqrt { .. } => backwards::backwards_rsqrt::<T, B>(self, upstream),
+            GradNode::Sinh { .. } => backwards::backwards_sinh::<T, B>(self, upstream),
+            GradNode::Cosh { .. } => backwards::backwards_cosh::<T, B>(self, upstream),
             GradNode::MatMul { .. } => backwards::backwards_matmul::<T, B>(self, upstream),
             GradNode::None => Ok(vec![]),
             // _ => Err(TensorError::UnsupportedOperation("Backward not implemented for this node type.".into())),
@@ -156,6 +189,12 @@ impl<T: WeightValue, B: Backend> GradNode<T, B> {
 pub struct GradContext<T: TensorValue, B: Backend> {
     // tape: Vec<NodeKey>, // holds references to all inner tensors that require gradients
     pub(crate) nodes: RefCell<slotmap::SlotMap<NodeKey, GradNode<T, B>>>,
+}
+
+impl<T: WeightValue, B: Backend> Default for GradContext<T, B> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<T: WeightValue, B: Backend> GradContext<T, B> {

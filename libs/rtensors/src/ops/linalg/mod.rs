@@ -1,4 +1,4 @@
-use crate::{backend::Backend, core::{primitives::TensorBase, tensor::TensorError, value::TensorValue}};
+use crate::{backend::Backend, core::{tensor::TensorError, value::TensorValue}};
 
 mod matmul;
 

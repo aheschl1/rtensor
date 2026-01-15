@@ -109,6 +109,144 @@ struct AbsOp {
     }
 };
 
+struct SinOp {
+    template<typename T>
+    __device__ __forceinline__ T operator()(T x) const {
+        return sin(x);
+    }
+};
+
+struct CosOp {
+    template<typename T>
+    __device__ __forceinline__ T operator()(T x) const {
+        return cos(x);
+    }
+};
+struct TanOp {
+    template<typename T>
+    __device__ __forceinline__ T operator()(T x) const {
+        return tan(x);
+    }
+};
+
+
+struct AsinOp {
+    template<typename T>
+    __device__ __forceinline__ T operator()(T x) const {
+        return asin(x);
+    }
+};
+
+struct AcosOp {
+    template<typename T>
+    __device__ __forceinline__ T operator()(T x) const {
+        return acos(x);
+    }
+};
+struct AtanOp {
+    template<typename T>
+    __device__ __forceinline__ T operator()(T x) const {
+        return atan(x);
+    }
+};
+
+/*
+
+    Hyperbolic
+
+*/
+
+struct SinHOp {
+    template<typename T>
+    __device__ __forceinline__ T operator()(T x) const {
+        return sinh(x);
+    }
+};
+
+struct CosHOp {
+    template<typename T>
+    __device__ __forceinline__ T operator()(T x) const {
+        return cosh(x);
+    }
+};
+
+
+
+struct AsinHOp {
+    template<typename T>
+    __device__ __forceinline__ T operator()(T x) const {
+        return asinh(x);
+    }
+};
+
+struct AcosHOp {
+    template<typename T>
+    __device__ __forceinline__ T operator()(T x) const {
+        return acosh(x);
+    }
+};
+struct AtanHOp {
+    template<typename T>
+    __device__ __forceinline__ T operator()(T x) const {
+        return atanh(x);
+    }
+};
+
+struct RsqrtOp {
+    template<typename T>
+    __device__ __forceinline__ T operator()(T x) const {
+        // TODO: Do we need to do rsqrtf
+        return rsqrt(x);
+    }
+};
+
+
+struct ReciprocalOp {
+    template<typename T>
+    __device__ __forceinline__ T operator()(T x) const {
+        // TODO: Do we need to do rsqrtf
+        return T(1) / x;
+    }
+};
+
+struct SquareOp {
+    template<typename T>
+    __device__ __forceinline__ T operator()(T x) const {
+        // TODO: Do we need to do rsqrtf
+        return x * x;
+    }
+};
+
+struct CubeOp {
+    template<typename T>
+    __device__ __forceinline__ T operator()(T x) const {
+        // TODO: Do we need to do rsqrtf
+        return x * x * x;
+    }
+};
+
+struct ExpOp {
+    template<typename T>
+    __device__ __forceinline__ T operator()(T x) const {
+        // TODO: Do we need to do rsqrtf
+        return exp(x);
+    }
+};
+
+struct SignOp {
+    template<typename T>
+    __device__ __forceinline__ T operator()(T x) const {
+        // TODO: Do we need to do rsqrtf
+        if(x < T(0)) {
+            return T(-1);
+        } else {
+            return T(1);
+        }
+    }
+};
+
+
+
 /*
     KERNELS
 */
@@ -314,6 +452,62 @@ DECLARE_UNARY_LAUNCHERS(trunc, TruncOp, double, f64)
 DECLARE_UNARY_LAUNCHERS(expm1, ExpM1Op, float,  f32)
 DECLARE_UNARY_LAUNCHERS(expm1, ExpM1Op, double, f64)
 
+
+DECLARE_UNARY_LAUNCHERS(sin, SinOp, float,  f32)
+DECLARE_UNARY_LAUNCHERS(sin, SinOp, double, f64)
+
+DECLARE_UNARY_LAUNCHERS(cos, CosOp, float,  f32)
+DECLARE_UNARY_LAUNCHERS(cos, CosOp, double, f64)
+
+DECLARE_UNARY_LAUNCHERS(tan, TanOp, float,  f32)
+DECLARE_UNARY_LAUNCHERS(tan, TanOp, double, f64)
+
+DECLARE_UNARY_LAUNCHERS(asin, AsinOp, float,  f32)
+DECLARE_UNARY_LAUNCHERS(asin, AsinOp, double, f64)
+
+
+DECLARE_UNARY_LAUNCHERS(acos, AcosOp, float,  f32)
+DECLARE_UNARY_LAUNCHERS(acos, AcosOp, double, f64)
+
+
+DECLARE_UNARY_LAUNCHERS(atan, AtanOp, float,  f32)
+DECLARE_UNARY_LAUNCHERS(atan, AtanOp, double, f64)
+
+DECLARE_UNARY_LAUNCHERS(sinh, SinHOp, float,  f32)
+DECLARE_UNARY_LAUNCHERS(sinh, SinHOp, double, f64)
+
+DECLARE_UNARY_LAUNCHERS(cosh, CosHOp, float,  f32)
+DECLARE_UNARY_LAUNCHERS(cosh, CosHOp, double, f64)
+
+
+DECLARE_UNARY_LAUNCHERS(asinh, AsinHOp, float,  f32)
+DECLARE_UNARY_LAUNCHERS(asinh, AsinHOp, double, f64)
+
+
+DECLARE_UNARY_LAUNCHERS(acosh, AcosHOp, float,  f32)
+DECLARE_UNARY_LAUNCHERS(acosh, AcosHOp, double, f64)
+
+
+DECLARE_UNARY_LAUNCHERS(atanh, AtanHOp, float,  f32)
+DECLARE_UNARY_LAUNCHERS(atanh, AtanHOp, double, f64)
+
+DECLARE_UNARY_LAUNCHERS(rsqrt, RsqrtOp, float, f32)
+DECLARE_UNARY_LAUNCHERS(rsqrt, RsqrtOp, double, f64)
+
+DECLARE_UNARY_LAUNCHERS(reciprocal, ReciprocalOp, float, f32)
+DECLARE_UNARY_LAUNCHERS(reciprocal, ReciprocalOp, double, f64)
+
+DECLARE_UNARY_LAUNCHERS(square, SquareOp, float, f32)
+DECLARE_UNARY_LAUNCHERS(square, SquareOp, double, f64)
+
+DECLARE_UNARY_LAUNCHERS(cube, CubeOp, float, f32)
+DECLARE_UNARY_LAUNCHERS(cube, CubeOp, double, f64)
+
+DECLARE_UNARY_LAUNCHERS(exp, ExpOp, float, f32)
+DECLARE_UNARY_LAUNCHERS(exp, ExpOp, double, f64)
+
+DECLARE_UNARY_LAUNCHERS(sign, SignOp, float, f32)
+DECLARE_UNARY_LAUNCHERS(sign, SignOp, double, f64)
 
 // extern "C" void launch_test_summy(double *data, size_t start, size_t len, unsigned int block_size)
 // {

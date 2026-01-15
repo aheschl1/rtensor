@@ -13,10 +13,7 @@ impl<T: WeightValue, B: Backend> Clone for GradTensor<T, B> {
     #[grad::when_enabled(ctx)]
     fn clone(&self) -> Self {
         let tensor = self.borrow().tensor.contiguous();
-        let grad = match &self.borrow().grad {
-            Some(g) => Some(g.contiguous()),
-            None => None,
-        };
+        let grad = self.borrow().grad.as_ref().map(|g| g.contiguous());
         let inner = GradTensorInner {
             tensor,
             grad,
@@ -246,12 +243,16 @@ mod tests {
             // optim.register_parameter(&a).unwrap();
             optim.register_parameters(&[&b]).unwrap();
             
+            let initial_loss = model(&a, &b, &target).borrow().tensor.item().unwrap();
             for _ in 0..10 {
                 let loss = model(&a, &b, &target);
                 println!("Loss: {:?}", loss.borrow().tensor.item());
                 ctx.backwards(&loss).unwrap();
                 optim.step().unwrap();
             }
+            let final_loss = model(&a, &b, &target).borrow().tensor.item().unwrap();
+            assert!(initial_loss - final_loss > 0.1, 
+                "Loss should reduce by at least 0.1, initial: {}, final: {}", initial_loss, final_loss);
 
             println!("{:?}", a);
 
@@ -263,12 +264,16 @@ mod tests {
             optim.register_parameter(&b).unwrap();
             optim.register_parameter(&c).unwrap();
 
+            let initial_loss = modelv2(&a, &b, &c, &target).borrow().tensor.item().unwrap();
             for _ in 0..10 {
                 let loss = modelv2(&a, &b, &c, &target);
                 println!("Loss: {:?}", loss.borrow().tensor.item());
                 ctx.backwards(&loss).unwrap();
                 optim.step().unwrap();
             }
+            let final_loss = modelv2(&a, &b, &c, &target).borrow().tensor.item().unwrap();
+            assert!(initial_loss - final_loss > 0.5, 
+                "Loss should reduce by at least 0.5, initial: {}, final: {}", initial_loss, final_loss);
 
             println!("{:?}", a);
 
@@ -278,12 +283,16 @@ mod tests {
             let target = Tensor::<f32>::zeros((3, 2)).grad();
             optim.register_parameter(&wa).unwrap();
             optim.register_parameter(&wb).unwrap();
+            let initial_loss = modelv3(&input, &wa, &wb, &target).borrow().tensor.item().unwrap();
             for _ in 0..10 {
                 let loss = modelv3(&input, &wa, &wb, &target);
                 println!("Loss: {:?}", loss.borrow().tensor.item());
                 ctx.backwards(&loss).unwrap();
                 optim.step().unwrap();
             }
+            let final_loss = modelv3(&input, &wa, &wb, &target).borrow().tensor.item().unwrap();
+            assert!(initial_loss - final_loss > 0.5, 
+                "Loss should reduce by at least 0.5, initial: {}, final: {}", initial_loss, final_loss);
 
             println!("{:?}", input);
             println!("{:?}", wa);
@@ -294,12 +303,16 @@ mod tests {
             let target = Tensor::<f32>::zeros((3, 2)).grad();
             optim.register_parameter(&wa).unwrap();
             optim.register_parameter(&wb).unwrap();
+            let initial_loss = modelv4(&input, &wa, &wb, &target).borrow().tensor.item().unwrap();
             for _ in 0..10 {
                 let loss = modelv4(&input, &wa, &wb, &target);
                 println!("Loss: {:?}", loss.borrow().tensor.item());
                 ctx.backwards(&loss).unwrap();
                 optim.step().unwrap();
             }
+            let final_loss = modelv4(&input, &wa, &wb, &target).borrow().tensor.item().unwrap();
+            assert!(initial_loss - final_loss > 0.5, 
+                "Loss should reduce by at least 0.5, initial: {}, final: {}", initial_loss, final_loss);
 
             println!("{:?}", input);
             println!("{:?}", wa);
@@ -307,12 +320,16 @@ mod tests {
             let input = Tensor::<f32>::ones((2, 3)).param();
             let target = Tensor::<f32>::zeros((3, 2)).grad();
             optim.register_parameter(&input).unwrap();
+            let initial_loss = modelv5(&input, &target).borrow().tensor.item().unwrap();
             for _ in 0..12 {
                 let loss = modelv5(&input, &target);
                 println!("Loss: {:?}", loss.borrow().tensor.item());
                 ctx.backwards(&loss).unwrap();
                 optim.step().unwrap();
             }
+            let final_loss = modelv5(&input, &target).borrow().tensor.item().unwrap();
+            assert!(initial_loss - final_loss > 0.5, 
+                "Loss should reduce by at least 0.5, initial: {}, final: {}", initial_loss, final_loss);
 
             println!("{:?}", input);
 
@@ -320,24 +337,32 @@ mod tests {
             let input = Tensor::<f32>::ones((2, 3)).grad();
             let target = Tensor::<f32>::zeros((3, 2)).grad();
             optim.register_parameter(&wa).unwrap();
+            let initial_loss = modelv6(&wa, &input, &target).borrow().tensor.item().unwrap();
             for _ in 0..10 {
                 let loss = modelv6(&wa, &input, &target);
                 println!("Loss: {:?}", loss.borrow().tensor.item());
                 ctx.backwards(&loss).unwrap();
                 optim.step().unwrap();
             }
+            let final_loss = modelv6(&wa, &input, &target).borrow().tensor.item().unwrap();
+            assert!(initial_loss - final_loss > 0.001, 
+                "Loss should reduce by at least 0.001, initial: {}, final: {}", initial_loss, final_loss);
             println!("{:?}", wa);
 
             let wa = Tensor::<f32>::ones((2, 3)).param();
             let input = Tensor::<f32>::ones((2, 3)).grad();
             let target = Tensor::<f32>::zeros((3, 2)).grad();
             optim.register_parameter(&wa).unwrap();
+            let initial_loss = modelv7(&wa, &input, &target).borrow().tensor.item().unwrap();
             for _ in 0..10 {
                 let loss = modelv7(&wa, &input, &target);
                 println!("Loss: {:?}", loss.borrow().tensor.item());
                 ctx.backwards(&loss).unwrap();
                 optim.step().unwrap();
             }
+            let final_loss = modelv7(&wa, &input, &target).borrow().tensor.item().unwrap();
+            assert!(initial_loss - final_loss > 0.2, 
+                "Loss should reduce by at least 0.2, initial: {}, final: {}", initial_loss, final_loss);
             println!("{:?}", wa);
 
             // use model, but do a broadcasted add
@@ -346,6 +371,10 @@ mod tests {
             let target = Tensor::<f32>::zeros((2, 3)).grad();
             optim.register_parameter(&wa).unwrap();
             optim.register_parameter(&input).unwrap();
+            let initial_loss = {
+                let inter = &input + &wa;
+                l1_loss(&inter, &target).borrow().tensor.item().unwrap()
+            };
             for _ in 0..10 {
                 let inter = &input + &wa; // broadcasted add
                 let loss = l1_loss(&inter, &target);
@@ -353,6 +382,12 @@ mod tests {
                 ctx.backwards(&loss).unwrap();
                 optim.step().unwrap();
             }
+            let final_loss = {
+                let inter = &input + &wa;
+                l1_loss(&inter, &target).borrow().tensor.item().unwrap()
+            };
+            assert!(initial_loss - final_loss > 0.1, 
+                "Loss should reduce by at least 0.1, initial: {}, final: {}", initial_loss, final_loss);
             println!("{:?}", wa);
 
             // use model, but do a broadcasted sub
@@ -361,6 +396,10 @@ mod tests {
             let target = Tensor::<f32>::ones((2, 3)).grad();
             optim.register_parameter(&wa).unwrap();
             optim.register_parameter(&input).unwrap();
+            let initial_loss = {
+                let inter = &input - &wa;
+                l1_loss(&inter, &target).borrow().tensor.item().unwrap()
+            };
             for _ in 0..10 {
                 let inter = &input - &wa; // broadcasted sub
                 let loss = l1_loss(&inter, &target);
@@ -368,6 +407,12 @@ mod tests {
                 ctx.backwards(&loss).unwrap();
                 optim.step().unwrap();
             }
+            let final_loss = {
+                let inter = &input - &wa;
+                l1_loss(&inter, &target).borrow().tensor.item().unwrap()
+            };
+            assert!(initial_loss - final_loss > 0.1, 
+                "Loss should reduce by at least 0.1, initial: {}, final: {}", initial_loss, final_loss);
             println!("{:?}", wa);
 
             // use model, but do a broadcasted mul
@@ -376,6 +421,10 @@ mod tests {
             let target = Tensor::<f32>::zeros((2, 3)).grad();
             optim.register_parameter(&wa).unwrap();
             optim.register_parameter(&input).unwrap();
+            let initial_loss = {
+                let inter = &input * &wa;
+                l1_loss(&inter, &target).borrow().tensor.item().unwrap()
+            };
             for _ in 0..10 {
                 let inter = &input * &wa; // broadcasted mul
                 let loss = l1_loss(&inter, &target);
@@ -383,6 +432,12 @@ mod tests {
                 ctx.backwards(&loss).unwrap();
                 optim.step().unwrap();
             }
+            let final_loss = {
+                let inter = &input * &wa;
+                l1_loss(&inter, &target).borrow().tensor.item().unwrap()
+            };
+            assert!(initial_loss - final_loss > 0.1, 
+                "Loss should reduce by at least 0.1, initial: {}, final: {}", initial_loss, final_loss);
             println!("{:?}", wa);
 
             // use model, but do a broadcasted div
@@ -391,6 +446,10 @@ mod tests {
             let target = Tensor::<f32>::zeros((2, 3)).grad();
             optim.register_parameter(&wa).unwrap();
             optim.register_parameter(&input).unwrap();
+            let initial_loss = {
+                let inter = &input / &wa;
+                l1_loss(&inter, &target).borrow().tensor.item().unwrap()
+            };
             for _ in 0..10 {
                 let inter = &input / &wa; // broadcasted div
                 let loss = l1_loss(&inter, &target);
@@ -398,6 +457,12 @@ mod tests {
                 ctx.backwards(&loss).unwrap();
                 optim.step().unwrap();
             }
+            let final_loss = {
+                let inter = &input / &wa;
+                l1_loss(&inter, &target).borrow().tensor.item().unwrap()
+            };
+            assert!(initial_loss - final_loss > 0.1, 
+                "Loss should reduce by at least 0.1, initial: {}, final: {}", initial_loss, final_loss);
             println!("{:?}", wa);
 
             // mamtmul
@@ -406,6 +471,10 @@ mod tests {
             let target = Tensor::<f32>::zeros((2, 4)).grad();
             optim.register_parameter(&wa).unwrap();
             optim.register_parameter(&wb).unwrap();
+            let initial_loss = {
+                let inter = wa.matmul(&wb).expect("MatMul failed");
+                l1_loss(&inter, &target).borrow().tensor.item().unwrap()
+            };
             for _ in 0..1 {
                 let inter = wa.matmul(&wb).expect("MatMul failed");
                 let loss = l1_loss(&inter, &target);
@@ -413,6 +482,13 @@ mod tests {
                 ctx.backwards(&loss).unwrap();
                 optim.step().unwrap();
             }
+            let final_loss = {
+                let inter = wa.matmul(&wb).expect("MatMul failed");
+                l1_loss(&inter, &target).borrow().tensor.item().unwrap()
+            };
+            // Only 1 iteration, so smaller threshold
+            assert!(initial_loss - final_loss > 0.01, 
+                "Loss should reduce by at least 0.01, initial: {}, final: {}", initial_loss, final_loss);
             println!("{:?}", wa);
             println!("{:?}", wb);
 
@@ -471,6 +547,11 @@ mod tests {
             
             let mut optim = SGD::<f32, Cpu>::new(0.01);
             model.register(&mut optim);
+            
+            let initial_loss = {
+                let output = model.forward(input.clone());
+                l1_loss(&output, &target).borrow().tensor.item().unwrap()
+            };
             for _ in 0..10 {
                 let output = model.forward(input.clone());
                 let loss = l1_loss(&output, &target);
@@ -478,6 +559,305 @@ mod tests {
                 ctx.backwards(&loss).unwrap();
                 optim.step().unwrap();
             }
+            let final_loss = {
+                let output = model.forward(input.clone());
+                l1_loss(&output, &target).borrow().tensor.item().unwrap()
+            };
+            assert!(initial_loss - final_loss > 0.01, 
+                "Dense model loss should reduce by at least 0.01, initial: {}, final: {}", initial_loss, final_loss);
+        });
+    }
+
+    #[test]
+    fn test_trig_and_hyperbolic() {
+        // Test sin, cos, tan, sinh, cosh, tanh
+        fn model_with_trig(
+            wa: &GradTensor<f32, Cpu>,
+            input: &GradTensor<f32, Cpu>,
+            target: &GradTensor<f32, Cpu>
+        ) -> GradTensor<f32, Cpu> {
+            let x = input + wa;
+            let y = x.sin() + x.cos().tanh();
+            l1_loss(&y, target)
+        }
+
+        fn model_with_hyperbolic(
+            wa: &GradTensor<f32, Cpu>,
+            input: &GradTensor<f32, Cpu>,
+            target: &GradTensor<f32, Cpu>
+        ) -> GradTensor<f32, Cpu> {
+            let x = input + wa;
+            let y = x.sinh() + x.cosh();
+            l1_loss(&y, target)
+        }
+
+        grad::with::<f32, Cpu>(|ctx| {
+            println!("\n=== Testing Trig Functions ===");
+            let wa = Tensor::<f32>::ones((2, 3)).param();
+            let input = Tensor::<f32>::ones((2, 3)).grad();
+            let target = Tensor::<f32>::zeros((2, 3)).grad();
+            
+            let mut optim = SGD::<f32, Cpu>::new(0.1);
+            optim.register_parameter(&wa).unwrap();
+            
+            let initial_loss = model_with_trig(&wa, &input, &target).borrow().tensor.item().unwrap();
+            for i in 0..10 {
+                let loss = model_with_trig(&wa, &input, &target);
+                println!("Iter {}: Loss = {:?}", i, loss.borrow().tensor.item());
+                ctx.backwards(&loss).unwrap();
+                optim.step().unwrap();
+            }
+            let final_loss = model_with_trig(&wa, &input, &target).borrow().tensor.item().unwrap();
+            assert!(initial_loss - final_loss > 0.01, 
+                "Trig loss should reduce by at least 0.01, initial: {}, final: {}", initial_loss, final_loss);
+
+            println!("\n=== Testing Hyperbolic Functions ===");
+            let wb = Tensor::<f32>::ones((2, 3)).param();
+            optim.register_parameter(&wb).unwrap();
+            
+            let initial_loss = model_with_hyperbolic(&wb, &input, &target).borrow().tensor.item().unwrap();
+            for i in 0..10 {
+                let loss = model_with_hyperbolic(&wb, &input, &target);
+                println!("Iter {}: Loss = {:?}", i, loss.borrow().tensor.item());
+                ctx.backwards(&loss).unwrap();
+                optim.step().unwrap();
+            }
+            let final_loss = model_with_hyperbolic(&wb, &input, &target).borrow().tensor.item().unwrap();
+            assert!(initial_loss - final_loss > 0.5, 
+                "Hyperbolic loss should reduce by at least 0.5, initial: {}, final: {}", initial_loss, final_loss);
+        });
+    }
+
+    #[test]
+    fn test_exp_and_powers() {
+        // Test exp, square, cube
+        fn model_with_exp(
+            wa: &GradTensor<f32, Cpu>,
+            input: &GradTensor<f32, Cpu>,
+            target: &GradTensor<f32, Cpu>
+        ) -> GradTensor<f32, Cpu> {
+            let x = input + wa;
+            let y = x.exp();
+            l1_loss(&y, target)
+        }
+
+        fn model_with_powers(
+            wa: &GradTensor<f32, Cpu>,
+            input: &GradTensor<f32, Cpu>,
+            target: &GradTensor<f32, Cpu>
+        ) -> GradTensor<f32, Cpu> {
+            let x = input + wa;
+            let y = x.square() + x.cube();
+            l1_loss(&y, target)
+        }
+
+        grad::with::<f32, Cpu>(|ctx| {
+            println!("\n=== Testing Exp ===");
+            let wa = Tensor::<f32>::ones((2, 3)).param();
+            let input = Tensor::<f32>::ones((2, 3)).grad();
+            let target = Tensor::<f32>::ones((2, 3)).grad();
+            
+            let mut optim = SGD::<f32, Cpu>::new(0.01);
+            optim.register_parameter(&wa).unwrap();
+            
+            let initial_loss = model_with_exp(&wa, &input, &target).borrow().tensor.item().unwrap();
+            for i in 0..10 {
+                let loss = model_with_exp(&wa, &input, &target);
+                println!("Iter {}: Loss = {:?}", i, loss.borrow().tensor.item());
+                ctx.backwards(&loss).unwrap();
+                optim.step().unwrap();
+            }
+            let final_loss = model_with_exp(&wa, &input, &target).borrow().tensor.item().unwrap();
+            assert!(initial_loss - final_loss > 0.1, 
+                "Exp loss should reduce by at least 0.1, initial: {}, final: {}", initial_loss, final_loss);
+
+            println!("\n=== Testing Powers ===");
+            let wb = Tensor::<f32>::ones((2, 3)).param();
+            optim.register_parameter(&wb).unwrap();
+            
+            let initial_loss = model_with_powers(&wb, &input, &target).borrow().tensor.item().unwrap();
+            for i in 0..10 {
+                let loss = model_with_powers(&wb, &input, &target);
+                println!("Iter {}: Loss = {:?}", i, loss.borrow().tensor.item());
+                ctx.backwards(&loss).unwrap();
+                optim.step().unwrap();
+            }
+            let final_loss = model_with_powers(&wb, &input, &target).borrow().tensor.item().unwrap();
+            assert!(initial_loss - final_loss > 0.1, 
+                "Powers loss should reduce by at least 0.1, initial: {}, final: {}", initial_loss, final_loss);
+        });
+    }
+
+    #[test]
+    fn test_reciprocal_and_rsqrt() {
+        // Test reciprocal and rsqrt
+        fn model_with_reciprocal(
+            wa: &GradTensor<f32, Cpu>,
+            input: &GradTensor<f32, Cpu>,
+            target: &GradTensor<f32, Cpu>
+        ) -> GradTensor<f32, Cpu> {
+            let x = input + wa;
+            let y = x.reciprocal();
+            l1_loss(&y, target)
+        }
+
+        fn model_with_rsqrt(
+            wa: &GradTensor<f32, Cpu>,
+            input: &GradTensor<f32, Cpu>,
+            target: &GradTensor<f32, Cpu>
+        ) -> GradTensor<f32, Cpu> {
+            let x = input + wa;
+            let y = x.rsqrt();
+            l1_loss(&y, target)
+        }
+
+        grad::with::<f32, Cpu>(|ctx| {
+            println!("\n=== Testing Reciprocal ===");
+            let wa = Tensor::<f32>::ones((2, 3)).param();
+            let input = Tensor::<f32>::ones((2, 3)).grad();
+            let target = Tensor::<f32>::ones((2, 3)).grad();
+            
+            let mut optim = SGD::<f32, Cpu>::new(0.1);
+            optim.register_parameter(&wa).unwrap();
+            
+            let initial_loss = model_with_reciprocal(&wa, &input, &target).borrow().tensor.item().unwrap();
+            for i in 0..10 {
+                let loss = model_with_reciprocal(&wa, &input, &target);
+                println!("Iter {}: Loss = {:?}", i, loss.borrow().tensor.item());
+                ctx.backwards(&loss).unwrap();
+                optim.step().unwrap();
+            }
+            let final_loss = model_with_reciprocal(&wa, &input, &target).borrow().tensor.item().unwrap();
+            // Reciprocal has small gradients for x > 1, so expect smaller reduction
+            assert!(initial_loss - final_loss > 0.001, 
+                "Reciprocal loss should reduce by at least 0.001, initial: {}, final: {}", initial_loss, final_loss);
+
+            println!("\n=== Testing Rsqrt ===");
+            let wb = Tensor::<f32>::ones((2, 3)).param();
+            optim.register_parameter(&wb).unwrap();
+            
+            let initial_loss = model_with_rsqrt(&wb, &input, &target).borrow().tensor.item().unwrap();
+            for i in 0..10 {
+                let loss = model_with_rsqrt(&wb, &input, &target);
+                println!("Iter {}: Loss = {:?}", i, loss.borrow().tensor.item());
+                ctx.backwards(&loss).unwrap();
+                optim.step().unwrap();
+            }
+            let final_loss = model_with_rsqrt(&wb, &input, &target).borrow().tensor.item().unwrap();
+            // Rsqrt also has small gradients for x > 1
+            assert!(initial_loss - final_loss > 0.001, 
+                "Rsqrt loss should reduce by at least 0.001, initial: {}, final: {}", initial_loss, final_loss);
+        });
+    }
+
+    #[test]
+    fn test_combined_operations() {
+        // Test combining multiple operations
+        fn model_complex(
+            wa: &GradTensor<f32, Cpu>,
+            wb: &GradTensor<f32, Cpu>,
+            input: &GradTensor<f32, Cpu>,
+            target: &GradTensor<f32, Cpu>
+        ) -> GradTensor<f32, Cpu> {
+            let x1 = input + wa;
+            let x2 = x1.square().tanh();  // square then tanh
+            let x3 = x2 + wb;
+            let x4 = x3.sinh().reciprocal();  // sinh then reciprocal
+            l1_loss(&x4, target)
+        }
+
+        fn model_chain(
+            wa: &GradTensor<f32, Cpu>,
+            input: &GradTensor<f32, Cpu>,
+            target: &GradTensor<f32, Cpu>
+        ) -> GradTensor<f32, Cpu> {
+            let x = input + wa;
+            let y = x.sin().exp().rsqrt();  // chain: sin -> exp -> rsqrt
+            l1_loss(&y, target)
+        }
+
+        grad::with::<f32, Cpu>(|ctx| {
+            println!("\n=== Testing Complex Model ===");
+            let wa = Tensor::<f32>::ones((2, 3)).param();
+            let wb = Tensor::<f32>::ones((2, 3)).param();
+            let input = Tensor::<f32>::ones((2, 3)).grad();
+            let target = Tensor::<f32>::zeros((2, 3)).grad();
+            
+            let mut optim = SGD::<f32, Cpu>::new(0.1);
+            optim.register_parameter(&wa).unwrap();
+            optim.register_parameter(&wb).unwrap();
+            
+            let initial_loss = model_complex(&wa, &wb, &input, &target).borrow().tensor.item().unwrap();
+            for i in 0..10 {
+                let loss = model_complex(&wa, &wb, &input, &target);
+                println!("Iter {}: Loss = {:?}", i, loss.borrow().tensor.item());
+                ctx.backwards(&loss).unwrap();
+                optim.step().unwrap();
+            }
+            let final_loss = model_complex(&wa, &wb, &input, &target).borrow().tensor.item().unwrap();
+            assert!(initial_loss - final_loss > 0.001, 
+                "Complex model loss should reduce by at least 0.001, initial: {}, final: {}", initial_loss, final_loss);
+
+            println!("\n=== Testing Chained Operations ===");
+            let wc = Tensor::<f32>::ones((2, 3)).param();
+            optim.register_parameter(&wc).unwrap();
+            
+            let initial_loss = model_chain(&wc, &input, &target).borrow().tensor.item().unwrap();
+            for i in 0..10 {
+                let loss = model_chain(&wc, &input, &target);
+                println!("Iter {}: Loss = {:?}", i, loss.borrow().tensor.item());
+                ctx.backwards(&loss).unwrap();
+                optim.step().unwrap();
+            }
+            let final_loss = model_chain(&wc, &input, &target).borrow().tensor.item().unwrap();
+            assert!(initial_loss - final_loss > 0.0001, 
+                "Chained operations loss should reduce by at least 0.0001, initial: {}, final: {}", initial_loss, final_loss);
+        });
+    }
+
+    #[test]
+    fn test_all_new_ops() {
+        // Test all 8 new operations in one model
+        fn model_all(
+            w: &GradTensor<f32, Cpu>,
+            input: &GradTensor<f32, Cpu>,
+            target: &GradTensor<f32, Cpu>
+        ) -> GradTensor<f32, Cpu> {
+            let x = input + w;
+            let y1 = x.tanh();
+            let y2 = x.exp();
+            let y3 = x.square();
+            let y4 = x.cube();
+            let y5 = x.reciprocal();
+            let y6 = x.rsqrt();
+            let y7 = x.sinh();
+            let y8 = x.cosh();
+            
+            let combined = &y1 + &y2 + &y3 + &y4 + &y5 + &y6 + &y7 + &y8;
+            l1_loss(&combined, target)
+        }
+
+        grad::with::<f32, Cpu>(|ctx| {
+            println!("\n=== Testing All 8 New Operations ===");
+            let w = Tensor::<f32>::ones((2, 3)).param();
+            let input = Tensor::<f32>::ones((2, 3)).grad();
+            let target = Tensor::<f32>::zeros((2, 3)).grad();
+            
+            let mut optim = SGD::<f32, Cpu>::new(0.01);
+            optim.register_parameter(&w).unwrap();
+            
+            let initial_loss = model_all(&w, &input, &target).borrow().tensor.item().unwrap();
+            for i in 0..15 {
+                let loss = model_all(&w, &input, &target);
+                println!("Iter {}: Loss = {:?}", i, loss.borrow().tensor.item());
+                ctx.backwards(&loss).unwrap();
+                optim.step().unwrap();
+            }
+            let final_loss = model_all(&w, &input, &target).borrow().tensor.item().unwrap();
+            assert!(initial_loss - final_loss > 1.0, 
+                "All ops loss should reduce by at least 1.0, initial: {}, final: {}", initial_loss, final_loss);
+            
+            println!("Final w gradient: {:?}", w.borrow().grad.as_ref().map(|g| g.item()));
         });
     }
 }

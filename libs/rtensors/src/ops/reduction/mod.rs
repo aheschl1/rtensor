@@ -15,7 +15,7 @@ impl<T: WeightValue> Accumulator<T> for AddAccumulator<T> {
     fn initialize() -> Self { Self { sum: T::ZERO } }
 
     #[inline(always)]
-    fn accumulate(&mut self, value: T) { self.sum = self.sum + value;}
+    fn accumulate(&mut self, value: T) { self.sum += value;}
 
     #[inline(always)]
     fn finalize(&self, _: usize) -> T {
@@ -32,7 +32,7 @@ impl<T: WeightValue> Accumulator<T> for ProdAccumulator<T> {
     fn initialize() -> Self { Self { prod: T::ONE } }
 
     #[inline(always)]
-    fn accumulate(&mut self, value: T) { self.prod = self.prod * value;}
+    fn accumulate(&mut self, value: T) { self.prod *= value;}
 
     #[inline(always)]
     fn finalize(&self, _: usize) -> T {
@@ -128,7 +128,7 @@ impl<T: WeightValue> Accumulator<T> for MeanAccumulator<T> {
     fn initialize() -> Self { Self { sum: T::ZERO } }
 
     #[inline(always)]
-    fn accumulate(&mut self, value: T) { self.sum = self.sum + value;}
+    fn accumulate(&mut self, value: T) { self.sum += value;}
 
     #[inline(always)]
     fn finalize(&self, count: usize) -> T {

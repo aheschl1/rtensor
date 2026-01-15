@@ -1,8 +1,7 @@
 use std::ops::{Div, DivAssign};
 
-use rand::rand_core::le;
 
-use crate::{backend::Backend, core::{primitives::TensorBase, value::{TensorValue, WeightValue}, MetaTensor, MetaTensorView, TensorView, TensorViewMut}, grad::{primitives::GradTensor, GradNode}, ops::broadcast::compute_broadcasted_params};
+use crate::{backend::Backend, core::{primitives::TensorBase, value::{TensorValue, WeightValue}, MetaTensor, MetaTensorView, TensorView, TensorViewMut}, grad::{primitives::GradTensor, GradNode}, ops::{broadcast::compute_broadcasted_params, unary::UnaryOp}};
 use crate::ops::base::BinaryOpType;
 
 /// Macro to implement DivAssign for mutable tensor types (TensorBase and TensorViewMut)
@@ -479,15 +478,13 @@ impl<T, B> std::ops::Div<GradTensor<T, B>> for GradTensor<T, B>
         let (_, broadcast_stra, broadcast_strb) = 
             compute_broadcasted_params(&self.borrow().tensor.meta, &rhs.borrow().tensor.meta).unwrap();
 
-        // TODO replace with .reciprocal() method once available
-        let mut rhs_input_reciprocal = TensorBase::<T, B>::ones(rhs.borrow().tensor.meta.shape.as_ref());
-        rhs_input_reciprocal /= &rhs.borrow().tensor;
+        let rhs_input_reciprocal = rhs.borrow().tensor.reciprocal();
         
         let op = GradNode::BroadcastDiv {
             left: self.node, 
             right: rhs.node,
             lhs_input: self.borrow().tensor.clone(),
-            rhs_input_reciprocal: rhs_input_reciprocal,
+            rhs_input_reciprocal,
             lhs_strides: broadcast_stra, 
             rhs_strides: broadcast_strb,
             lhs_shape: self.borrow().tensor.meta.shape.clone(),
@@ -508,13 +505,11 @@ impl<T, B> std::ops::Div<&GradTensor<T, B>> for GradTensor<T, B>
             compute_broadcasted_params(&self.borrow().tensor.meta, &rhs.borrow().tensor.meta).unwrap();
 
         let value = &self.borrow().tensor / &rhs.borrow().tensor;
-        // TODO replace with .reciprocal() method once available
-        let mut rhs_input_reciprocal = TensorBase::<T, B>::ones(rhs.borrow().tensor.meta.shape.as_ref());
-        rhs_input_reciprocal /= &rhs.borrow().tensor;
+        let rhs_input_reciprocal = rhs.borrow().tensor.reciprocal();
 
         let op = GradNode::BroadcastDiv { 
             lhs_input: self.borrow().tensor.clone(),
-            rhs_input_reciprocal: rhs_input_reciprocal,
+            rhs_input_reciprocal,
             left: self.node, 
             right: rhs.node, 
             lhs_strides: broadcast_stra, 
@@ -537,15 +532,13 @@ impl<T, B> std::ops::Div<&GradTensor<T, B>> for &GradTensor<T, B>
         let (_, broadcast_stra, broadcast_strb) = 
             compute_broadcasted_params(&self.borrow().tensor.meta, &rhs.borrow().tensor.meta).unwrap();
         
-        // TODO replace with .reciprocal() method once available
-        let mut rhs_input_reciprocal = TensorBase::<T, B>::ones(rhs.borrow().tensor.meta.shape.as_ref());
-        rhs_input_reciprocal /= &rhs.borrow().tensor;
+        let rhs_input_reciprocal = rhs.borrow().tensor.reciprocal();
 
         let op = GradNode::BroadcastDiv { 
             left: self.node, 
             right: rhs.node, 
             lhs_input: self.borrow().tensor.clone(),
-            rhs_input_reciprocal: rhs_input_reciprocal,
+            rhs_input_reciprocal,
             lhs_strides: broadcast_stra, 
             rhs_strides: broadcast_strb,
             lhs_shape: self.borrow().tensor.meta.shape.clone(),
@@ -566,15 +559,13 @@ impl<T, B> std::ops::Div<GradTensor<T, B>> for &GradTensor<T, B>
         let (_, broadcast_stra, broadcast_strb) = 
             compute_broadcasted_params(&self.borrow().tensor.meta, &rhs.borrow().tensor.meta).unwrap();
         
-        // TODO replace with .reciprocal() method once available
-        let mut rhs_input_reciprocal = TensorBase::<T, B>::ones(rhs.borrow().tensor.meta.shape.as_ref());
-        rhs_input_reciprocal /= &rhs.borrow().tensor;
+        let rhs_input_reciprocal = rhs.borrow().tensor.reciprocal();
 
         let op = GradNode::BroadcastDiv { 
             left: self.node, 
             right: rhs.node, 
             lhs_input: self.borrow().tensor.clone(),
-            rhs_input_reciprocal: rhs_input_reciprocal,
+            rhs_input_reciprocal,
             lhs_strides: broadcast_stra, 
             rhs_strides: broadcast_strb,
             lhs_shape: self.borrow().tensor.meta.shape.clone(),
