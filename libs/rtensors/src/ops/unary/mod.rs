@@ -139,13 +139,22 @@ macro_rules! specify_unary_op_template {
 
 specify_unary_op_template! {
     (Sin) sin where T: WeightValue; |input, result, _ctx, grad_node| {
-        Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
+        Ok(GradNode::Sin {
+            input: grad_node,
+            input_tensor: input.clone(),
+        })
     },
     (Cos) cos where T: WeightValue; |input, result, _ctx, grad_node| {
-        Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
+        Ok(GradNode::Cos {
+            input: grad_node,
+            input_tensor: input.clone(),
+        })
     },
     (Tan) tan where T: WeightValue; |input, result, _ctx, grad_node| {
-        Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
+        Ok(GradNode::Tan {
+            input: grad_node,
+            input_tensor: input.clone(),
+        })
     },
     (Asin) asin where T: WeightValue; |input, result, _ctx, grad_node| {
         Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
@@ -157,10 +166,16 @@ specify_unary_op_template! {
         Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
     },
     (Sinh) sinh where T: WeightValue; |input, result, _ctx, grad_node| {
-        Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
+        Ok(GradNode::Sinh {
+            input: grad_node,
+            input_tensor: input.clone(),
+        })
     },
     (Cosh) cosh where T: WeightValue; |input, result, _ctx, grad_node| {
-        Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
+        Ok(GradNode::Cosh {
+            input: grad_node,
+            input_tensor: input.clone(),
+        })
     },
     (Asinh) asinh where T: WeightValue; |input, result, _ctx, grad_node| {
         Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
@@ -172,19 +187,34 @@ specify_unary_op_template! {
         Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
     },
     (Rsqrt) rsqrt where T: WeightValue; |input, result, _ctx, grad_node| {
-        Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
+        Ok(GradNode::Rsqrt {
+            input: grad_node,
+            result: result.clone(),
+        })
     },
     (Reciprocal) reciprocal where T: WeightValue; |input, result, _ctx, grad_node| {
-        Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
+        Ok(GradNode::Reciprocal {
+            input: grad_node,
+            input_tensor: input.clone(),
+        })
     },
     (Square) square where T: WeightValue; |input, result, _ctx, grad_node| {
-        Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
+        Ok(GradNode::Square {
+            input: grad_node,
+            input_tensor: input.clone(),
+        })
     },
     (Cube) cube where T: WeightValue; |input, result, _ctx, grad_node| {
-        Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
+        Ok(GradNode::Cube {
+            input: grad_node,
+            input_tensor: input.clone(),
+        })
     },
     (ExpV) exp where T: WeightValue; |input, result, _ctx, grad_node| {
-        Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
+        Ok(GradNode::Exp {
+            input: grad_node,
+            result: result.clone(),
+        })
     },
     (Sign) sign where T: WeightValue; |input, result, _ctx, grad_node| {
         Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
@@ -235,7 +265,10 @@ specify_unary_op_template! {
         Err(TensorError::UnsupportedOperation("Gradient for silu not yet implemented.".into()))
     },
     (Tanh) tanh where T: Exp, InvExp; |input, result, _ctx, grad_node| {
-        Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
+        Ok(GradNode::Tanh {
+            input: grad_node,
+            result: result.clone(),
+        })
     },
     (Sqrt) sqrt where T: SquareRoot; |input, result, _ctx, grad_node| {
         Ok(GradNode::Sqrt {

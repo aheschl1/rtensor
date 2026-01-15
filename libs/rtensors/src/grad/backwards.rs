@@ -1,6 +1,7 @@
 use crate::{backend::{Backend, BackendMatMul}, core::{idx::Idx, primitives::TensorBase, tensor::{TensorAccess, TensorError}, value::WeightValue, Shape, Strides}, grad::GradNode, ops::{reduction::ReductionOp, unary::UnaryOp}};
 use crate::ops::linalg::MatMul;
 
+#[inline]
 pub(crate) fn accumulate_grad<T: WeightValue, B: Backend>(
     node: &GradNode<T, B>, 
     upstream: &TensorBase<T, B>,
@@ -21,6 +22,7 @@ pub(crate) fn accumulate_grad<T: WeightValue, B: Backend>(
     Ok(vec![upstream.clone()])
 }
 
+#[inline]
 pub(crate) fn backwards_add<T: WeightValue, B: Backend>(
     node: &GradNode<T, B>, 
     upstream: &TensorBase<T, B>,
@@ -37,6 +39,7 @@ pub(crate) fn backwards_add<T: WeightValue, B: Backend>(
     Ok(vec![lhs_grad, rhs_grad])
 }
 
+#[inline]
 pub(crate) fn backwards_sub<T: WeightValue, B: Backend>(
     node: &GradNode<T, B>, 
     upstream: &TensorBase<T, B>,
@@ -53,6 +56,7 @@ pub(crate) fn backwards_sub<T: WeightValue, B: Backend>(
     Ok(vec![lhs_grad, rhs_grad])
 }
 
+#[inline]
 pub(crate) fn backwards_mul<T: WeightValue, B: Backend>(
     node: &GradNode<T, B>, 
     upstream: &TensorBase<T, B>,
@@ -76,6 +80,7 @@ pub(crate) fn backwards_mul<T: WeightValue, B: Backend>(
     Ok(vec![lhs_grad, rhs_grad])
 }
 
+#[inline]
 pub(crate) fn backwards_div<T: WeightValue, B: Backend>(
     node: &GradNode<T, B>, 
     upstream: &TensorBase<T, B>,
@@ -99,6 +104,7 @@ pub(crate) fn backwards_div<T: WeightValue, B: Backend>(
     Ok(vec![lhs_grad, rhs_grad])
 }
 
+#[inline]
 pub(crate) fn backwards_add_scalar<T: WeightValue, B: Backend>(
     node: &GradNode<T, B>, 
     upstream: &TensorBase<T, B>,
@@ -110,6 +116,7 @@ pub(crate) fn backwards_add_scalar<T: WeightValue, B: Backend>(
     Ok(vec![upstream.clone()])
 }
 
+#[inline]
 pub(crate) fn backwards_mul_scalar<T: WeightValue, B: Backend>(
     node: &GradNode<T, B>, 
     upstream: &TensorBase<T, B>,
@@ -121,6 +128,7 @@ pub(crate) fn backwards_mul_scalar<T: WeightValue, B: Backend>(
     Ok(vec![upstream * s])
 }
 
+#[inline]
 pub(crate) fn backwards_div_scalar<T: WeightValue, B: Backend>(
     node: &GradNode<T, B>, 
     upstream: &TensorBase<T, B>,
@@ -132,6 +140,7 @@ pub(crate) fn backwards_div_scalar<T: WeightValue, B: Backend>(
     Ok(vec![upstream / s])
 }
 
+#[inline]
 pub(crate) fn backwards_l1<T: WeightValue, B: Backend>(
     node: &GradNode<T, B>, 
     upstream: &TensorBase<T, B>,
@@ -148,6 +157,7 @@ pub(crate) fn backwards_l1<T: WeightValue, B: Backend>(
 
 /// Backward function for the Permute operation
 /// Reverses the permutation applied in the forward pass
+#[inline]
 pub fn backwards_permute<T: WeightValue, B: Backend>(
     node: &GradNode<T, B>, 
     upstream: &TensorBase<T, B>,
@@ -170,6 +180,7 @@ pub fn backwards_permute<T: WeightValue, B: Backend>(
     Ok(vec![grad])
 }
 
+#[inline]
 pub fn backwards_relu<T: WeightValue, B: Backend>(
     node: &GradNode<T, B>, 
     upstream: &TensorBase<T, B>,
@@ -181,6 +192,7 @@ pub fn backwards_relu<T: WeightValue, B: Backend>(
     Ok(vec![grad])
 }
 
+#[inline]
 pub fn backwards_negate<T: WeightValue, B: Backend>(
     node: &GradNode<T, B>, 
     upstream: &TensorBase<T, B>,
@@ -192,6 +204,7 @@ pub fn backwards_negate<T: WeightValue, B: Backend>(
     Ok(vec![grad])
 }
 
+#[inline]
 pub fn backwards_sqrt<T: WeightValue, B: Backend>(
     node: &GradNode<T, B>, 
     upstream: &TensorBase<T, B>,
@@ -204,6 +217,7 @@ pub fn backwards_sqrt<T: WeightValue, B: Backend>(
     Ok(vec![grad])
 }
 
+#[inline]
 pub fn backwards_abs<T: WeightValue, B: Backend>(
     node: &GradNode<T, B>, 
     upstream: &TensorBase<T, B>,
@@ -215,6 +229,7 @@ pub fn backwards_abs<T: WeightValue, B: Backend>(
     Ok(vec![grad])
 }
 
+#[inline]
 pub fn backwards_sigmoid<T: WeightValue, B: Backend>(
     node: &GradNode<T, B>, 
     upstream: &TensorBase<T, B>,
@@ -228,6 +243,7 @@ pub fn backwards_sigmoid<T: WeightValue, B: Backend>(
     Ok(vec![grad])
 }
 
+#[inline]
 pub fn backwards_ln<T: WeightValue, B: Backend>(
     node: &GradNode<T, B>, 
     upstream: &TensorBase<T, B>,
@@ -239,6 +255,156 @@ pub fn backwards_ln<T: WeightValue, B: Backend>(
     Ok(vec![grad])
 }
 
+#[inline]
+pub fn backwards_sin<T: WeightValue, B: Backend>(
+    node: &GradNode<T, B>, 
+    upstream: &TensorBase<T, B>,
+) -> Result<Vec<TensorBase<T, B>>, TensorError>{
+    let GradNode::Sin { input_tensor, .. } = node else {
+        return Err(TensorError::UnsupportedOperation("Invalid node type passed to Sin backwards.".into()));
+    };
+    // d/dx(sin(x)) = cos(x)
+    let grad = input_tensor.cos() * upstream;
+    Ok(vec![grad])
+}
+
+#[inline]
+pub fn backwards_cos<T: WeightValue, B: Backend>(
+    node: &GradNode<T, B>, 
+    upstream: &TensorBase<T, B>,
+) -> Result<Vec<TensorBase<T, B>>, TensorError>{
+    let GradNode::Cos { input_tensor, .. } = node else {
+        return Err(TensorError::UnsupportedOperation("Invalid node type passed to Cos backwards.".into()));
+    };
+    // d/dx(cos(x)) = -sin(x)
+    let grad = -input_tensor.sin() * upstream;
+    Ok(vec![grad])
+}
+
+#[inline]
+pub fn backwards_tan<T: WeightValue, B: Backend>(
+    node: &GradNode<T, B>, 
+    upstream: &TensorBase<T, B>,
+) -> Result<Vec<TensorBase<T, B>>, TensorError>{
+    let GradNode::Tan { input_tensor, .. } = node else {
+        return Err(TensorError::UnsupportedOperation("Invalid node type passed to Tan backwards.".into()));
+    };
+    // d/dx(tan(x)) = sec^2(x) = 1/cos^2(x)
+    let cos_x = input_tensor.cos();
+    let sec_squared = cos_x.square().reciprocal();
+    let grad = sec_squared * upstream;
+    Ok(vec![grad])
+}
+
+#[inline]
+pub fn backwards_tanh<T: WeightValue, B: Backend>(
+    node: &GradNode<T, B>, 
+    upstream: &TensorBase<T, B>,
+) -> Result<Vec<TensorBase<T, B>>, TensorError>{
+    let GradNode::Tanh { result, .. } = node else {
+        return Err(TensorError::UnsupportedOperation("Invalid node type passed to Tanh backwards.".into()));
+    };
+    // d/dx(tanh(x)) = 1 - tanh²(x) = sech²(x)
+    let one = T::from_f32(1.0);
+    let grad = (-result.square() + one) * upstream;
+    Ok(vec![grad])
+}
+
+#[inline]
+pub fn backwards_exp<T: WeightValue, B: Backend>(
+    node: &GradNode<T, B>, 
+    upstream: &TensorBase<T, B>,
+) -> Result<Vec<TensorBase<T, B>>, TensorError>{
+    let GradNode::Exp { result, .. } = node else {
+        return Err(TensorError::UnsupportedOperation("Invalid node type passed to Exp backwards.".into()));
+    };
+    // d/dx(exp(x)) = exp(x)
+    let grad = result * upstream;
+    Ok(vec![grad])
+}
+
+#[inline]
+pub fn backwards_square<T: WeightValue, B: Backend>(
+    node: &GradNode<T, B>, 
+    upstream: &TensorBase<T, B>,
+) -> Result<Vec<TensorBase<T, B>>, TensorError>{
+    let GradNode::Square { input_tensor, .. } = node else {
+        return Err(TensorError::UnsupportedOperation("Invalid node type passed to Square backwards.".into()));
+    };
+    // d/dx(x²) = 2x
+    let two = T::from_f32(2.0);
+    let grad = input_tensor * two * upstream;
+    Ok(vec![grad])
+}
+
+#[inline]
+pub fn backwards_cube<T: WeightValue, B: Backend>(
+    node: &GradNode<T, B>, 
+    upstream: &TensorBase<T, B>,
+) -> Result<Vec<TensorBase<T, B>>, TensorError>{
+    let GradNode::Cube { input_tensor, .. } = node else {
+        return Err(TensorError::UnsupportedOperation("Invalid node type passed to Cube backwards.".into()));
+    };
+    // d/dx(x³) = 3x²
+    let three = T::from_f32(3.0);
+    let grad = input_tensor.square() * three * upstream;
+    Ok(vec![grad])
+}
+
+#[inline]
+pub fn backwards_reciprocal<T: WeightValue, B: Backend>(
+    node: &GradNode<T, B>, 
+    upstream: &TensorBase<T, B>,
+) -> Result<Vec<TensorBase<T, B>>, TensorError>{
+    let GradNode::Reciprocal { input_tensor, .. } = node else {
+        return Err(TensorError::UnsupportedOperation("Invalid node type passed to Reciprocal backwards.".into()));
+    };
+    // d/dx(1/x) = -1/x²
+    let grad = -input_tensor.square().reciprocal() * upstream;
+    Ok(vec![grad])
+}
+
+#[inline]
+pub fn backwards_rsqrt<T: WeightValue, B: Backend>(
+    node: &GradNode<T, B>, 
+    upstream: &TensorBase<T, B>,
+) -> Result<Vec<TensorBase<T, B>>, TensorError>{
+    let GradNode::Rsqrt { result, .. } = node else {
+        return Err(TensorError::UnsupportedOperation("Invalid node type passed to Rsqrt backwards.".into()));
+    };
+    // d/dx(1/√x) = -1/(2x^(3/2)) = -rsqrt(x)³/2
+    let neg_half = T::from_f32(-0.5);
+    let grad = result.cube() * neg_half * upstream;
+    Ok(vec![grad])
+}
+
+#[inline]
+pub fn backwards_sinh<T: WeightValue, B: Backend>(
+    node: &GradNode<T, B>, 
+    upstream: &TensorBase<T, B>,
+) -> Result<Vec<TensorBase<T, B>>, TensorError>{
+    let GradNode::Sinh { input_tensor, .. } = node else {
+        return Err(TensorError::UnsupportedOperation("Invalid node type passed to Sinh backwards.".into()));
+    };
+    // d/dx(sinh(x)) = cosh(x)
+    let grad = input_tensor.cosh() * upstream;
+    Ok(vec![grad])
+}
+
+#[inline]
+pub fn backwards_cosh<T: WeightValue, B: Backend>(
+    node: &GradNode<T, B>, 
+    upstream: &TensorBase<T, B>,
+) -> Result<Vec<TensorBase<T, B>>, TensorError>{
+    let GradNode::Cosh { input_tensor, .. } = node else {
+        return Err(TensorError::UnsupportedOperation("Invalid node type passed to Cosh backwards.".into()));
+    };
+    // d/dx(cosh(x)) = sinh(x)
+    let grad = input_tensor.sinh() * upstream;
+    Ok(vec![grad])
+}
+
+#[inline]
 pub fn backwards_matmul<T: WeightValue, B: Backend + BackendMatMul<T>>(
     node: &GradNode<T, B>, 
     upstream: &TensorBase<T, B>,

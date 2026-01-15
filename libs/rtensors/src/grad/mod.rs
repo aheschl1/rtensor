@@ -70,6 +70,17 @@ pub(crate) enum GradNode<T: TensorValue, B: Backend> {
     Negate { input: NodeKey },
     Sqrt { input: NodeKey, output: TensorBase<T, B> },
     Ln { input: NodeKey, x_reciprocal: TensorBase<T, B> }, // store 1/x for backward
+    Sin { input: NodeKey, input_tensor: TensorBase<T, B> },
+    Cos { input: NodeKey, input_tensor: TensorBase<T, B> },
+    Tan { input: NodeKey, input_tensor: TensorBase<T, B> },
+    Tanh { input: NodeKey, result: TensorBase<T, B> },
+    Exp { input: NodeKey, result: TensorBase<T, B> },
+    Square { input: NodeKey, input_tensor: TensorBase<T, B> },
+    Cube { input: NodeKey, input_tensor: TensorBase<T, B> },
+    Reciprocal { input: NodeKey, input_tensor: TensorBase<T, B> },
+    Rsqrt { input: NodeKey, result: TensorBase<T, B> },
+    Sinh { input: NodeKey, input_tensor: TensorBase<T, B> },
+    Cosh { input: NodeKey, input_tensor: TensorBase<T, B> },
     MatMul {
         left: NodeKey,
         right: NodeKey,
@@ -120,12 +131,23 @@ impl<T: WeightValue, B: Backend> GradNode<T, B> {
             GradNode::Sigmoid { input, .. } => vec![*input],
             GradNode::Sqrt { input, .. } => vec![*input],
             GradNode::Ln { input, .. } => vec![*input],
+            GradNode::Sin { input, .. } => vec![*input],
+            GradNode::Cos { input, .. } => vec![*input],
+            GradNode::Tan { input, .. } => vec![*input],
+            GradNode::Tanh { input, .. } => vec![*input],
+            GradNode::Exp { input, .. } => vec![*input],
+            GradNode::Square { input, .. } => vec![*input],
+            GradNode::Cube { input, .. } => vec![*input],
+            GradNode::Reciprocal { input, .. } => vec![*input],
+            GradNode::Rsqrt { input, .. } => vec![*input],
+            GradNode::Sinh { input, .. } => vec![*input],
+            GradNode::Cosh { input, .. } => vec![*input],
             GradNode::MatMul { left, right, .. } => vec![*left, *right],
         }
     }
 
     fn backwards(&self, upstream: &TensorBase<T, B>, _ctx: &GradContext<T, B>) -> Result<Vec<TensorBase<T, B>>, TensorError> 
-    where 
+    where
         B: BackendMatMul<T>
     {
         match self {
@@ -146,6 +168,17 @@ impl<T: WeightValue, B: Backend> GradNode<T, B> {
             GradNode::Abs { .. } => backwards::backwards_abs::<T, B>(self, upstream),
             GradNode::Sqrt { .. } => backwards::backwards_sqrt::<T, B>(self, upstream),
             GradNode::Ln { .. } => backwards::backwards_ln::<T, B>(self, upstream),
+            GradNode::Sin { .. } => backwards::backwards_sin::<T, B>(self, upstream),
+            GradNode::Cos { .. } => backwards::backwards_cos::<T, B>(self, upstream),
+            GradNode::Tan { .. } => backwards::backwards_tan::<T, B>(self, upstream),
+            GradNode::Tanh { .. } => backwards::backwards_tanh::<T, B>(self, upstream),
+            GradNode::Exp { .. } => backwards::backwards_exp::<T, B>(self, upstream),
+            GradNode::Square { .. } => backwards::backwards_square::<T, B>(self, upstream),
+            GradNode::Cube { .. } => backwards::backwards_cube::<T, B>(self, upstream),
+            GradNode::Reciprocal { .. } => backwards::backwards_reciprocal::<T, B>(self, upstream),
+            GradNode::Rsqrt { .. } => backwards::backwards_rsqrt::<T, B>(self, upstream),
+            GradNode::Sinh { .. } => backwards::backwards_sinh::<T, B>(self, upstream),
+            GradNode::Cosh { .. } => backwards::backwards_cosh::<T, B>(self, upstream),
             GradNode::MatMul { .. } => backwards::backwards_matmul::<T, B>(self, upstream),
             GradNode::None => Ok(vec![]),
             // _ => Err(TensorError::UnsupportedOperation("Backward not implemented for this node type.".into())),
