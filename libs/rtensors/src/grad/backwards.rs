@@ -356,11 +356,11 @@ pub fn backwards_reciprocal<T: WeightValue, B: Backend>(
     node: &GradNode<T, B>, 
     upstream: &TensorBase<T, B>,
 ) -> Result<Vec<TensorBase<T, B>>, TensorError>{
-    let GradNode::Reciprocal { input_tensor, .. } = node else {
+    let GradNode::Reciprocal { result, .. } = node else {
         return Err(TensorError::UnsupportedOperation("Invalid node type passed to Reciprocal backwards.".into()));
     };
-    // d/dx(1/x) = -1/x²
-    let grad = -input_tensor.square().reciprocal() * upstream;
+    // d/dx(1/x) = -1/x² = -(1/x)²
+    let grad = -result.square() * upstream;
     Ok(vec![grad])
 }
 
@@ -401,6 +401,32 @@ pub fn backwards_cosh<T: WeightValue, B: Backend>(
     };
     // d/dx(cosh(x)) = sinh(x)
     let grad = input_tensor.sinh() * upstream;
+    Ok(vec![grad])
+}
+
+#[inline]
+pub fn backwards_expm1<T: WeightValue, B: Backend>(
+    node: &GradNode<T, B>, 
+    upstream: &TensorBase<T, B>,
+) -> Result<Vec<TensorBase<T, B>>, TensorError>{
+    let GradNode::ExpM1 { input_tensor, .. } = node else {
+        return Err(TensorError::UnsupportedOperation("Invalid node type passed to ExpM1 backwards.".into()));
+    };
+    // d/dx(exp(x) - 1) = exp(x)
+    let grad = input_tensor.exp() * upstream;
+    Ok(vec![grad])
+}
+
+#[inline]
+pub fn backwards_ln1p<T: WeightValue, B: Backend>(
+    node: &GradNode<T, B>, 
+    upstream: &TensorBase<T, B>,
+) -> Result<Vec<TensorBase<T, B>>, TensorError>{
+    let GradNode::Ln1p { input_tensor, .. } = node else {
+        return Err(TensorError::UnsupportedOperation("Invalid node type passed to Ln1p backwards.".into()));
+    };
+    // d/dx(ln(1 + x)) = 1/(1 + x)
+    let grad = (input_tensor + T::ONE).reciprocal() * upstream;
     Ok(vec![grad])
 }
 

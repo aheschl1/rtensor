@@ -552,7 +552,7 @@ mod tests {
                 let output = model.forward(input.clone());
                 l1_loss(&output, &target).borrow().tensor.item().unwrap()
             };
-            for _ in 0..10 {
+            for _ in 0..100 {
                 let output = model.forward(input.clone());
                 let loss = l1_loss(&output, &target);
                 println!("Loss: {:?}", loss.borrow().tensor.item());
