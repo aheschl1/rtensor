@@ -73,7 +73,7 @@ pub trait AsView<T: TensorValue, B: Backend> {
     
     /// Returns a view with a different shape, collapsing dimensions as needed.
     /// The tensor must be contiguous.
-    fn view_as(&self, shape: Shape) -> Result<TensorView<'_, T, B>, TensorError>;
+    fn view_as(&self, shape: impl Into<Shape>) -> Result<TensorView<'_, T, B>, TensorError>;
 }
 
 /// Provides mutable view access to tensor data.
@@ -84,7 +84,7 @@ pub trait AsViewMut<T: TensorValue, B: Backend> : AsView<T, B> {
     
     /// Returns a mutable view with a different shape, collapsing dimensions as needed.
     /// The tensor must be contiguous.
-    fn view_as_mut(&'_ mut self, shape: Shape) -> Result<TensorViewMut<'_, T, B>, TensorError>;
+    fn view_as_mut(&'_ mut self, shape: impl Into<Shape>) -> Result<TensorViewMut<'_, T, B>, TensorError>;
 }
 
 /// Converts tensor views or references to owned tensors.
@@ -116,13 +116,9 @@ impl<T: TensorValue, B: Backend> AsView<T, B> for TensorBase<T, B> {
         )
     }
     
-    fn view_as(&self, shape: Shape) -> Result<TensorView<'_, T, B>, TensorError> {
-        // collapse into shape
-        if !is_contiguous_relaxed(&self.meta.shape, &self.meta.strides){
-            return Err(TensorError::ContiguityError("Cannot view_as non contiguous tensor".to_string()));
-        }
-
-        panic!()
+    /// Logical reinterpretation of a contiguous memory layout.
+    fn view_as(&self, shape: impl Into<Shape>) -> Result<TensorView<'_, T, B>, TensorError> {
+        view_as_inner(self, shape.into())
     }
 } 
 
@@ -135,13 +131,8 @@ impl<T: TensorValue, B: Backend> AsView<T, B> for &TensorBase<T, B> {
         )
     }
     
-    fn view_as(&self, shape: Shape) -> Result<TensorView<'_, T, B>, TensorError> {
-        // collapse into shape
-        if !is_contiguous_relaxed(&self.meta.shape, &self.meta.strides){
-            return Err(TensorError::ContiguityError("Cannot view_as non contiguous tensor".to_string()));
-        }
-
-        panic!()
+    fn view_as(&self, shape: impl Into<Shape>) -> Result<TensorView<'_, T, B>, TensorError> {
+        view_as_inner(self, shape.into())
     }
 } 
 
@@ -154,8 +145,8 @@ impl<T: TensorValue, B: Backend> AsViewMut<T, B> for TensorBase<T, B> {
         )
     }
     
-    fn view_as_mut(&'_ mut self, shape: Shape) -> Result<TensorViewMut<'_, T, B>, TensorError> {
-        todo!()
+    fn view_as_mut(&'_ mut self, shape: impl Into<Shape>) -> Result<TensorViewMut<'_, T, B>, TensorError> {
+        view_as_mut_inner(self, shape.into())
     }
 }
 
@@ -169,8 +160,8 @@ impl<T: TensorValue, B: Backend> AsView<T, B> for TensorView<'_, T, B>
         )
     }
     
-    fn view_as(&self, shape: Shape) -> Result<TensorView<'_, T, B>, TensorError> {
-        todo!()
+    fn view_as(&self, shape: impl Into<Shape>) -> Result<TensorView<'_, T, B>, TensorError> {
+        view_as_inner(self, shape.into())
     }
 
 }
@@ -185,8 +176,8 @@ impl<T: TensorValue, B: Backend> AsView<T, B> for TensorViewMut<'_, T, B>
         )
     }
     
-    fn view_as(&self, shape: Shape) -> Result<TensorView<'_, T, B>, TensorError> {
-        todo!()
+    fn view_as(&self, shape: impl Into<Shape>) -> Result<TensorView<'_, T, B>, TensorError> {
+        view_as_inner(self, shape.into())
     }
 }
 
@@ -200,8 +191,8 @@ impl<T: TensorValue, B: Backend> AsViewMut<T, B> for TensorViewMut<'_, T, B>
         )
     }
     
-    fn view_as_mut(&'_ mut self, shape: Shape) -> Result<TensorViewMut<'_, T, B>, TensorError> {
-        todo!()
+    fn view_as_mut(&'_ mut self, shape: impl Into<Shape>) -> Result<TensorViewMut<'_, T, B>, TensorError> {
+        view_as_mut_inner(self, shape.into())
     }
 }
 
@@ -279,7 +270,7 @@ fn view_to_contiguous<T: TensorValue, B: Backend>(meta: &MetaTensor, raw: &B::Bu
     // }
     
     let mut new_idx = 0;
-    for range in meta.iter_contiguous_ranges() {
+    for range in meta.iter_forward_contiguous_ranges() {
         let len = range.end - range.start;
         new_backend.copy_range_within(&mut new_buf, raw, new_idx, range.start, len)?;
         new_idx += len;
@@ -292,6 +283,48 @@ fn view_to_contiguous<T: TensorValue, B: Backend>(meta: &MetaTensor, raw: &B::Bu
     let new_meta = MetaTensor::new(new_shape, new_stride, 0);
     
     Ok(TensorBase::from_parts(new_backend, new_buf, new_meta))
+}
+
+#[inline]
+fn view_as_inner<T: TensorValue, B: Backend>(
+    tensor: &impl AsView<T, B>,
+    shape: Shape
+) -> Result<TensorView<'_, T, B>, TensorError> {
+    let mut tensor: TensorView<'_, T, B> = tensor.view();
+
+    if !is_contiguous_relaxed(&tensor.meta.shape, &tensor.meta.strides){
+        return Err(TensorError::ContiguityError("Cannot view_as non contiguous tensor".to_string()));
+    }
+    if shape.size() != tensor.meta.size() {
+        return Err(TensorError::InvalidShape(format!("Invalid size {} for initial shape {}", shape.size(), tensor.meta.size())));
+    }
+    // correct element count, one subspace.
+    // so, we can just create new meta
+    let new_stride = super::shape_to_stride(&shape);
+    let new_meta = MetaTensor::new(shape, new_stride, tensor.meta.offset());
+    tensor.meta = new_meta;
+    Ok(tensor)
+}
+
+#[inline]
+fn view_as_mut_inner<T: TensorValue, B: Backend>(
+    tensor: &mut impl AsViewMut<T, B>,
+    shape: Shape
+) -> Result<TensorViewMut<'_, T, B>, TensorError> {
+    let mut tensor: TensorViewMut<'_, T, B> = tensor.view_mut();
+
+    if !is_contiguous_relaxed(&tensor.meta.shape, &tensor.meta.strides){
+        return Err(TensorError::ContiguityError("Cannot view_as non contiguous tensor".to_string()));
+    }
+    if shape.size() != tensor.meta.size() {
+        return Err(TensorError::InvalidShape(format!("Invalid size {} for initial shape {}", shape.size(), tensor.meta.size())));
+    }
+    // correct element count, one subspace.
+    // so, we can just create new meta
+    let new_stride = super::shape_to_stride(&shape);
+    let new_meta = MetaTensor::new(shape, new_stride, tensor.meta.offset());
+    tensor.meta = new_meta;
+    Ok(tensor)
 }
 
 #[inline]

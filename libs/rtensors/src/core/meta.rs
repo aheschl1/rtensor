@@ -257,8 +257,10 @@ impl MetaTensor {
     /// Returns a vector of ranges representing contiguous memory blocks.
     /// The complexity is O(blocks) where blocks is the number of contiguous blocks.
     /// So, contiguous tensors return a single range in O(1) time.
-    /// A matrix with three contiguous rows not sitting contiguously would return three ranges in O(3) time.
-    pub fn iter_contiguous_ranges(&self) -> Vec<Range<usize>> {
+    /// A matrix with three contiguous rows not sitting contiguously would return three ranges would be slower.
+    /// 
+    /// Note that nagative strides are treaterd as non-contiguous here. This makes it appropriate for memcpy use cases.
+    pub(crate) fn iter_forward_contiguous_ranges(&self) -> Vec<Range<usize>> {
         let k = contiguous_suffix_len(&self.shape, &self.strides);
         if k == 0 {
             return self.iter_offsets().map(|o| o..o+1).collect();

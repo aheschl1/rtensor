@@ -368,7 +368,7 @@ mod tests {
             // use model, but do a broadcasted add
             let wa = Tensor::<f32>::ones((1, 3)).param();
             let input = Tensor::<f32>::ones((1, 2, 1)).param();
-            let target = Tensor::<f32>::zeros((2, 3)).grad();
+            let target = Tensor::<f32>::zeros((1, 2, 3)).grad();
             optim.register_parameter(&wa).unwrap();
             optim.register_parameter(&input).unwrap();
             let initial_loss = {
@@ -393,7 +393,7 @@ mod tests {
             // use model, but do a broadcasted sub
             let wa = Tensor::<f32>::ones((1, 3)).param();
             let input = Tensor::<f32>::ones((1, 2, 1)).param();
-            let target = Tensor::<f32>::ones((2, 3)).grad();
+            let target = Tensor::<f32>::ones((1, 2, 3)).grad();
             optim.register_parameter(&wa).unwrap();
             optim.register_parameter(&input).unwrap();
             let initial_loss = {
@@ -418,7 +418,7 @@ mod tests {
             // use model, but do a broadcasted mul
             let wa = Tensor::<f32>::ones((1, 3)).param();
             let input = Tensor::<f32>::ones((1, 2, 1)).param();
-            let target = Tensor::<f32>::zeros((2, 3)).grad();
+            let target = Tensor::<f32>::zeros((1, 2, 3)).grad();
             optim.register_parameter(&wa).unwrap();
             optim.register_parameter(&input).unwrap();
             let initial_loss = {
@@ -443,7 +443,7 @@ mod tests {
             // use model, but do a broadcasted div
             let wa = Tensor::<f32>::ones((1, 3)).param();
             let input = Tensor::<f32>::ones((1, 2, 1)).param();
-            let target = Tensor::<f32>::zeros((2, 3)).grad();
+            let target = Tensor::<f32>::zeros((1, 2, 3)).grad();
             optim.register_parameter(&wa).unwrap();
             optim.register_parameter(&input).unwrap();
             let initial_loss = {

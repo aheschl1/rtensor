@@ -38,7 +38,7 @@ impl<T: WeightValue, B: Backend> L1<T, B> for GradTensor<T, B> {
         
         let self_tensor = &self_inner.tensor;
         let target_tensor = &target_inner.tensor;
-        assert!(self_tensor.shape() == target_tensor.shape(), "Shapes must be the same for L1 loss");
+        assert!(self_tensor.shape() == target_tensor.shape(), "Shapes must be the same for L1 loss. Got {:?} and {:?}", self_tensor.shape(), target_tensor.shape());
         
         let diff = self_tensor - target_tensor;
         let mut grad_map = diff.sign();
