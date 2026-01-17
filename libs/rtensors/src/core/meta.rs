@@ -1,6 +1,6 @@
 use std::ops::{Index, IndexMut, Range};
 
-use crate::{backend::Backend, core::{primitives::TensorBase, value::TensorValue, TensorViewMut}};
+use crate::{backend::Backend, core::{idx::Idx, primitives::TensorBase, value::TensorValue, TensorViewMut}};
 
 use super::primitives::TensorView;
 
@@ -322,6 +322,45 @@ impl MetaTensor {
 
         offset as usize
     }
+
+    pub fn idx_to_offset(&self, idx: impl Into<Idx>) -> usize {
+        let idx = idx.into();
+        let idx: Vec<usize> = idx.into();
+        let mut offset = self.offset as isize;
+        for (c, stride) in idx.iter().zip(self.strides.iter()) {
+            offset += *c as isize * *stride;
+        }
+        offset as usize
+    }
+
+    pub fn offset_to_idx(&self, offset: usize) -> Idx {
+        let mut idx = vec![0; self.rank()];
+        let mut rem = offset as isize - self.offset as isize;
+
+        for d in 0..self.rank() {
+            let stride = self.strides[d];
+            if stride == 0 {
+                idx[d] = 0;
+                continue;
+            }
+            let mut c = rem / stride;
+            let max = self.shape[d] as isize - 1;
+            if c < 0 {
+                c = 0;
+            } else if c > max {
+                c = max;
+            }
+            idx[d] = c as usize;
+            rem -= c * stride;
+        }
+
+        // debug_assert!(
+        //     self.idx_to_offset(&self.offset_to_idx(offset)) == offset
+        // );
+
+        idx.into()
+    }
+
 }
 
 pub struct TensorOffsetIterator<'a> {

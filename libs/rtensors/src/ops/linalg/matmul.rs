@@ -172,7 +172,7 @@ where
         let mut m1 = lview.unsqueeze().matmul(unsafe { &rview.unsqueeze_at(1).unwrap_unchecked() })?;
 
         // Here we use squeeze in place to prevent two memcopys.
-        m1.squeeze_in_place();
+        m1.squeeze_inplace();
         Ok(m1)
     }
 

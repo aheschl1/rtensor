@@ -15,7 +15,9 @@ pub use slice::Slice;
 
 #[cfg(test)]
 mod tests {
-    use crate::{backend::Backend, coord, core::{idx::Idx, tensor::{AsTensor, AsView, AsViewMut, TensorAccess, TensorAccessMut, TensorError}, value::TensorValue, MetaTensor, MetaTensorView, Shape, Slice, Strides, Tensor}, get};
+    use rand::rand_core::le;
+
+    use crate::{backend::Backend, coord, core::{idx::Idx, tensor::{AsTensor, AsView, AsViewMut, TensorAccess, TensorAccessMut, TensorError}, value::TensorValue, MetaTensor, MetaTensorView, Shape, Slice, Strides, Tensor}, get, ops::linalg::PaddingType};
 
     fn make_tensor<T: TensorValue>(buf: Vec<T>, shape: impl Into<Shape>) -> Tensor<T> {
         Tensor::from_buf(buf, shape.into()).unwrap()
@@ -3914,7 +3916,155 @@ mod tests {
         assert_eq!(index_tensor(Idx::At(2), &squeezed).unwrap(), 8);
     }
 
-    
+    #[test]
+    fn test_pad_1d() {
+        let tensor = make_tensor(vec![1, 2, 3], vec![3]);
+        let padded = tensor.pad(vec![2], &PaddingType::Zeros).unwrap();
+        assert_eq!(*padded.shape(), vec![7]);
+        assert_eq!(index_tensor(Idx::At(0), &padded).unwrap(), 0);
+        assert_eq!(index_tensor(Idx::At(2), &padded).unwrap(), 1);
+        assert_eq!(index_tensor(Idx::At(4), &padded).unwrap(), 3);
+        assert_eq!(index_tensor(Idx::At(6), &padded).unwrap(), 0);
+    }
+
+    #[test]
+    fn test_pad_2d() {
+        let tensor = make_tensor(
+            vec![
+                1, 2, 
+                3, 4
+            ], 
+            vec![2, 2]
+        );
+        let padded = tensor.pad(vec![1, 2], &PaddingType::Zeros).unwrap();
+        let expected = make_tensor(
+            vec![
+                0, 0, 0, 0, 0, 0,
+                0, 0, 1, 2, 0, 0,
+                0, 0, 3, 4, 0, 0,
+                0, 0, 0, 0, 0, 0
+            ], 
+            vec![4, 6]
+        );
+        assert_eq!(padded, expected);
+    }
+
+    #[test]
+    fn test_pad_3d() {
+        // Test 3D tensor padding: [2, 2, 2] -> [4, 4, 4]
+        let tensor = make_tensor(
+            vec![
+                1, 2,  // depth 0, row 0
+                3, 4,  // depth 0, row 1
+                5, 6,  // depth 1, row 0
+                7, 8   // depth 1, row 1
+            ], 
+            vec![2, 2, 2]
+        );
+        let padded = tensor.pad(vec![1, 1, 1], &PaddingType::Zeros).unwrap();
+        assert_eq!(*padded.shape(), vec![4, 4, 4]);
+        
+        // Check corner is zero
+        assert_eq!(index_tensor(Idx::Coord(vec![0, 0, 0]), &padded).unwrap(), 0);
+        // Check original data is preserved in the middle
+        assert_eq!(index_tensor(Idx::Coord(vec![1, 1, 1]), &padded).unwrap(), 1);
+        assert_eq!(index_tensor(Idx::Coord(vec![1, 1, 2]), &padded).unwrap(), 2);
+        assert_eq!(index_tensor(Idx::Coord(vec![2, 2, 2]), &padded).unwrap(), 8);
+    }
+
+    #[test]
+    fn test_pad_4d() {
+        // Test 4D tensor (batch, channel, height, width): [1, 2, 2, 2] -> [3, 4, 4, 4]
+        let tensor = make_tensor(
+            vec![
+                1, 2,  3, 4,   // batch 0, channel 0
+                5, 6,  7, 8    // batch 0, channel 1
+            ], 
+            vec![1, 2, 2, 2]
+        );
+        let padded = tensor.pad(vec![1, 1, 1, 1], &PaddingType::Zeros).unwrap();
+        assert_eq!(*padded.shape(), vec![3, 4, 4, 4]);
+        
+        // Check that padding is applied
+        assert_eq!(index_tensor(Idx::Coord(vec![0, 0, 0, 0]), &padded).unwrap(), 0);
+        // Check original data
+        assert_eq!(index_tensor(Idx::Coord(vec![1, 1, 1, 1]), &padded).unwrap(), 1);
+    }
+
+    #[test]
+    fn test_pad_asymmetric() {
+        // Test asymmetric padding: different padding on different dimensions
+        let tensor = make_tensor(
+            vec![1, 2, 3, 4, 5, 6], 
+            vec![2, 3]
+        );
+        let padded = tensor.pad(vec![3, 1], &PaddingType::Zeros).unwrap();
+        assert_eq!(*padded.shape(), vec![8, 5]); // [2+3*2, 3+1*2]
+        
+        // Check padding zones
+        assert_eq!(index_tensor(Idx::Coord(vec![0, 0]), &padded).unwrap(), 0);
+        assert_eq!(index_tensor(Idx::Coord(vec![0, 4]), &padded).unwrap(), 0);
+        // Check original data in the middle
+        assert_eq!(index_tensor(Idx::Coord(vec![3, 1]), &padded).unwrap(), 1);
+        assert_eq!(index_tensor(Idx::Coord(vec![4, 3]), &padded).unwrap(), 6);
+    }
+
+    #[test]
+    fn test_pad_zero_padding_some_dims() {
+        // Test with zero padding on some dimensions
+        let tensor = make_tensor(
+            vec![1, 2, 3, 4, 5, 6, 7, 8], 
+            vec![2, 2, 2]
+        );
+        let padded = tensor.pad(vec![0, 2, 1], &PaddingType::Zeros).unwrap();
+        assert_eq!(*padded.shape(), vec![2, 6, 4]); // [2+0, 2+2*2, 2+1*2]
+        
+        // First dimension unchanged, original [0,0,0] -> [0, 2, 1]
+        assert_eq!(index_tensor(Idx::Coord(vec![0, 2, 1]), &padded).unwrap(), 1);
+        // Check padding in other dimensions
+        assert_eq!(index_tensor(Idx::Coord(vec![0, 0, 1]), &padded).unwrap(), 0);
+        // Original [1,1,1] has value 8, becomes [1, 3, 2] after padding
+        assert_eq!(index_tensor(Idx::Coord(vec![1, 3, 2]), &padded).unwrap(), 8);
+    }
+
+    #[test]
+    fn test_pad_large_padding() {
+        // Test with large padding relative to tensor size
+        let tensor = make_tensor(vec![42], vec![1]);
+        let padded = tensor.pad(vec![5], &PaddingType::Zeros).unwrap();
+        assert_eq!(*padded.shape(), vec![11]); // 1 + 5*2
+        
+        // Check middle element
+        assert_eq!(index_tensor(Idx::At(5), &padded).unwrap(), 42);
+        // Check padding
+        assert_eq!(index_tensor(Idx::At(0), &padded).unwrap(), 0);
+        assert_eq!(index_tensor(Idx::At(10), &padded).unwrap(), 0);
+    }
+
+    #[test]
+    fn test_pad_rectangular_2d() {
+        // Test non-square 2D tensor
+        let tensor = make_tensor(
+            vec![1, 2, 3, 4, 5, 6], 
+            vec![3, 2]
+        );
+        let padded = tensor.pad(vec![2, 3], &PaddingType::Zeros).unwrap();
+        assert_eq!(*padded.shape(), vec![7, 8]); // [3+2*2, 2+3*2]
+        
+        let expected = make_tensor(
+            vec![
+                0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 1, 2, 0, 0, 0,
+                0, 0, 0, 3, 4, 0, 0, 0,
+                0, 0, 0, 5, 6, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0
+            ], 
+            vec![7, 8]
+        );
+        assert_eq!(padded, expected);
+    }
 }
 
 

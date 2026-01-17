@@ -1,34 +1,53 @@
 
-use crate::{backend::Backend, core::{primitives::TensorBase, tensor::{TensorAccess, TensorAccessMut}, value::WeightValue, MetaTensorView}, grad::{primitives::GradTensor, GradNode}, ops::{reduction::TotalReductionOp, unary::UnaryOp}};
+use crate::{backend::Backend, core::{primitives::TensorBase, tensor::{TensorAccess, TensorAccessMut}, value::WeightValue, MetaTensorView}, grad::{primitives::GradTensor, GradNode}, ops::{reduction::{self, TotalReductionOp}, unary::UnaryOp}};
 
 
+
+pub enum ReductionType {
+    Mean,
+    Sum,
+    None,
+}
 
 trait L1<T: WeightValue, B: Backend> {
-    fn l1(&self, target: &Self) -> Self;
+    fn l1(&self, target: &Self, reduction: ReductionType) -> Self;
 }
 
 impl<T: WeightValue, B: Backend> L1<T, B> for TensorBase<T, B> {
-    fn l1(&self, target: &Self) -> Self {
-        
-        (self - target).abs().mean().expect("L1 loss computation failed")
+    fn l1(&self, target: &Self, reduction: ReductionType) -> Self {
+        let diff = (self - target).abs();
+        match reduction {
+            ReductionType::Mean => {
+                diff.mean().expect("Failed to reduce")
+            },
+            ReductionType::Sum => {
+                diff.sum().expect("Failed to reduce")
+            },
+            ReductionType::None => {
+                diff
+            },
+        }
     }
 }
 
-// TODO capture broadcasting in L1 loss for backwards
+// TODO concider braodcasting impact. 
 impl<T: WeightValue, B: Backend> L1<T, B> for GradTensor<T, B> {
-    fn l1(&self, target: &Self) -> Self {
+    fn l1(&self, target: &Self, reduction: ReductionType) -> Self {
         let self_inner = self.borrow();
         let target_inner = target.borrow();
-
+        
         let self_tensor = &self_inner.tensor;
         let target_tensor = &target_inner.tensor;
-
+        assert!(self_tensor.shape() == target_tensor.shape(), "Shapes must be the same for L1 loss");
+        
         let diff = self_tensor - target_tensor;
         let mut grad_map = diff.sign();
 
-        grad_map /= T::from_usize(self_tensor.size());
+        if let ReductionType::Mean = reduction {
+            grad_map /= T::from_usize(self_tensor.size());
+        }
 
-        let loss_tensor = self_tensor.l1(target_tensor);
+        let loss_tensor = self_tensor.l1(target_tensor, reduction);
         GradTensor::from_op_self_referential(loss_tensor, |inner| 
             GradNode::L1 {
                 input: self.node,
@@ -40,9 +59,24 @@ impl<T: WeightValue, B: Backend> L1<T, B> for GradTensor<T, B> {
     }
 }
 
+pub fn mean_l1_loss<T: WeightValue, B: Backend>(
+    input: &GradTensor<T, B>,
+    target: &GradTensor<T, B>
+) -> GradTensor<T, B> {
+    input.l1(target, ReductionType::Mean)
+}
+
+pub fn sum_l1_loss<T: WeightValue, B: Backend>(
+    input: &GradTensor<T, B>,
+    target: &GradTensor<T, B>
+) -> GradTensor<T, B> {
+    input.l1(target, ReductionType::Sum)
+}
+
 pub fn l1_loss<T: WeightValue, B: Backend>(
     input: &GradTensor<T, B>,
     target: &GradTensor<T, B>,
+    reduction: ReductionType,
 ) -> GradTensor<T, B> {
-    input.l1(target)
+    input.l1(target, reduction)
 }

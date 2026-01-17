@@ -7,7 +7,7 @@ use crate::backend::Backend;
 use crate::backend::cpu::Cpu;
 use crate::core::value::TensorValue;
 use crate::core::{shape_to_stride, MetaTensor, MetaTensorView, Shape};
-use crate::core::tensor::{TensorError, compute_squeezed_parameters};
+use crate::core::tensor::{compute_squeezed_parameters, compute_unsqueezed_parameters, TensorError};
 
 /// A generic tensor with backend-specific storage.
 /// 
@@ -142,6 +142,17 @@ where
             meta,
         }
     }
+
+    pub fn unsqueeze_at_inplace(&mut self, dim: usize) -> Result<(), TensorError> {
+        let (new_shape, new_strides) = unsafe { compute_unsqueezed_parameters(self.shape(), self.strides(), dim).unwrap_unchecked() };
+        self.meta.shape = new_shape;
+        self.meta.strides = new_strides;
+        Ok(())
+    }
+
+    pub fn unsqueeze_inplace(&mut self) {
+        self.unsqueeze_at_inplace(0).unwrap();
+    }
 }
 
 impl<'a, T, B> TensorViewMut<'a, T, B>
@@ -161,6 +172,17 @@ where
             backend,
             meta
         }
+    }
+
+    pub fn unsqueeze_at_inplace(&mut self, dim: usize) -> Result<(), TensorError> {
+        let (new_shape, new_strides) = unsafe { compute_unsqueezed_parameters(self.shape(), self.strides(), dim).unwrap_unchecked() };
+        self.meta.shape = new_shape;
+        self.meta.strides = new_strides;
+        Ok(())
+    }
+
+    pub fn unsqueeze_inplace(&mut self) {
+        self.unsqueeze_at_inplace(0).unwrap();
     }
 }
 
@@ -317,11 +339,23 @@ where
     }
 
     /// Squeezes the tensor in place, preventing a new allocation from being made.
-    pub fn squeeze_in_place(&mut self) {
+    pub fn squeeze_inplace(&mut self) {
         let (new_shape, new_strides) = unsafe { compute_squeezed_parameters(self.shape(), self.strides(), None).unwrap_unchecked() };
         self.meta.shape = new_shape;
         self.meta.strides = new_strides;
     }
+
+    pub fn unsqueeze_at_inplace(&mut self, dim: usize) -> Result<(), TensorError> {
+        let (new_shape, new_strides) = unsafe { compute_unsqueezed_parameters(self.shape(), self.strides(), dim).unwrap_unchecked() };
+        self.meta.shape = new_shape;
+        self.meta.strides = new_strides;
+        Ok(())
+    }
+
+    pub fn unsqueeze_inplace(&mut self) {
+        self.unsqueeze_at_inplace(0).unwrap();
+    }
+
 }
 
 #[cfg(feature = "remote")]

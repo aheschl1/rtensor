@@ -1,4 +1,4 @@
-use crate::{backend::Backend, core::{idx::Idx, meta::is_contiguous_relaxed, primitives::{DeviceType, TensorBase}, value::{TensorValue, WeightValue}, Dim, MetaTensor, MetaTensorView, Shape, Strides, TensorView, TensorViewMut}, grad::{self, primitives::GradTensor}};
+use crate::{backend::Backend, core::{idx::Idx, meta::is_contiguous_relaxed, primitives::{DeviceType, TensorBase}, value::{TensorValue, WeightValue}, Dim, MetaTensor, MetaTensorView, Shape, Strides, TensorView, TensorViewMut}, grad::{self, primitives::GradTensor}, ops::linalg::PaddingType};
 use super::slice::{Slice, compute_sliced_parameters};
 use thiserror::Error;
 
@@ -94,6 +94,9 @@ pub trait AsTensor<T: TensorValue, B: Backend> {
     
     /// Ensures the tensor has a contiguous memory layout, copying if needed.
     fn contiguous(&self) -> TensorBase<T, B>;
+
+    /// Adds padding around tensor
+    fn pad(&self, padding: impl Into<Shape>, padding_type: &PaddingType) -> Result<TensorBase<T, B>, TensorError>;
 }
 
 
@@ -216,6 +219,14 @@ impl <T: TensorValue, B: Backend> AsTensor<T, B> for TensorBase<T, B> {
             view_to_contiguous(&self.meta, &self.buf, &self.backend).unwrap()
         }
     }
+    
+    fn pad(&self, padding: impl Into<Shape>, padding_type: &PaddingType) -> Result<TensorBase<T, B>, TensorError> {
+        pad_inner(
+            self,
+            padding,
+            padding_type
+        )
+    }
 }
 
 impl<'a, T: TensorValue, B: Backend> AsTensor<T, B> for TensorView<'a, T, B> {
@@ -226,6 +237,14 @@ impl<'a, T: TensorValue, B: Backend> AsTensor<T, B> for TensorView<'a, T, B> {
     fn contiguous(&self) -> TensorBase<T, B> {
         self.owned()
     }
+    
+    fn pad(&self, padding: impl Into<Shape>, padding_type: &PaddingType) -> Result<TensorBase<T, B>, TensorError> {
+        pad_inner(
+            self,
+            padding,
+            padding_type
+        )
+    }
 }
 
 impl<'a, T: TensorValue, B: Backend> AsTensor<T, B> for TensorViewMut<'a, T, B> {
@@ -235,6 +254,14 @@ impl<'a, T: TensorValue, B: Backend> AsTensor<T, B> for TensorViewMut<'a, T, B> 
 
     fn contiguous(&self) -> TensorBase<T, B> {
         self.owned()
+    }
+    
+    fn pad(&self, padding: impl Into<Shape>, padding_type: &PaddingType) -> Result<TensorBase<T, B>, TensorError> {
+        pad_inner(
+            self,
+            padding,
+            padding_type
+        )
     }
 }
 
@@ -258,12 +285,62 @@ fn view_to_contiguous<T: TensorValue, B: Backend>(meta: &MetaTensor, raw: &B::Bu
         new_idx += len;
     }
 
+
     // Create a new tensor with contiguous layout (standard row-major stride)
     let new_shape = meta.shape().clone();
     let new_stride = super::shape_to_stride(&new_shape);
     let new_meta = MetaTensor::new(new_shape, new_stride, 0);
     
     Ok(TensorBase::from_parts(new_backend, new_buf, new_meta))
+}
+
+#[inline]
+fn pad_inner<T: TensorValue, B: Backend>(
+    tensor: &impl AsView<T, B>,
+    padding: impl Into<Shape>,
+    padding_type: &PaddingType
+) -> Result<TensorBase<T, B>, TensorError> {
+    let padding: Shape = padding.into();
+    let tensor: TensorView<'_, T, B> = tensor.view();
+
+    if padding.len() != tensor.rank() {
+        return Err(TensorError::WrongDims("Padding rank must match tensor rank".to_string()));
+    }
+    let output_shape: Vec<usize> = tensor.shape().iter().zip(padding.iter()).map(|(dim_size, pad)| dim_size + 2 * pad).collect();
+    let output_shape = Shape::from(output_shape);
+    let mut output_tensor = match padding_type {
+        PaddingType::Zeros => {
+            TensorBase::<T, B>::zeros(output_shape)
+        }
+    };
+
+    // temporary go through each input coordinate and copy to output
+    for input_coord in tensor.meta.iter_coords() {
+        let output_coord: Vec<Dim> = input_coord.iter().zip(padding.iter()).map(|(c, p)| c + p).collect();
+        let input_offset = tensor.meta.idx_to_offset(&input_coord);
+        let output_offset = output_tensor.meta.idx_to_offset(&output_coord);
+        tensor.backend.copy_range_within(&mut output_tensor.buf, &tensor.buf, output_offset, input_offset, 1)?;
+    }
+
+    // // we need to copy each contiguous region from input to output at the correct offset
+    // for region in tensor.meta.iter_contiguous_ranges() {
+    //     let len = region.end - region.start;
+
+    //     let coordinate_start: Vec<usize> = tensor.meta.offset_to_idx(region.start).into();
+    //     let out_coordinate_start = coordinate_start
+    //         .iter()
+    //         .zip(padding.iter())
+    //         .map(|(coord, pad)| coord + pad)
+    //         .collect::<Vec<Dim>>();
+    //     let out_offset = output_tensor.meta.idx_to_offset(&out_coordinate_start);
+    //     debug_assert!(
+    //         tensor.meta.idx_to_offset(&tensor.meta.offset_to_idx(region.start)) == region.start
+    //     );
+    //     println!("Copying region {:?} to output offset {}", region, out_offset);
+    //     tensor.backend.copy_range_within(&mut output_tensor.buf, &tensor.buf, out_offset, region.start, len)?;
+    // }
+
+    Ok(output_tensor)   
 }
 
 /// Provides read access to tensor elements and slicing operations.
@@ -688,7 +765,7 @@ fn compute_permuted_parameters(shape: &Shape, stride: &Strides, dims: &Idx) -> R
 }
 
 #[inline]
-fn compute_unsqueezed_parameters(shape: &Shape, stride: &Strides, dim: Dim) -> Result<(Shape, Strides), TensorError> {
+pub(crate) fn compute_unsqueezed_parameters(shape: &Shape, stride: &Strides, dim: Dim) -> Result<(Shape, Strides), TensorError> {
     if dim > shape.len() {
         return Err(TensorError::InvalidDim(format!(
             "Unsqueeze dim {} is out of bounds for tensor rank {}",

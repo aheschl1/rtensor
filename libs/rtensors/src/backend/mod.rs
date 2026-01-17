@@ -1,7 +1,7 @@
 
 use std::fmt::Debug;
 
-use crate::{core::{meta::ContiguityTypes, primops::{Exp, InvExp, SquareRoot}, tensor::TensorError, value::{TensorValue, WeightValue}, Dim, MetaTensor, MetaTensorView}, ops::{base::BinaryOpType, reduction::ReductionOpTypes}};
+use crate::{core::{meta::ContiguityTypes, primops::{Exp, InvExp, SquareRoot}, tensor::TensorError, value::{TensorValue, WeightValue}, Dim, MetaTensor, MetaTensorView}, ops::{base::BinaryOpType, linalg::ConvConfig2D, reduction::ReductionOpTypes}};
 
 pub mod cpu;
 
@@ -91,6 +91,7 @@ macro_rules! elementwise_unary_dispatch {
 }
 
 use paste::paste;
+use rand::distr::weighted::Weight;
 
 
 macro_rules! specify_trait_unary_cabal {
@@ -394,8 +395,15 @@ pub trait Backend: Send + Sync + 'static + Clone + Debug {
                 op
             )
         }
-
     }
+
+    fn apply_conv_2d<T: WeightValue>(
+        &self, 
+        input: (&Self::Buf<T>, &MetaTensor), 
+        kernel: (&Self::Buf<T>, &MetaTensor),
+        output: &mut Self::Buf<T>,
+        config: &ConvConfig2D
+    ) -> Result<(), TensorError>;
 }
 
 pub trait BackendMatMul<T: TensorValue>: Backend {
