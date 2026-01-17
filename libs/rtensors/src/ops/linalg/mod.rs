@@ -1,6 +1,17 @@
-use crate::{backend::Backend, core::{tensor::TensorError, value::TensorValue}};
+use crate::{backend::Backend, core::{tensor::TensorError, value::{TensorValue, WeightValue}}};
 
 mod matmul;
+mod conv;
+
+pub enum PaddingType {
+    Zeros
+}
+
+pub struct ConvConfig2D {
+    pub stride: (usize, usize),
+    pub padding: (usize, usize),
+    pub padding_type: PaddingType,
+}
 
 /// Linear algebra operations: matrix multiplication and dot product.
 /// 
@@ -33,6 +44,17 @@ where
     /// let result = a.dot(&b).unwrap(); // Scalar: 32.0
     /// ```
     fn dot(&self, rhs: &Rhs) -> Result<Self::Output, TensorError>;
+}
+
+pub trait Conv<K, T, B>
+where
+    T: WeightValue,
+    B: Backend,
+{
+    type Output;
+
+
+    fn conv2d(&self, kernel: &K, config: &ConvConfig2D) -> Result<Self::Output, TensorError>;
 }
 
 #[cfg(test)]

@@ -574,7 +574,6 @@ macro_rules! specify_trait_scalar_cabal {
 }
 
 
-
 impl Backend for Cuda {
     type Buf<T: TensorValue> = CudaBuf<T>;
 
@@ -728,273 +727,6 @@ impl Backend for Cuda {
             .map_err(|e| TensorError::CudaError(e.to_string()))?;
         Ok(host_buf.into_boxed_slice())
     }
-
-    // fn apply_elementwise_binary_contiguous<T: TensorValue>(
-    //     &self,
-    //     buf: &mut Self::Buf<T>,
-    //     op: (BinaryOpType, T),
-    //     start: usize,
-    //     len: usize,
-    // ) -> Result<(), TensorError> {
-    //     let op_code = op.0.to_op_code();
-    //     let value = op.1;
-    //     let stream = self.stream();
-
-    //     macro_rules! launch_elementwise {
-    //         ($launch_fn:ident, $t:ty) => {{
-    //             // transmute value from T to actual type
-    //             let concrete_value: $t = unsafe { std::mem::transmute_copy(&value) };
-
-    //             let (raw_ptr, _) = buf.ptr.device_ptr(&stream);
-    //             let data_ptr = raw_ptr as *mut $t;
-    //             let data_ptr = unsafe { data_ptr.add(start) };
-
-    //             unsafe {
-    //                 $launch_fn(
-    //                     data_ptr as *mut $t,
-    //                     len,
-    //                     op_code,
-    //                     concrete_value,
-    //                     DEFAULT_BLOCK_SIZE,
-    //                 );
-    //             }
-    //             self.dirty();
-    //             Ok(())
-    //         }};
-    //     }
-
-    //     // Dispatch based on type
-    //     let tid = std::any::TypeId::of::<T>();
-    //     match tid {
-    //         id if id == std::any::TypeId::of::<f32>() => {
-    //             launch_elementwise!(launch_elementwise_contiguous_f32, f32)
-    //         }
-    //         id if id == std::any::TypeId::of::<f64>() => {
-    //             launch_elementwise!(launch_elementwise_contiguous_f64, f64)
-    //         }
-    //         id if id == std::any::TypeId::of::<u8>() => {
-    //             launch_elementwise!(launch_elementwise_contiguous_u8, u8)
-    //         }
-    //         id if id == std::any::TypeId::of::<u16>() => {
-    //             launch_elementwise!(launch_elementwise_contiguous_u16, u16)
-    //         }
-    //         id if id == std::any::TypeId::of::<u32>() => {
-    //             launch_elementwise!(launch_elementwise_contiguous_u32, u32)
-    //         }
-    //         id if id == std::any::TypeId::of::<u64>() => {
-    //             launch_elementwise!(launch_elementwise_contiguous_u64, u64)
-    //         }
-    //         id if id == std::any::TypeId::of::<u128>() => {
-    //             launch_elementwise!(launch_elementwise_contiguous_u128, u128)
-    //         }
-    //         id if id == std::any::TypeId::of::<i8>() => {
-    //             launch_elementwise!(launch_elementwise_contiguous_i8, i8)
-    //         }
-    //         id if id == std::any::TypeId::of::<i16>() => {
-    //             launch_elementwise!(launch_elementwise_contiguous_i16, i16)
-    //         }
-    //         id if id == std::any::TypeId::of::<i32>() => {
-    //             launch_elementwise!(launch_elementwise_contiguous_i32, i32)
-    //         }
-    //         id if id == std::any::TypeId::of::<i64>() => {
-    //             launch_elementwise!(launch_elementwise_contiguous_i64, i64)
-    //         }
-    //         id if id == std::any::TypeId::of::<i128>() => {
-    //             launch_elementwise!(launch_elementwise_contiguous_i128, i128)
-    //         }
-    //         id if id == std::any::TypeId::of::<types::boolean>() => {
-    //             launch_elementwise!(launch_elementwise_contiguous_boolean, bool)
-    //         }
-    //         _ => Err(TensorError::CudaError(
-    //             "Unsupported type for CUDA elementwise operation".to_string(),
-    //         )),
-    //     }
-    // }
-
-    // fn apply_elementwise_binary_1d_strided<T: TensorValue>(
-    //     &self,
-    //     buf: &mut Self::Buf<T>,
-    //     op: (BinaryOpType, T),
-    //     start: usize,
-    //     stride: isize,
-    //     len: usize,
-    // ) -> Result<(), TensorError> {
-    //     let op_code = op.0.to_op_code();
-    //     let value = op.1;
-    //     let stream = self.stream();
-
-    //     macro_rules! launch_elementwise {
-    //         ($launch_fn:ident, $t:ty) => {{
-    //             // transmute value from T to actual type
-    //             let concrete_value: $t = unsafe { std::mem::transmute_copy(&value) };
-    //             let (data_ptr, _) = buf.ptr.device_ptr(&stream);
-
-    //             unsafe {
-    //                 $launch_fn(
-    //                     data_ptr as *mut $t,
-    //                     start,
-    //                     stride,
-    //                     len,
-    //                     op_code,
-    //                     concrete_value,
-    //                     DEFAULT_BLOCK_SIZE,
-    //                 );
-    //             }
-    //             self.dirty();
-    //             Ok(())
-    //         }};
-    //     }
-
-    //     // Dispatch based on type
-    //     match std::any::TypeId::of::<T>() {
-    //         id if id == std::any::TypeId::of::<f32>() => {
-    //             launch_elementwise!(launch_elementwise_strided_f32, f32)
-    //         }
-    //         id if id == std::any::TypeId::of::<f64>() => {
-    //             launch_elementwise!(launch_elementwise_strided_f64, f64)
-    //         }
-    //         id if id == std::any::TypeId::of::<u8>() => {
-    //             launch_elementwise!(launch_elementwise_strided_u8, u8)
-    //         }
-    //         id if id == std::any::TypeId::of::<u16>() => {
-    //             launch_elementwise!(launch_elementwise_strided_u16, u16)
-    //         }
-    //         id if id == std::any::TypeId::of::<u32>() => {
-    //             launch_elementwise!(launch_elementwise_strided_u32, u32)
-    //         }
-    //         id if id == std::any::TypeId::of::<u64>() => {
-    //             launch_elementwise!(launch_elementwise_strided_u64, u64)
-    //         }
-    //         id if id == std::any::TypeId::of::<u128>() => {
-    //             launch_elementwise!(launch_elementwise_strided_u128, u128)
-    //         }
-    //         id if id == std::any::TypeId::of::<i8>() => {
-    //             launch_elementwise!(launch_elementwise_strided_i8, i8)
-    //         }
-    //         id if id == std::any::TypeId::of::<i16>() => {
-    //             launch_elementwise!(launch_elementwise_strided_i16, i16)
-    //         }
-    //         id if id == std::any::TypeId::of::<i32>() => {
-    //             launch_elementwise!(launch_elementwise_strided_i32, i32)
-    //         }
-    //         id if id == std::any::TypeId::of::<i64>() => {
-    //             launch_elementwise!(launch_elementwise_strided_i64, i64)
-    //         }
-    //         id if id == std::any::TypeId::of::<i128>() => {
-    //             launch_elementwise!(launch_elementwise_strided_i128, i128)
-    //         }
-    //         id if id == std::any::TypeId::of::<types::boolean>() => {
-    //             launch_elementwise!(launch_elementwise_strided_boolean, bool)
-    //         }
-    //         _ => Err(TensorError::CudaError(
-    //             "Unsupported type for CUDA elementwise operation".to_string(),
-    //         )),
-    //     }
-    // }
-
-    // fn apply_elementwise_binary_nd<T: TensorValue>(
-    //     &self,
-    //     buf: &mut Self::Buf<T>,
-    //     op: (BinaryOpType, T),
-    //     offset: usize,
-    //     shape: &[usize],
-    //     stride: &[isize],
-    // ) -> Result<(), TensorError> {
-    //     let op_code = op.0.to_op_code();
-    //     let value = op.1;
-    //     let stream = self.stream();
-    //     let rank = shape.len();
-    //     let size = shape.iter().product::<usize>();
-    //     // we need ptr to stridde and shape
-    //     let shape_buf = self.alloc_from_slice(
-    //         shape
-    //             .to_vec()
-    //             .into_iter()
-    //             .map(|x| x as u64)
-    //             .collect::<Vec<u64>>()
-    //             .into_boxed_slice(),
-    //     )?;
-    //     let stride_buf = self.alloc_from_slice(
-    //         stride
-    //             .to_vec()
-    //             .into_iter()
-    //             .map(|x| x as i64)
-    //             .collect::<Vec<i64>>()
-    //             .into_boxed_slice(),
-    //     )?;
-
-    //     let (stride_ptr, _) = stride_buf.ptr.device_ptr(&stream);
-    //     let (shape_ptr, _) = shape_buf.ptr.device_ptr(&stream);
-
-    //     macro_rules! launch_elementwise {
-    //         ($launch_fn:ident, $t:ty) => {{
-    //             // transmute value from T to actual type
-    //             let concrete_value: $t = unsafe { std::mem::transmute_copy(&value) };
-    //             let (data_ptr, _) = buf.ptr.device_ptr(&stream);
-
-    //             unsafe {
-    //                 $launch_fn(
-    //                     data_ptr as *mut $t,
-    //                     offset,
-    //                     stride_ptr as *const isize,
-    //                     shape_ptr as *const usize,
-    //                     rank,
-    //                     size,
-    //                     op_code,
-    //                     concrete_value,
-    //                     DEFAULT_BLOCK_SIZE,
-    //                 );
-    //             }
-    //             self.dirty();
-    //             Ok(())
-    //         }};
-    //     }
-
-    //     match std::any::TypeId::of::<T>() {
-    //         id if id == std::any::TypeId::of::<f32>() => {
-    //             launch_elementwise!(launch_elementwise_nd_affine_f32, f32)
-    //         }
-    //         id if id == std::any::TypeId::of::<f64>() => {
-    //             launch_elementwise!(launch_elementwise_nd_affine_f64, f64)
-    //         }
-    //         id if id == std::any::TypeId::of::<u8>() => {
-    //             launch_elementwise!(launch_elementwise_nd_affine_u8, u8)
-    //         }
-    //         id if id == std::any::TypeId::of::<u16>() => {
-    //             launch_elementwise!(launch_elementwise_nd_affine_u16, u16)
-    //         }
-    //         id if id == std::any::TypeId::of::<u32>() => {
-    //             launch_elementwise!(launch_elementwise_nd_affine_u32, u32)
-    //         }
-    //         id if id == std::any::TypeId::of::<u64>() => {
-    //             launch_elementwise!(launch_elementwise_nd_affine_u64, u64)
-    //         }
-    //         id if id == std::any::TypeId::of::<u128>() => {
-    //             launch_elementwise!(launch_elementwise_nd_affine_u128, u128)
-    //         }
-    //         id if id == std::any::TypeId::of::<i8>() => {
-    //             launch_elementwise!(launch_elementwise_nd_affine_i8, i8)
-    //         }
-    //         id if id == std::any::TypeId::of::<i16>() => {
-    //             launch_elementwise!(launch_elementwise_nd_affine_i16, i16)
-    //         }
-    //         id if id == std::any::TypeId::of::<i32>() => {
-    //             launch_elementwise!(launch_elementwise_nd_affine_i32, i32)
-    //         }
-    //         id if id == std::any::TypeId::of::<i64>() => {
-    //             launch_elementwise!(launch_elementwise_nd_affine_i64, i64)
-    //         }
-    //         id if id == std::any::TypeId::of::<i128>() => {
-    //             launch_elementwise!(launch_elementwise_nd_affine_i128, i128)
-    //         }
-    //         id if id == std::any::TypeId::of::<types::boolean>() => {
-    //             launch_elementwise!(launch_elementwise_nd_affine_boolean, bool)
-    //         }
-    //         _ => Err(TensorError::CudaError(
-    //             "Unsupported type for CUDA elementwise operation".to_string(),
-    //         )),
-    //     }
-    // }
 
     fn broadcast<T: TensorValue>(
         &self,
@@ -1696,14 +1428,16 @@ impl Backend for Cuda {
         apply_nd_argmax_contiguous(self, src, dst, dim, op)
     }
     
-    // impl_cpu_unary!{ relu, _temp }
-    // impl_cpu_unary! { neg, _temp }
-    // impl_cpu_unary! { sigmoid, _temp }
+    fn apply_conv_2d<T: WeightValue>(
+        &self, 
+        input: (&Self::Buf<T>, &MetaTensor), 
+        kernel: (&Self::Buf<T>, &MetaTensor),
+        output: &mut Self::Buf<T>,
+        config: &crate::ops::linalg::ConvConfig2D
+    ) -> Result<(), TensorError> {
+        todo!()
+    }
 }
-
-
-
-
 
 #[inline]
 fn populate_reduction_settings(

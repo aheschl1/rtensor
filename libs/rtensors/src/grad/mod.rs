@@ -77,10 +77,12 @@ pub(crate) enum GradNode<T: TensorValue, B: Backend> {
     Exp { input: NodeKey, result: TensorBase<T, B> },
     Square { input: NodeKey, input_tensor: TensorBase<T, B> },
     Cube { input: NodeKey, input_tensor: TensorBase<T, B> },
-    Reciprocal { input: NodeKey, input_tensor: TensorBase<T, B> },
+    Reciprocal { input: NodeKey, result: TensorBase<T, B> },
     Rsqrt { input: NodeKey, result: TensorBase<T, B> },
     Sinh { input: NodeKey, input_tensor: TensorBase<T, B> },
     Cosh { input: NodeKey, input_tensor: TensorBase<T, B> },
+    ExpM1 { input: NodeKey, input_tensor: TensorBase<T, B> },
+    Ln1p { input: NodeKey, input_tensor: TensorBase<T, B> },
     MatMul {
         left: NodeKey,
         right: NodeKey,
@@ -142,6 +144,8 @@ impl<T: WeightValue, B: Backend> GradNode<T, B> {
             GradNode::Rsqrt { input, .. } => vec![*input],
             GradNode::Sinh { input, .. } => vec![*input],
             GradNode::Cosh { input, .. } => vec![*input],
+            GradNode::ExpM1 { input, .. } => vec![*input],
+            GradNode::Ln1p { input, .. } => vec![*input],
             GradNode::MatMul { left, right, .. } => vec![*left, *right],
         }
     }
@@ -179,6 +183,8 @@ impl<T: WeightValue, B: Backend> GradNode<T, B> {
             GradNode::Rsqrt { .. } => backwards::backwards_rsqrt::<T, B>(self, upstream),
             GradNode::Sinh { .. } => backwards::backwards_sinh::<T, B>(self, upstream),
             GradNode::Cosh { .. } => backwards::backwards_cosh::<T, B>(self, upstream),
+            GradNode::ExpM1 { .. } => backwards::backwards_expm1::<T, B>(self, upstream),
+            GradNode::Ln1p { .. } => backwards::backwards_ln1p::<T, B>(self, upstream),
             GradNode::MatMul { .. } => backwards::backwards_matmul::<T, B>(self, upstream),
             GradNode::None => Ok(vec![]),
             // _ => Err(TensorError::UnsupportedOperation("Backward not implemented for this node type.".into())),

@@ -151,14 +151,14 @@ impl<T: WeightValue, B: Backend> PartialEq for GradTensor<T, B> { fn eq(&self, o
 
 #[cfg(test)]
 mod tests {
-    use crate::{backend::{cpu::Cpu, Backend}, core::{tensor::{RandomTensor, TensorAccess, WithGrad}, value::WeightValue, Tensor}, grad::{self, optim::{Optim, SGD}, primitives::GradTensor}, ops::{broadcast::l1::l1_loss, linalg::MatMul, scalar::ScalarGradOp, unary::UnaryGradOp}};
+    use crate::{backend::{cpu::Cpu, Backend}, core::{tensor::{RandomTensor, TensorAccess, WithGrad}, value::WeightValue, Tensor}, grad::{self, optim::{Optim, SGD}, primitives::GradTensor}, ops::{broadcast::l1::mean_l1_loss, linalg::MatMul, scalar::ScalarGradOp, unary::UnaryGradOp}};
 
     #[test]
     fn playground() {
 
         fn model(wa: &GradTensor<f32, Cpu>, wb: &GradTensor<f32, Cpu>, target: &GradTensor<f32, Cpu>) -> GradTensor<f32, Cpu> {
             let c = wa + wb;
-            let loss = l1_loss(&c, target);
+            let loss = mean_l1_loss(&c, target);
             loss
         }
 
@@ -171,7 +171,7 @@ mod tests {
             let inter = wb + wc;
             // println!("Intermediate: {:?}", inter);
             let c = wa + &inter;
-            let loss = l1_loss(&c, target);
+            let loss = mean_l1_loss(&c, target);
             loss
         }
 
@@ -185,7 +185,7 @@ mod tests {
             let inter2 = inter.permute((1, 0)).unwrap().abs();
             // println!("Intermediate: {:?}", inter);
             let c = wb + &inter2;
-            let loss = l1_loss(&c, target);
+            let loss = mean_l1_loss(&c, target);
             loss
         }
 
@@ -199,7 +199,7 @@ mod tests {
             let inter2 = inter.permute((1, 0)).unwrap().relu();
             // println!("Intermediate: {:?}", inter);
             let c = wb + &inter2;
-            let loss = l1_loss(&c, target);
+            let loss = mean_l1_loss(&c, target);
             loss
         }
 
@@ -207,7 +207,7 @@ mod tests {
             input: &GradTensor<f32, Cpu>,  // [2, 3]
             target: &GradTensor<f32, Cpu> // [3, 2]
         ) -> GradTensor<f32, Cpu> {
-            let loss = l1_loss(&-input.sqrt(), &target.clone().transpose());
+            let loss = mean_l1_loss(&-input.sqrt(), &target.clone().transpose());
             loss
         }
 
@@ -218,7 +218,7 @@ mod tests {
         ) -> GradTensor<f32, Cpu> {
             let temp = input + wa;
             let temp2 = temp.sigmoid().leaky_relu(1.); // grad should be identical even without leaky relu
-            let loss = l1_loss(&-temp2.sqrt(), &target.clone().transpose());
+            let loss = mean_l1_loss(&-temp2.sqrt(), &target.clone().transpose());
             loss
         }
 
@@ -229,7 +229,7 @@ mod tests {
         ) -> GradTensor<f32, Cpu> {
             let temp = input + wa;
             let temp2 = temp.leaky_relu(0.1).ln();
-            let loss = l1_loss(&-temp2, &target.clone().transpose());
+            let loss = mean_l1_loss(&-temp2, &target.clone().transpose());
             loss
         }
 
@@ -368,23 +368,23 @@ mod tests {
             // use model, but do a broadcasted add
             let wa = Tensor::<f32>::ones((1, 3)).param();
             let input = Tensor::<f32>::ones((1, 2, 1)).param();
-            let target = Tensor::<f32>::zeros((2, 3)).grad();
+            let target = Tensor::<f32>::zeros((1, 2, 3)).grad();
             optim.register_parameter(&wa).unwrap();
             optim.register_parameter(&input).unwrap();
             let initial_loss = {
                 let inter = &input + &wa;
-                l1_loss(&inter, &target).borrow().tensor.item().unwrap()
+                mean_l1_loss(&inter, &target).borrow().tensor.item().unwrap()
             };
             for _ in 0..10 {
                 let inter = &input + &wa; // broadcasted add
-                let loss = l1_loss(&inter, &target);
+                let loss = mean_l1_loss(&inter, &target);
                 println!("Loss: {:?}", loss.borrow().tensor.item());
                 ctx.backwards(&loss).unwrap();
                 optim.step().unwrap();
             }
             let final_loss = {
                 let inter = &input + &wa;
-                l1_loss(&inter, &target).borrow().tensor.item().unwrap()
+                mean_l1_loss(&inter, &target).borrow().tensor.item().unwrap()
             };
             assert!(initial_loss - final_loss > 0.1, 
                 "Loss should reduce by at least 0.1, initial: {}, final: {}", initial_loss, final_loss);
@@ -393,23 +393,23 @@ mod tests {
             // use model, but do a broadcasted sub
             let wa = Tensor::<f32>::ones((1, 3)).param();
             let input = Tensor::<f32>::ones((1, 2, 1)).param();
-            let target = Tensor::<f32>::ones((2, 3)).grad();
+            let target = Tensor::<f32>::ones((1, 2, 3)).grad();
             optim.register_parameter(&wa).unwrap();
             optim.register_parameter(&input).unwrap();
             let initial_loss = {
                 let inter = &input - &wa;
-                l1_loss(&inter, &target).borrow().tensor.item().unwrap()
+                mean_l1_loss(&inter, &target).borrow().tensor.item().unwrap()
             };
             for _ in 0..10 {
                 let inter = &input - &wa; // broadcasted sub
-                let loss = l1_loss(&inter, &target);
+                let loss = mean_l1_loss(&inter, &target);
                 println!("Loss: {:?}", loss.borrow().tensor.item());
                 ctx.backwards(&loss).unwrap();
                 optim.step().unwrap();
             }
             let final_loss = {
                 let inter = &input - &wa;
-                l1_loss(&inter, &target).borrow().tensor.item().unwrap()
+                mean_l1_loss(&inter, &target).borrow().tensor.item().unwrap()
             };
             assert!(initial_loss - final_loss > 0.1, 
                 "Loss should reduce by at least 0.1, initial: {}, final: {}", initial_loss, final_loss);
@@ -418,23 +418,23 @@ mod tests {
             // use model, but do a broadcasted mul
             let wa = Tensor::<f32>::ones((1, 3)).param();
             let input = Tensor::<f32>::ones((1, 2, 1)).param();
-            let target = Tensor::<f32>::zeros((2, 3)).grad();
+            let target = Tensor::<f32>::zeros((1, 2, 3)).grad();
             optim.register_parameter(&wa).unwrap();
             optim.register_parameter(&input).unwrap();
             let initial_loss = {
                 let inter = &input * &wa;
-                l1_loss(&inter, &target).borrow().tensor.item().unwrap()
+                mean_l1_loss(&inter, &target).borrow().tensor.item().unwrap()
             };
             for _ in 0..10 {
                 let inter = &input * &wa; // broadcasted mul
-                let loss = l1_loss(&inter, &target);
+                let loss = mean_l1_loss(&inter, &target);
                 println!("Loss: {:?}", loss.borrow().tensor.item());
                 ctx.backwards(&loss).unwrap();
                 optim.step().unwrap();
             }
             let final_loss = {
                 let inter = &input * &wa;
-                l1_loss(&inter, &target).borrow().tensor.item().unwrap()
+                mean_l1_loss(&inter, &target).borrow().tensor.item().unwrap()
             };
             assert!(initial_loss - final_loss > 0.1, 
                 "Loss should reduce by at least 0.1, initial: {}, final: {}", initial_loss, final_loss);
@@ -443,23 +443,23 @@ mod tests {
             // use model, but do a broadcasted div
             let wa = Tensor::<f32>::ones((1, 3)).param();
             let input = Tensor::<f32>::ones((1, 2, 1)).param();
-            let target = Tensor::<f32>::zeros((2, 3)).grad();
+            let target = Tensor::<f32>::zeros((1, 2, 3)).grad();
             optim.register_parameter(&wa).unwrap();
             optim.register_parameter(&input).unwrap();
             let initial_loss = {
                 let inter = &input / &wa;
-                l1_loss(&inter, &target).borrow().tensor.item().unwrap()
+                mean_l1_loss(&inter, &target).borrow().tensor.item().unwrap()
             };
             for _ in 0..10 {
                 let inter = &input / &wa; // broadcasted div
-                let loss = l1_loss(&inter, &target);
+                let loss = mean_l1_loss(&inter, &target);
                 println!("Loss: {:?}", loss.borrow().tensor.item());
                 ctx.backwards(&loss).unwrap();
                 optim.step().unwrap();
             }
             let final_loss = {
                 let inter = &input / &wa;
-                l1_loss(&inter, &target).borrow().tensor.item().unwrap()
+                mean_l1_loss(&inter, &target).borrow().tensor.item().unwrap()
             };
             assert!(initial_loss - final_loss > 0.1, 
                 "Loss should reduce by at least 0.1, initial: {}, final: {}", initial_loss, final_loss);
@@ -473,18 +473,18 @@ mod tests {
             optim.register_parameter(&wb).unwrap();
             let initial_loss = {
                 let inter = wa.matmul(&wb).expect("MatMul failed");
-                l1_loss(&inter, &target).borrow().tensor.item().unwrap()
+                mean_l1_loss(&inter, &target).borrow().tensor.item().unwrap()
             };
             for _ in 0..1 {
                 let inter = wa.matmul(&wb).expect("MatMul failed");
-                let loss = l1_loss(&inter, &target);
+                let loss = mean_l1_loss(&inter, &target);
                 println!("Loss: {:?}", loss.borrow().tensor.item());
                 ctx.backwards(&loss).unwrap();
                 optim.step().unwrap();
             }
             let final_loss = {
                 let inter = wa.matmul(&wb).expect("MatMul failed");
-                l1_loss(&inter, &target).borrow().tensor.item().unwrap()
+                mean_l1_loss(&inter, &target).borrow().tensor.item().unwrap()
             };
             // Only 1 iteration, so smaller threshold
             assert!(initial_loss - final_loss > 0.01, 
@@ -550,18 +550,18 @@ mod tests {
             
             let initial_loss = {
                 let output = model.forward(input.clone());
-                l1_loss(&output, &target).borrow().tensor.item().unwrap()
+                mean_l1_loss(&output, &target).borrow().tensor.item().unwrap()
             };
-            for _ in 0..10 {
+            for _ in 0..100 {
                 let output = model.forward(input.clone());
-                let loss = l1_loss(&output, &target);
+                let loss = mean_l1_loss(&output, &target);
                 println!("Loss: {:?}", loss.borrow().tensor.item());
                 ctx.backwards(&loss).unwrap();
                 optim.step().unwrap();
             }
             let final_loss = {
                 let output = model.forward(input.clone());
-                l1_loss(&output, &target).borrow().tensor.item().unwrap()
+                mean_l1_loss(&output, &target).borrow().tensor.item().unwrap()
             };
             assert!(initial_loss - final_loss > 0.01, 
                 "Dense model loss should reduce by at least 0.01, initial: {}, final: {}", initial_loss, final_loss);
@@ -578,7 +578,7 @@ mod tests {
         ) -> GradTensor<f32, Cpu> {
             let x = input + wa;
             let y = x.sin() + x.cos().tanh();
-            l1_loss(&y, target)
+            mean_l1_loss(&y, target)
         }
 
         fn model_with_hyperbolic(
@@ -588,7 +588,7 @@ mod tests {
         ) -> GradTensor<f32, Cpu> {
             let x = input + wa;
             let y = x.sinh() + x.cosh();
-            l1_loss(&y, target)
+            mean_l1_loss(&y, target)
         }
 
         grad::with::<f32, Cpu>(|ctx| {
@@ -638,7 +638,7 @@ mod tests {
         ) -> GradTensor<f32, Cpu> {
             let x = input + wa;
             let y = x.exp();
-            l1_loss(&y, target)
+            mean_l1_loss(&y, target)
         }
 
         fn model_with_powers(
@@ -648,7 +648,7 @@ mod tests {
         ) -> GradTensor<f32, Cpu> {
             let x = input + wa;
             let y = x.square() + x.cube();
-            l1_loss(&y, target)
+            mean_l1_loss(&y, target)
         }
 
         grad::with::<f32, Cpu>(|ctx| {
@@ -698,7 +698,7 @@ mod tests {
         ) -> GradTensor<f32, Cpu> {
             let x = input + wa;
             let y = x.reciprocal();
-            l1_loss(&y, target)
+            mean_l1_loss(&y, target)
         }
 
         fn model_with_rsqrt(
@@ -708,7 +708,7 @@ mod tests {
         ) -> GradTensor<f32, Cpu> {
             let x = input + wa;
             let y = x.rsqrt();
-            l1_loss(&y, target)
+            mean_l1_loss(&y, target)
         }
 
         grad::with::<f32, Cpu>(|ctx| {
@@ -763,7 +763,7 @@ mod tests {
             let x2 = x1.square().tanh();  // square then tanh
             let x3 = x2 + wb;
             let x4 = x3.sinh().reciprocal();  // sinh then reciprocal
-            l1_loss(&x4, target)
+            mean_l1_loss(&x4, target)
         }
 
         fn model_chain(
@@ -773,7 +773,7 @@ mod tests {
         ) -> GradTensor<f32, Cpu> {
             let x = input + wa;
             let y = x.sin().exp().rsqrt();  // chain: sin -> exp -> rsqrt
-            l1_loss(&y, target)
+            mean_l1_loss(&y, target)
         }
 
         grad::with::<f32, Cpu>(|ctx| {
@@ -834,7 +834,7 @@ mod tests {
             let y8 = x.cosh();
             
             let combined = &y1 + &y2 + &y3 + &y4 + &y5 + &y6 + &y7 + &y8;
-            l1_loss(&combined, target)
+            mean_l1_loss(&combined, target)
         }
 
         grad::with::<f32, Cpu>(|ctx| {

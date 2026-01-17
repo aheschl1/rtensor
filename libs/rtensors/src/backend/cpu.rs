@@ -409,6 +409,16 @@ impl Backend for Cpu {
         ) -> Result<(), TensorError> {
         todo!()
     }
+    
+    fn apply_conv_2d<T: WeightValue>(
+        &self, 
+        input: (&Self::Buf<T>, &MetaTensor), 
+        kernel: (&Self::Buf<T>, &MetaTensor),
+        output: &mut Self::Buf<T>,
+        config: &crate::ops::linalg::ConvConfig2D
+    ) -> Result<(), TensorError> {
+        todo!()
+    }
 
 }
 

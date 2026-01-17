@@ -123,3 +123,12 @@ impl From<()> for Idx {
     }
 }
 
+impl Into<Vec<Dim>> for Idx {
+    fn into(self) -> Vec<Dim> {
+        match self {
+            Idx::Coord(coords) => coords,
+            Idx::At(i) => vec![i],
+            Idx::Item => vec![],
+        }
+    }
+}

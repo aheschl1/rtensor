@@ -15,7 +15,9 @@ pub use slice::Slice;
 
 #[cfg(test)]
 mod tests {
-    use crate::{backend::Backend, coord, core::{idx::Idx, tensor::{AsTensor, AsView, AsViewMut, TensorAccess, TensorAccessMut, TensorError}, value::TensorValue, MetaTensor, MetaTensorView, Shape, Slice, Strides, Tensor}, get};
+    use rand::rand_core::le;
+
+    use crate::{backend::Backend, coord, core::{idx::Idx, tensor::{AsTensor, AsView, AsViewMut, TensorAccess, TensorAccessMut, TensorError}, value::TensorValue, MetaTensor, MetaTensorView, Shape, Slice, Strides, Tensor}, get, ops::linalg::PaddingType};
 
     fn make_tensor<T: TensorValue>(buf: Vec<T>, shape: impl Into<Shape>) -> Tensor<T> {
         Tensor::from_buf(buf, shape.into()).unwrap()
@@ -922,83 +924,85 @@ mod tests {
         assert_eq!(index_tensor(Idx::Coord(vec![1, 0, 0]), &tensor.view()).unwrap(), 67);
     }
 
-    // #[test]
-    // fn test_view_as_owned_success() {
-    //     let buf = vec![1, 2, 3, 4, 5, 6];
-    //     let shape = vec![2, 3];
-    //     let tensor = make_tensor(buf, shape);
-    //     let reshaped = tensor.view().view_as(vec![3, 2]).unwrap();
-    //     assert_eq!(*reshaped.shape(), vec![3, 2]);
-    //     assert_eq!(*reshaped.stride(), vec![2, 1]);
-    //     // Row-major sequence preserved
-    //     assert_eq!(index_tensor(Idx::Coord(vec![0, 0]), &reshaped).unwrap(), 1);
-    //     assert_eq!(index_tensor(Idx::Coord(vec![0, 1]), &reshaped).unwrap(), 2);
-    //     assert_eq!(index_tensor(Idx::Coord(vec![1, 0]), &reshaped).unwrap(), 3);
-    //     assert_eq!(index_tensor(Idx::Coord(vec![1, 1]), &reshaped).unwrap(), 4);
-    //     assert_eq!(index_tensor(Idx::Coord(vec![2, 0]), &reshaped).unwrap(), 5);
-    //     assert_eq!(index_tensor(Idx::Coord(vec![2, 1]), &reshaped).unwrap(), 6);
-    // }
+    #[test]
+    fn test_view_as_owned_success() {
+        let buf = vec![1, 2, 3, 4, 5, 6];
+        let shape = vec![2, 3];
+        let tensor = make_tensor(buf, shape);
+        let v = tensor.view();
+        let reshaped = v.view_as((3, 2)).unwrap();
+        assert_eq!(*reshaped.shape(), vec![3, 2]);
+        assert_eq!(*reshaped.strides(), vec![2, 1]);
+        // Row-major sequence preserved
+        assert_eq!(index_tensor(Idx::Coord(vec![0, 0]), &reshaped).unwrap(), 1);
+        assert_eq!(index_tensor(Idx::Coord(vec![0, 1]), &reshaped).unwrap(), 2);
+        assert_eq!(index_tensor(Idx::Coord(vec![1, 0]), &reshaped).unwrap(), 3);
+        assert_eq!(index_tensor(Idx::Coord(vec![1, 1]), &reshaped).unwrap(), 4);
+        assert_eq!(index_tensor(Idx::Coord(vec![2, 0]), &reshaped).unwrap(), 5);
+        assert_eq!(index_tensor(Idx::Coord(vec![2, 1]), &reshaped).unwrap(), 6);
+    }
 
-    // #[test]
-    // fn test_view_as_owned_error() {
-    //     let buf = vec![1, 2, 3, 4, 5, 6];
-    //     let shape = vec![2, 3];
-    //     let tensor = make_tensor(buf, shape);
-    //     assert!(matches!(tensor.view().view_as(vec![4, 2]), Err(TensorError::InvalidShape)));
-    // }
+    #[test]
+    #[should_panic]
+    fn test_view_as_owned_error() {
+        let buf = vec![1, 2, 3, 4, 5, 6];
+        let shape = vec![2, 3];
+        let tensor = make_tensor(buf, shape);
+        tensor.view_as(vec![4, 2]).unwrap();
+    }
 
-    // #[test]
-    // fn test_view_as_slice_success() {
-    //     let buf = vec![
-    //         1, 2, 3, 
-    //         4, 5, 6
-    //     ];
-    //     let shape = vec![2, 3];
-    //     let tensor = make_tensor(buf, shape);
+    #[test]
+    fn test_view_as_slice_success() {
+        let buf = vec![
+            1, 2, 3, 
+            4, 5, 6
+        ];
+        let shape = vec![2, 3];
+        let tensor = make_tensor(buf, shape);
 
-    //     let view = tensor.view();
-    //     let slice = view.slice(0, 1..1).unwrap(); // shape [3]
-    //     assert_eq!(*slice.shape(), vec![3]);
-    //     let reshaped = slice.view_as(vec![1, 3]).unwrap();
-    //     assert_eq!(*reshaped.shape(), vec![1, 3]);
-    //     assert_eq!(*reshaped.stride(), vec![3, 1]);
-    //     // Values should correspond to original slice elements 4,5,6
-    //     assert_eq!(index_tensor(Idx::Coord(vec![0, 0]), &reshaped).unwrap(), 4);
-    //     assert_eq!(index_tensor(Idx::Coord(vec![0, 1]), &reshaped).unwrap(), 5);
-    //     assert_eq!(index_tensor(Idx::Coord(vec![0, 2]), &reshaped).unwrap(), 6);
-    // }
+        let view = tensor.view();
+        let slice = view.slice(0, 1..1).unwrap(); // shape [3]
+        assert_eq!(*slice.shape(), vec![3]);
+        let reshaped = slice.view_as((1, 3)).unwrap();
+        assert_eq!(*reshaped.shape(), vec![1, 3]);
+        assert_eq!(*reshaped.strides(), vec![3, 1]);
+        // Values should correspond to original slice elements 4,5,6
+        assert_eq!(index_tensor(Idx::Coord(vec![0, 0]), &reshaped).unwrap(), 4);
+        assert_eq!(index_tensor(Idx::Coord(vec![0, 1]), &reshaped).unwrap(), 5);
+        assert_eq!(index_tensor(Idx::Coord(vec![0, 2]), &reshaped).unwrap(), 6);
+    }
 
-    // #[test]
-    // fn test_view_as_mut_view_modify() {
-    //     let buf = vec![1, 2, 3, 4];
-    //     let shape = vec![2, 2];
-    //     let mut tensor = make_tensor(buf, shape);
-    //     let mut view_mut = tensor.view_mut(); // shape [2,2]
-    //     // Modify before reshaping to avoid borrow conflicts
-    //     view_mut.set(&Idx::Coord(vec![1, 0]), 40).unwrap(); // coordinate [1,0] maps to linear index 2
-    //     let reshaped = view_mut.view_as(vec![4]).unwrap(); // reshape to flat vector
-    //     assert_eq!(*reshaped.shape(), vec![4]);
-    //     assert_eq!(*reshaped.stride(), vec![1]);
-    //     // Check reshaped view sees update at linear index 2
-    //     assert_eq!(index_tensor(Idx::At(2), &reshaped).unwrap(), 40);
-    // }
+    #[test]
+    fn test_view_as_mut_view_modify() {
+        let buf = vec![1, 2, 3, 4];
+        let shape = vec![2, 2];
+        let mut tensor = make_tensor(buf, shape);
+        let mut view_mut = tensor.view_mut(); // shape [2,2]
+        // Modify before reshaping to avoid borrow conflicts
+        view_mut.set(&Idx::Coord(vec![1, 0]), 40).unwrap(); // coordinate [1,0] maps to linear index 2
+        let reshaped = view_mut.view_as(vec![4]).unwrap(); // reshape to flat vector
+        assert_eq!(*reshaped.shape(), vec![4]);
+        assert_eq!(*reshaped.strides(), vec![1]);
+        // Check reshaped view sees update at linear index 2
+        assert_eq!(index_tensor(Idx::At(2), &reshaped).unwrap(), 40);
+    }
 
-    // #[test]
-    // fn test_view_as_scalar() {
-    //     let tensor = CpuTensor::scalar(99); // shape []
-    //     let view1 = tensor.view();
-    //     assert_eq!(*view1.shape(), vec![]);
-    //     let reshaped = view1.view_as(vec![1]).unwrap();
-    //     assert_eq!(*reshaped.shape(), vec![1]);
-    //     assert_eq!(*reshaped.stride(), vec![1]);
-    //     assert_eq!(index_tensor(Idx::At(0), &reshaped).unwrap(), 99);
+    #[test]
+    fn test_view_as_scalar() {
+        let tensor = Tensor::scalar(99); // shape []
+        let view1 = tensor.view();
+        assert_eq!(*view1.shape(), vec![]);
+        let reshaped = view1.view_as(vec![1]).unwrap();
+        assert_eq!(*reshaped.shape(), vec![1]);
+        assert_eq!(*reshaped.strides(), vec![1]);
+        assert_eq!(index_tensor(Idx::At(0), &reshaped).unwrap(), 99);
 
-    //     // view as [1, 1, 1]
+        // view as [1, 1, 1]
 
-    //     let r2 = reshaped.view_as(vec![1, 1, 1]).unwrap();
-    //     assert_eq!(index_tensor(Idx::Coord(vec![0, 0, 0]), &r2).unwrap(), 99);
+        let r2 = reshaped.view_as(vec![1, 1, 1]).unwrap();
+        assert_eq!(index_tensor(Idx::Coord(vec![0, 0, 0]), &r2).unwrap(), 99);
 
-    // }
+    }
 
     fn index_tensor<'a, T: TensorValue + PartialEq + std::fmt::Debug, B: Backend>(index: impl Into<Idx>, tensor: &'a impl TensorAccess<T, B>) -> Result<T, TensorError> {
         let index = index.into();
@@ -1189,21 +1193,23 @@ mod tests {
         assert!(matches!(scalar.view().slice(0, 0..0), Err(TensorError::InvalidDim(_))));
     }
 
-    // #[test]
-    // fn test_view_as_slice_error() {
-    //     let tensor = make_tensor(vec![1, 2, 3, 4, 5, 6], vec![2, 3]);
+    #[test]
+    #[should_panic]
+    fn test_view_as_slice_error() {
+        let tensor = make_tensor(vec![1, 2, 3, 4, 5, 6], vec![2, 3]);
 
-    //     let view = tensor.view();
-    //     let slice = view.slice(0, 0..0).unwrap(); // shape [3]
-    //     assert!(matches!(slice.view_as(vec![2, 2]), Err(TensorError::InvalidShape)));
-    // }
+        let view = tensor.view();
+        let slice = view.slice(0, 0..0).unwrap(); // shape [3]
+        slice.view_as(vec![2, 2]).unwrap();
+    }
 
-    // #[test]
-    // fn test_view_mut_as_error() {
-    //     let mut tensor = make_tensor(vec![1, 2, 3, 4], vec![2, 2]);
-    //     let view_mut = tensor.view_mut();
-    //     assert!(matches!(view_mut.view_as(vec![3, 2]), Err(TensorError::InvalidShape)));
-    // }
+    #[test]
+    #[should_panic]
+    fn test_view_mut_as_error() {
+        let mut tensor = make_tensor(vec![1, 2, 3, 4], vec![2, 2]);
+        let view_mut = tensor.view_mut();
+        view_mut.view_as(vec![3, 2]).unwrap();
+    }
 
     #[test]
     fn test_item_wrong_dims_error() {
@@ -1446,19 +1452,19 @@ mod tests {
         assert_eq!(owned.buf, vec![4, 5, 6].into_boxed_slice());
     }
 
-    // #[test]
-    // fn test_view_to_owned_reshaped() {
-    //     // Test converting a reshaped view to owned
-    //     let tensor = make_tensor(vec![1, 2, 3, 4, 5, 6], vec![2, 3]);
-    //     let view = tensor.view();
-    //     let reshaped = view.view_as(vec![3, 2]).unwrap();
+    #[test]
+    fn test_view_to_owned_reshaped() {
+        // Test converting a reshaped view to owned
+        let tensor = make_tensor(vec![1, 2, 3, 4, 5, 6], vec![2, 3]);
+        let view = tensor.view();
+        let reshaped = view.view_as(vec![3, 2]).unwrap();
         
-    //     let owned = reshaped.owned();
+        let owned = reshaped.owned();
         
-    //     assert_eq!(*owned.shape(), vec![3, 2]);
-    //     assert_eq!(owned.raw, vec![1, 2, 3, 4, 5, 6].into_boxed_slice());
-    //     assert!(owned.is_contiguous());
-    // }
+        assert_eq!(*owned.shape(), vec![3, 2]);
+        assert_eq!(owned.buf, vec![1, 2, 3, 4, 5, 6].into_boxed_slice());
+        assert!(owned.is_contiguous());
+    }
 
     #[test]
     fn test_view_to_owned_3d_slice() {
@@ -3914,7 +3920,358 @@ mod tests {
         assert_eq!(index_tensor(Idx::At(2), &squeezed).unwrap(), 8);
     }
 
-    
+    #[test]
+    fn test_pad_1d() {
+        let tensor = make_tensor(vec![1, 2, 3], vec![3]);
+        let padded = tensor.pad(vec![2], &PaddingType::Zeros).unwrap();
+        assert_eq!(*padded.shape(), vec![7]);
+        assert_eq!(index_tensor(Idx::At(0), &padded).unwrap(), 0);
+        assert_eq!(index_tensor(Idx::At(2), &padded).unwrap(), 1);
+        assert_eq!(index_tensor(Idx::At(4), &padded).unwrap(), 3);
+        assert_eq!(index_tensor(Idx::At(6), &padded).unwrap(), 0);
+    }
+
+    #[test]
+    fn test_pad_2d() {
+        let tensor = make_tensor(
+            vec![
+                1, 2, 
+                3, 4
+            ], 
+            vec![2, 2]
+        );
+        let padded = tensor.pad(vec![1, 2], &PaddingType::Zeros).unwrap();
+        let expected = make_tensor(
+            vec![
+                0, 0, 0, 0, 0, 0,
+                0, 0, 1, 2, 0, 0,
+                0, 0, 3, 4, 0, 0,
+                0, 0, 0, 0, 0, 0
+            ], 
+            vec![4, 6]
+        );
+        assert_eq!(padded, expected);
+    }
+
+    #[test]
+    fn test_pad_3d() {
+        // Test 3D tensor padding: [2, 2, 2] -> [4, 4, 4]
+        let tensor = make_tensor(
+            vec![
+                1, 2,  // depth 0, row 0
+                3, 4,  // depth 0, row 1
+                5, 6,  // depth 1, row 0
+                7, 8   // depth 1, row 1
+            ], 
+            vec![2, 2, 2]
+        );
+        let padded = tensor.pad(vec![1, 1, 1], &PaddingType::Zeros).unwrap();
+        assert_eq!(*padded.shape(), vec![4, 4, 4]);
+        
+        // Check corner is zero
+        assert_eq!(index_tensor(Idx::Coord(vec![0, 0, 0]), &padded).unwrap(), 0);
+        // Check original data is preserved in the middle
+        assert_eq!(index_tensor(Idx::Coord(vec![1, 1, 1]), &padded).unwrap(), 1);
+        assert_eq!(index_tensor(Idx::Coord(vec![1, 1, 2]), &padded).unwrap(), 2);
+        assert_eq!(index_tensor(Idx::Coord(vec![2, 2, 2]), &padded).unwrap(), 8);
+    }
+
+    #[test]
+    fn test_pad_4d() {
+        // Test 4D tensor (batch, channel, height, width): [1, 2, 2, 2] -> [3, 4, 4, 4]
+        let tensor = make_tensor(
+            vec![
+                1, 2,  3, 4,   // batch 0, channel 0
+                5, 6,  7, 8    // batch 0, channel 1
+            ], 
+            vec![1, 2, 2, 2]
+        );
+        let padded = tensor.pad(vec![1, 1, 1, 1], &PaddingType::Zeros).unwrap();
+        assert_eq!(*padded.shape(), vec![3, 4, 4, 4]);
+        
+        // Check that padding is applied
+        assert_eq!(index_tensor(Idx::Coord(vec![0, 0, 0, 0]), &padded).unwrap(), 0);
+        // Check original data
+        assert_eq!(index_tensor(Idx::Coord(vec![1, 1, 1, 1]), &padded).unwrap(), 1);
+    }
+
+    #[test]
+    fn test_pad_asymmetric() {
+        // Test asymmetric padding: different padding on different dimensions
+        let tensor = make_tensor(
+            vec![1, 2, 3, 4, 5, 6], 
+            vec![2, 3]
+        );
+        let padded = tensor.pad(vec![3, 1], &PaddingType::Zeros).unwrap();
+        assert_eq!(*padded.shape(), vec![8, 5]); // [2+3*2, 3+1*2]
+        
+        // Check padding zones
+        assert_eq!(index_tensor(Idx::Coord(vec![0, 0]), &padded).unwrap(), 0);
+        assert_eq!(index_tensor(Idx::Coord(vec![0, 4]), &padded).unwrap(), 0);
+        // Check original data in the middle
+        assert_eq!(index_tensor(Idx::Coord(vec![3, 1]), &padded).unwrap(), 1);
+        assert_eq!(index_tensor(Idx::Coord(vec![4, 3]), &padded).unwrap(), 6);
+    }
+
+    #[test]
+    fn test_pad_zero_padding_some_dims() {
+        // Test with zero padding on some dimensions
+        let tensor = make_tensor(
+            vec![1, 2, 3, 4, 5, 6, 7, 8], 
+            vec![2, 2, 2]
+        );
+        let padded = tensor.pad(vec![0, 2, 1], &PaddingType::Zeros).unwrap();
+        assert_eq!(*padded.shape(), vec![2, 6, 4]); // [2+0, 2+2*2, 2+1*2]
+        
+        // First dimension unchanged, original [0,0,0] -> [0, 2, 1]
+        assert_eq!(index_tensor(Idx::Coord(vec![0, 2, 1]), &padded).unwrap(), 1);
+        // Check padding in other dimensions
+        assert_eq!(index_tensor(Idx::Coord(vec![0, 0, 1]), &padded).unwrap(), 0);
+        // Original [1,1,1] has value 8, becomes [1, 3, 2] after padding
+        assert_eq!(index_tensor(Idx::Coord(vec![1, 3, 2]), &padded).unwrap(), 8);
+    }
+
+    #[test]
+    fn test_pad_large_padding() {
+        // Test with large padding relative to tensor size
+        let tensor = make_tensor(vec![42], vec![1]);
+        let padded = tensor.pad(vec![5], &PaddingType::Zeros).unwrap();
+        assert_eq!(*padded.shape(), vec![11]); // 1 + 5*2
+        
+        // Check middle element
+        assert_eq!(index_tensor(Idx::At(5), &padded).unwrap(), 42);
+        // Check padding
+        assert_eq!(index_tensor(Idx::At(0), &padded).unwrap(), 0);
+        assert_eq!(index_tensor(Idx::At(10), &padded).unwrap(), 0);
+    }
+
+    #[test]
+    fn test_pad_rectangular_2d() {
+        // Test non-square 2D tensor
+        let tensor = make_tensor(
+            vec![1, 2, 3, 4, 5, 6], 
+            vec![3, 2]
+        );
+        let padded = tensor.pad(vec![2, 3], &PaddingType::Zeros).unwrap();
+        assert_eq!(*padded.shape(), vec![7, 8]); // [3+2*2, 2+3*2]
+        
+        let expected = make_tensor(
+            vec![
+                0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 1, 2, 0, 0, 0,
+                0, 0, 0, 3, 4, 0, 0, 0,
+                0, 0, 0, 5, 6, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0
+            ], 
+            vec![7, 8]
+        );
+        assert_eq!(padded, expected);
+    }
+
+    #[test]
+    fn test_pad_sliced_1d_row() {
+        // Test padding a 1D slice from a 2D tensor
+        // Compare: slice then pad vs. creating equivalent tensor and padding
+        let tensor = make_tensor(
+            vec![
+                1, 2, 3, 4,
+                5, 6, 7, 8,
+                9, 10, 11, 12
+            ],
+            vec![3, 4]
+        );
+        
+        // Slice to get first row: [1, 2, 3, 4]
+        let view = tensor.view();
+        let sliced = view.slice(0, 0..0).unwrap();
+        assert_eq!(*sliced.shape(), vec![4]);
+        
+        // Pad the slice
+        let padded_slice = sliced.pad(vec![2], &PaddingType::Zeros).unwrap();
+        
+        // Create equivalent full tensor and pad it
+        let full = make_tensor(vec![1, 2, 3, 4], vec![4]);
+        let padded_full = full.pad(vec![2], &PaddingType::Zeros).unwrap();
+        
+        // They should be equal
+        assert_eq!(padded_slice, padded_full);
+        assert_eq!(*padded_slice.shape(), vec![8]);
+        assert_eq!(index_tensor(Idx::At(0), &padded_slice).unwrap(), 0);
+        assert_eq!(index_tensor(Idx::At(2), &padded_slice).unwrap(), 1);
+        assert_eq!(index_tensor(Idx::At(5), &padded_slice).unwrap(), 4);
+        assert_eq!(index_tensor(Idx::At(7), &padded_slice).unwrap(), 0);
+    }
+
+    #[test]
+    fn test_pad_sliced_1d_column() {
+        // Test padding a non-contiguous 1D column slice
+        let tensor = make_tensor(
+            vec![
+                1, 2, 3,
+                4, 5, 6,
+                7, 8, 9,
+                10, 11, 12
+            ],
+            vec![4, 3]
+        );
+        
+        // Slice to get second column: [2, 5, 8, 11]
+        let view = tensor.view();
+        let sliced = view.slice(1, 1..1).unwrap();
+        assert_eq!(*sliced.shape(), vec![4]);
+        assert_eq!(*sliced.strides(), vec![3]); // Non-contiguous
+        
+        // Pad the slice
+        let padded_slice = sliced.pad(vec![1], &PaddingType::Zeros).unwrap();
+        
+        // Create equivalent full tensor and pad it
+        let full = make_tensor(vec![2, 5, 8, 11], vec![4]);
+        let padded_full = full.pad(vec![1], &PaddingType::Zeros).unwrap();
+        
+        // They should be equal
+        assert_eq!(padded_slice, padded_full);
+        assert_eq!(*padded_slice.shape(), vec![6]);
+        assert_eq!(index_tensor(Idx::At(0), &padded_slice).unwrap(), 0);
+        assert_eq!(index_tensor(Idx::At(1), &padded_slice).unwrap(), 2);
+        assert_eq!(index_tensor(Idx::At(4), &padded_slice).unwrap(), 11);
+        assert_eq!(index_tensor(Idx::At(5), &padded_slice).unwrap(), 0);
+    }
+
+    #[test]
+    fn test_pad_sliced_2d_submatrix() {
+        // Test padding a 2D slice from a larger matrix
+        let tensor = make_tensor(
+            vec![
+                1, 2, 3, 4, 5,
+                6, 7, 8, 9, 10,
+                11, 12, 13, 14, 15,
+                16, 17, 18, 19, 20
+            ],
+            vec![4, 5]
+        );
+        
+        // Slice to get center 2x3 submatrix: [[7,8,9], [12,13,14]]
+        let view = tensor.view();
+        let sliced_rows = view.slice(0, 1..3).unwrap();
+        let sliced = sliced_rows.slice(1, 1..4).unwrap();
+        assert_eq!(*sliced.shape(), vec![2, 3]);
+        
+        // Pad the slice
+        let padded_slice = sliced.pad(vec![1, 2], &PaddingType::Zeros).unwrap();
+        
+        // Create equivalent full tensor and pad it
+        let full = make_tensor(vec![7, 8, 9, 12, 13, 14], vec![2, 3]);
+        let padded_full = full.pad(vec![1, 2], &PaddingType::Zeros).unwrap();
+        
+        // They should be equal
+        assert_eq!(padded_slice, padded_full);
+        assert_eq!(*padded_slice.shape(), vec![4, 7]);
+    }
+
+    #[test]
+    fn test_pad_sliced_3d_subcube() {
+        // Test padding a 3D slice
+        let tensor = make_tensor(
+            vec![
+                // Depth 0
+                1, 2, 3, 4,
+                5, 6, 7, 8,
+                9, 10, 11, 12,
+                13, 14, 15, 16,
+                // Depth 1
+                17, 18, 19, 20,
+                21, 22, 23, 24,
+                25, 26, 27, 28,
+                29, 30, 31, 32,
+                // Depth 2
+                33, 34, 35, 36,
+                37, 38, 39, 40,
+                41, 42, 43, 44,
+                45, 46, 47, 48
+            ],
+            vec![3, 4, 4]
+        );
+        
+        // Slice to get a 2x2x2 subcube from the middle
+        // Depth [1..3], Rows [1..3], Cols [1..3]
+        let view = tensor.view();
+        let d_slice = view.slice(0, 1..3).unwrap();
+        let r_slice = d_slice.slice(1, 1..3).unwrap();
+        let sliced = r_slice.slice(2, 1..3).unwrap();
+        assert_eq!(*sliced.shape(), vec![2, 2, 2]);
+        
+        // Extract the values: depth1[1,1], depth1[1,2], depth1[2,1], depth1[2,2],
+        //                     depth2[1,1], depth2[1,2], depth2[2,1], depth2[2,2]
+        // = [22, 23, 26, 27, 38, 39, 42, 43]
+        
+        // Pad the slice
+        let padded_slice = sliced.pad(vec![1, 1, 1], &PaddingType::Zeros).unwrap();
+        
+        // Create equivalent full tensor and pad it
+        let full = make_tensor(vec![22, 23, 26, 27, 38, 39, 42, 43], vec![2, 2, 2]);
+        let padded_full = full.pad(vec![1, 1, 1], &PaddingType::Zeros).unwrap();
+        
+        // They should be equal
+        assert_eq!(padded_slice, padded_full);
+        assert_eq!(*padded_slice.shape(), vec![4, 4, 4]);
+        
+        // Verify some values
+        assert_eq!(index_tensor(Idx::Coord(vec![0, 0, 0]), &padded_slice).unwrap(), 0); // padding
+        assert_eq!(index_tensor(Idx::Coord(vec![1, 1, 1]), &padded_slice).unwrap(), 22); // original data
+        assert_eq!(index_tensor(Idx::Coord(vec![2, 2, 2]), &padded_slice).unwrap(), 43); // original data
+    }
+
+    #[test]
+    fn test_pad_reversed_slice() {
+        // Test padding a slice with negative stride (reversed)
+        let tensor = make_tensor(vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10], vec![10]);
+        
+        // Slice with reverse: indices [7, 6, 5, 4, 3]
+        let view = tensor.view();
+        let sliced = view.slice(0, 7..2).unwrap();
+        assert_eq!(*sliced.shape(), vec![5]);
+        
+        // Pad the slice
+        let padded_slice = sliced.pad(vec![2], &PaddingType::Zeros).unwrap();
+        
+        // Create equivalent full tensor (reversed order) and pad it
+        let full = make_tensor(vec![8, 7, 6, 5, 4], vec![5]);
+        let padded_full = full.pad(vec![2], &PaddingType::Zeros).unwrap();
+        
+        // They should be equal
+        assert_eq!(padded_slice, padded_full);
+        assert_eq!(*padded_slice.shape(), vec![9]);
+        assert_eq!(index_tensor(Idx::At(2), &padded_slice).unwrap(), 8);
+        assert_eq!(index_tensor(Idx::At(6), &padded_slice).unwrap(), 4);
+    }
+
+    #[test]
+    fn test_pad_strided_slice() {
+        // Test padding a slice with step > 1
+        let tensor = make_tensor(vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10], vec![10]);
+        
+        // Slice with step 2: indices [1, 3, 5, 7] = [2, 4, 6, 8]
+        let view = tensor.view();
+        let sliced = view.slice(0, Slice::from(1..9).step(2)).unwrap();
+        assert_eq!(*sliced.shape(), vec![4]);
+        
+        // Pad the slice
+        let padded_slice = sliced.pad(vec![1], &PaddingType::Zeros).unwrap();
+        
+        // Create equivalent full tensor and pad it
+        let full = make_tensor(vec![2, 4, 6, 8], vec![4]);
+        let padded_full = full.pad(vec![1], &PaddingType::Zeros).unwrap();
+        
+        // They should be equal
+        assert_eq!(padded_slice, padded_full);
+        assert_eq!(*padded_slice.shape(), vec![6]);
+        assert_eq!(index_tensor(Idx::At(0), &padded_slice).unwrap(), 0);
+        assert_eq!(index_tensor(Idx::At(1), &padded_slice).unwrap(), 2);
+        assert_eq!(index_tensor(Idx::At(4), &padded_slice).unwrap(), 8);
+        assert_eq!(index_tensor(Idx::At(5), &padded_slice).unwrap(), 0);
+    }
 }
 
 

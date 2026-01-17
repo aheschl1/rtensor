@@ -195,7 +195,7 @@ specify_unary_op_template! {
     (Reciprocal) reciprocal where T: WeightValue; |input, result, _ctx, grad_node| {
         Ok(GradNode::Reciprocal {
             input: grad_node,
-            input_tensor: input.clone(),
+            result: result.clone(),
         })
     },
     (Square) square where T: WeightValue; |input, result, _ctx, grad_node| {
@@ -215,9 +215,6 @@ specify_unary_op_template! {
             input: grad_node,
             result: result.clone(),
         })
-    },
-    (Sign) sign where T: WeightValue; |input, result, _ctx, grad_node| {
-        Err(TensorError::UnsupportedOperation("Gradient for tanh not yet implemented.".into()))
     },
     (Abs) abs; |input, result, _ctx, grad_node| {
         // TODO: Make a kernel for this
@@ -288,22 +285,31 @@ specify_unary_op_template! {
         })
     },
     (ExpM1) expm1 where T: Exp; |input, result, _ctx, grad_node| {
-        Err(TensorError::UnsupportedOperation("Gradient for expm1 not yet implemented.".into()))
+        Ok(GradNode::ExpM1 {
+            input: grad_node,
+            input_tensor: input.clone(),
+        })
     },
     (Ln1p) ln1p where T: WeightValue; |input, result, _ctx, grad_node| {
-        Err(TensorError::UnsupportedOperation("Gradient for ln1p not yet implemented.".into()))
+        Ok(GradNode::Ln1p {
+            input: grad_node,
+            input_tensor: input.clone(),
+        })
     },
     (Floor) floor where T: WeightValue; |input, result, _ctx, grad_node| {
-        Err(TensorError::UnsupportedOperation("Gradient for floor not yet implemented.".into()))
+        Err(TensorError::UnsupportedOperation("Floor is not differentiable.".into()))
     },
     (Ceil) ceil where T: WeightValue; |input, result, _ctx, grad_node| {
-        Err(TensorError::UnsupportedOperation("Gradient for ceil not yet implemented.".into()))
+        Err(TensorError::UnsupportedOperation("Ceiling is not differentiable.".into()))
     },
     (Round) round where T: WeightValue; |input, result, _ctx, grad_node| {
-        Err(TensorError::UnsupportedOperation("Gradient for round not yet implemented.".into()))
+        Err(TensorError::UnsupportedOperation("Rounding is not differentiable.".into()))
     },
     (Trunc) trunc where T: WeightValue; |input, result, _ctx, grad_node| {
-        Err(TensorError::UnsupportedOperation("Gradient for trunc not yet implemented.".into()))
+        Err(TensorError::UnsupportedOperation("Truncating is not differentiable.".into()))
+    },
+    (Sign) sign where T: WeightValue; |input, result, _ctx, grad_node| {
+        Err(TensorError::UnsupportedOperation("Sign is not differentiable.".into()))
     },
 }
 
