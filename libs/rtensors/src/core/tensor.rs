@@ -97,6 +97,9 @@ pub trait AsTensor<T: TensorValue, B: Backend> {
 
     /// Adds padding around tensor
     fn pad(&self, padding: impl Into<Shape>, padding_type: &PaddingType) -> Result<TensorBase<T, B>, TensorError>;
+
+    /// Reshapes a tensor and makes contiguous
+    fn reshape(&self, shape: impl Into<Shape>) -> Result<TensorBase<T, B>, TensorError>;
 }
 
 
@@ -218,6 +221,13 @@ impl <T: TensorValue, B: Backend> AsTensor<T, B> for TensorBase<T, B> {
             padding_type
         )
     }
+    
+    fn reshape(&self, shape: impl Into<Shape>) -> Result<TensorBase<T, B>, TensorError> {
+        let mut contiguous = self.contiguous();
+        let contig_view = contiguous.view_as(shape)?;
+        contiguous.meta = contig_view.meta.clone();
+        Ok(contiguous)
+    }
 }
 
 impl<'a, T: TensorValue, B: Backend> AsTensor<T, B> for TensorView<'a, T, B> {
@@ -236,6 +246,13 @@ impl<'a, T: TensorValue, B: Backend> AsTensor<T, B> for TensorView<'a, T, B> {
             padding_type
         )
     }
+    
+    fn reshape(&self, shape: impl Into<Shape>) -> Result<TensorBase<T, B>, TensorError> {
+        let mut contiguous = self.contiguous();
+        let contig_view = contiguous.view_as(shape)?;
+        contiguous.meta = contig_view.meta.clone();
+        Ok(contiguous)
+    }
 }
 
 impl<'a, T: TensorValue, B: Backend> AsTensor<T, B> for TensorViewMut<'a, T, B> {
@@ -253,6 +270,13 @@ impl<'a, T: TensorValue, B: Backend> AsTensor<T, B> for TensorViewMut<'a, T, B> 
             padding,
             padding_type
         )
+    }
+    
+    fn reshape(&self, shape: impl Into<Shape>) -> Result<TensorBase<T, B>, TensorError> {
+        let mut contiguous = self.contiguous();
+        let contig_view = contiguous.view_as(shape)?;
+        contiguous.meta = contig_view.meta.clone();
+        Ok(contiguous)
     }
 }
 
