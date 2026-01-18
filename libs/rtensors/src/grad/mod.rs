@@ -313,9 +313,12 @@ impl<T: WeightValue, B: Backend> GradContext<T, B> {
                 accumulations.entry(parent).or_insert_with(Vec::new).push(grad);
             }
 
-            if let GradNode::Leaf(_) = node {}else {
-                // free memory by removing node info for non-leaf nodes
-                nodes.remove(node_key);
+            match node {
+                GradNode::None | GradNode::Leaf(_) => {},
+                _ => {
+                    // free memory by removing upstream grads after use
+                    accumulations.remove(&node_key);
+                }
             }
         }
         Ok(())
