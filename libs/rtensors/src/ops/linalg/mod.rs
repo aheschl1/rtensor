@@ -47,6 +47,8 @@ where
 
 
     fn conv2d(&self, kernel: &K, config: &ConvConfig2D) -> Result<Self::Output, TensorError>;
+
+    fn conv3d(&self, kernel: &K, config: &ConvConfig3D) -> Result<Self::Output, TensorError>;
 }
 
 #[cfg(test)]
