@@ -415,7 +415,7 @@ impl Backend for Cpu {
         input: (&Self::Buf<T>, &MetaTensor), 
         kernel: (&Self::Buf<T>, &MetaTensor),
         output: &mut Self::Buf<T>,
-        config: &crate::ops::linalg::ConvConfig2D
+        config: &crate::ops::linalg::ConvConfig2D,
     ) -> Result<(), TensorError> {
         todo!()
     }
