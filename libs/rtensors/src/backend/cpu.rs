@@ -218,6 +218,20 @@ impl Backend for Cpu {
         Self
     }
 
+    fn convert<T: TensorValue, N: TensorValue>(&self, src: &Self::Buf<T>, dst: &mut Self::Buf<N>) -> Result<(), TensorError> {
+        if src.len() != dst.len() {
+            return Err(TensorError::SizeMismatch(format!(
+                "Buffer size mismatch in convert: src size {}, dst size {}",
+                src.len(),
+                dst.len()
+            )));
+        }
+        for i in 0..src.len() {
+            dst[i] = T::convert::<N>(&src[i]);
+        }
+        Ok(())
+    }
+
     fn copy<T: TensorValue>(&self, src: &Self::Buf<T>) -> Result<Self::Buf<T>, TensorError> {
         let mut dst = self.alloc(src.len())?;
         dst.copy_from_slice(src);

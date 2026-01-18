@@ -134,6 +134,18 @@ pub struct GradTensorInner<T: TensorValue, B: Backend> {
     pub(crate) grad: Option<TensorBase<T, B>>,
 }
 
+impl<T: TensorValue, B: Backend> GradTensorInner<T, B> {
+    pub fn item(&self) -> Result<T, TensorError> {
+        self.tensor.item()
+    }
+}
+
+impl<T: TensorValue, B: Backend> MetaTensorView for GradTensorInner<T, B> {
+    fn meta(&self) -> &crate::core::MetaTensor {
+        &self.tensor.meta
+    }
+}
+
 pub type GradTensorRef<T, B> = Arc<RefCell<GradTensorInner<T, B>>>;
 
 impl<T: TensorValue, B: Backend> std::fmt::Debug for GradTensorInner<T, B> {

@@ -1,4 +1,5 @@
 /target
+/examples/data/mnist*
 todo
 .vscode
 v0.3.30.tar.gz

@@ -36,6 +36,9 @@ pub enum TensorError {
     #[error("operation not supported: {0}")]
     UnsupportedOperation(String),
 
+    #[error("conversion error: {0}")]
+    ConversionError(String),
+
     #[cfg(feature = "cuda")]
     #[error("cuda error: {0}")]
     CudaError(String),

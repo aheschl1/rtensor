@@ -227,6 +227,7 @@ pub trait Backend: Send + Sync + 'static + Clone + Debug {
     fn len<T: TensorValue>(&self, buf: &Self::Buf<T>) -> usize;
     fn copy<T: TensorValue>(&self, src: &Self::Buf<T>) -> Result<Self::Buf<T>, TensorError>;
     fn dump<T: TensorValue>(&self, src: &Self::Buf<T>) -> Result<Box<[T]>, TensorError>;
+    fn convert<T: TensorValue, N: TensorValue>(&self, src: &Self::Buf<T>, dst: &mut Self::Buf<N>) -> Result<(), TensorError>;
     fn new() -> Self;
     /// Broadcast two tensors into a destination tensor according to broadcasting rules
     /// 

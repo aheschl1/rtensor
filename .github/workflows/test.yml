@@ -49,7 +49,7 @@ jobs:
             ${{ runner.os }}-target-
       
       - name: Build (CPU only)
-        run: cargo build --verbose --no-default-features
+        run: cargo build --verbose --features imagers
       
       - name: Run tests (CPU only)
-        run: cargo test --verbose --no-default-features
+        run: cargo test --verbose --features imagers

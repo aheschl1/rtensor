@@ -2,11 +2,75 @@ use std::{env, path::PathBuf, process::Command};
 
 fn main() {
     #[cfg(feature = "cuda")]
-    build_cuda_kernels();
+    {
+        detect_and_warn_cuda_version();
+        build_cuda_kernels();
+    }
 
     build_openblas();
 
     println!("cargo:rerun-if-changed=build.rs");
+}
+
+#[cfg(feature = "cuda")]
+fn detect_and_warn_cuda_version() {
+    let cuda_version = detect_cuda_version();
+    
+    if let Some(version) = cuda_version {
+        let major = version / 1000;
+        let minor = (version % 1000) / 10;
+        
+        println!("cargo:warning=Detected CUDA version: {}.{}", major, minor);
+        
+        // Check if user might need a different cudarc feature
+        if version >= 13000 {
+            println!("cargo:warning=");
+            println!("cargo:warning=Note: You have CUDA 13.x installed.");
+            println!("cargo:warning=If you encounter runtime errors, you may need to change Cargo.toml:");
+            println!("cargo:warning=  cudarc = {{ version = \"0.18.1\", features = [\"cuda-13000\"], optional = true }}");
+            println!("cargo:warning=");
+            println!("cargo:warning=Currently using cuda-12000 feature (backward compatible)");
+        } else if version >= 12000 {
+            println!("cargo:warning=✓ Using CUDA 12.x - cudarc configured correctly");
+        } else {
+            println!("cargo:warning=  CUDA version {}.{} may not be fully supported.", major, minor);
+            println!("cargo:warning=Recommended: CUDA 12.0 or later");
+        }
+    } else {
+        println!("cargo:warning=Could not auto-detect CUDA version");
+        println!("cargo:warning=Assuming CUDA 12.x (default)");
+    }
+}
+
+#[cfg(feature = "cuda")]
+fn detect_cuda_version() -> Option<u32> {
+    use std::process::Command;
+    
+    // Try to get CUDA version from nvcc
+    if let Some(nvcc) = find_nvcc() {
+        if let Ok(output) = Command::new(&nvcc).arg("--version").output() {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                // Parse version from output like "release 12.0, V12.0.140"
+                if let Some(line) = stdout.lines().find(|l| l.contains("release")) {
+                    // Extract version number (e.g., "12.0")
+                    if let Some(version_str) = line.split("release").nth(1) {
+                        if let Some(version_part) = version_str.trim().split(',').next() {
+                            // Parse "12.0" into 12000
+                            let parts: Vec<&str> = version_part.split('.').collect();
+                            if parts.len() >= 2 {
+                                if let (Ok(major), Ok(minor)) = (parts[0].parse::<u32>(), parts[1].parse::<u32>()) {
+                                    return Some(major * 1000 + minor * 10);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    None
 }
 
 fn build_openblas() {
@@ -138,28 +202,52 @@ fn generate_openblas_bindings(include_dir: &PathBuf) {
 fn find_nvcc() -> Option<PathBuf> {
     use std::process::Command;
     
-    // Try to find nvcc in PATH first
+    // 1. Check NVCC_PATH environment variable
+    if let Ok(nvcc_path) = env::var("NVCC_PATH") {
+        let path = PathBuf::from(nvcc_path);
+        if path.exists() {
+            println!("cargo:warning=Using nvcc from NVCC_PATH: {}", path.display());
+            return Some(path);
+        } else {
+            println!("cargo:warning=NVCC_PATH is set but file doesn't exist: {}", path.display());
+        }
+    }
+    
+    // 2. Check CUDA_HOME environment variable
+    if let Ok(cuda_home) = env::var("CUDA_HOME") {
+        let nvcc_path = PathBuf::from(&cuda_home).join("bin/nvcc");
+        if nvcc_path.exists() {
+            println!("cargo:warning=Using nvcc from CUDA_HOME: {}", nvcc_path.display());
+            return Some(nvcc_path);
+        }
+    }
+    
+    // 3. Try to find nvcc in PATH
     if let Ok(output) = Command::new("which").arg("nvcc").output() {
         if output.status.success() {
             let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
             if !path_str.is_empty() {
-                return Some(PathBuf::from(path_str));
+                let path = PathBuf::from(path_str);
+                println!("cargo:warning=Found nvcc in PATH: {}", path.display());
+                return Some(path);
             }
         }
     }
     
-    // Common CUDA installation paths
+    // 4. Common CUDA installation paths
     let common_paths = [
         "/usr/local/cuda/bin/nvcc",
         "/usr/bin/nvcc",
         "/opt/cuda/bin/nvcc",
         "/usr/local/cuda-12.0/bin/nvcc",
         "/usr/local/cuda-11.0/bin/nvcc",
+        "/usr/local/cuda-13.0/bin/nvcc",
     ];
     
     for path in &common_paths {
         let nvcc_path = PathBuf::from(path);
         if nvcc_path.exists() {
+            println!("cargo:warning=Found nvcc at: {}", nvcc_path.display());
             return Some(nvcc_path);
         }
     }
@@ -169,7 +257,29 @@ fn find_nvcc() -> Option<PathBuf> {
 
 #[cfg(feature = "cuda")]
 fn find_cuda_lib_path() -> Option<PathBuf> {
-    // Common CUDA library paths
+    // 1. Check CUDA_LIB_DIR environment variable
+    if let Ok(cuda_lib_dir) = env::var("CUDA_LIB_DIR") {
+        let path = PathBuf::from(cuda_lib_dir);
+        if path.exists() {
+            println!("cargo:warning=Using CUDA libraries from CUDA_LIB_DIR: {}", path.display());
+            return Some(path);
+        } else {
+            println!("cargo:warning=CUDA_LIB_DIR is set but directory doesn't exist: {}", path.display());
+        }
+    }
+    
+    // 2. Check CUDA_HOME environment variable
+    if let Ok(cuda_home) = env::var("CUDA_HOME") {
+        for subdir in &["lib64", "lib"] {
+            let lib_path = PathBuf::from(&cuda_home).join(subdir);
+            if lib_path.join("libcudart.so").exists() {
+                println!("cargo:warning=Using CUDA libraries from CUDA_HOME: {}", lib_path.display());
+                return Some(lib_path);
+            }
+        }
+    }
+    
+    // 3. Common CUDA library paths
     let common_paths = [
         "/usr/local/cuda/lib64",
         "/usr/local/cuda/lib",
@@ -178,12 +288,19 @@ fn find_cuda_lib_path() -> Option<PathBuf> {
         "/opt/cuda/lib64",
         "/usr/local/cuda-12.0/lib64",
         "/usr/local/cuda-11.0/lib64",
+        "/usr/local/cuda-13.0/lib64",
     ];
     
     for path in &common_paths {
         let lib_path = PathBuf::from(path);
-        // Check if libcudart.so exists in this path
-        if lib_path.join("libcudart.so").exists() {
+        // Check if libcudart.so or libcudart.so.* exists in this path
+        if lib_path.join("libcudart.so").exists() || 
+           lib_path.read_dir().ok()
+               .and_then(|entries| entries
+                   .filter_map(|e| e.ok())
+                   .find(|e| e.file_name().to_str().unwrap_or("").starts_with("libcudart.so")))
+               .is_some() {
+            println!("cargo:warning=Found CUDA libraries at: {}", lib_path.display());
             return Some(lib_path);
         }
     }
@@ -228,16 +345,41 @@ fn build_cuda_kernels() {
     
     // Find nvcc
     let nvcc = find_nvcc().expect(
-        "Could not find nvcc. Please install CUDA toolkit or add nvcc to PATH."
+        "\n\n\
+        ╔══════════════════════════════════════════════════════════════════╗\n\
+        ║                    NVCC NOT FOUND                                ║\n\
+        ╚══════════════════════════════════════════════════════════════════╝\n\
+        \n\
+        Could not find nvcc (NVIDIA CUDA Compiler).\n\
+        \n\
+        Please install the CUDA toolkit or specify the path using one of:\n\
+        - Set NVCC_PATH environment variable to the full path to nvcc\n\
+        - Set CUDA_HOME environment variable to your CUDA installation directory\n\
+        - Add nvcc to your PATH\n\
+        \n\
+        Download CUDA toolkit from: https://developer.nvidia.com/cuda-downloads\n\
+        "
     );
     
-    println!("Found nvcc at: {}", nvcc.display());
+    println!("cargo:warning=Found nvcc at: {}", nvcc.display());
     
     let cuda_lib_path = find_cuda_lib_path().expect(
-        "Could not find CUDA libraries. Please install CUDA toolkit."
+        "\n\n\
+        ╔══════════════════════════════════════════════════════════════════╗\n\
+        ║                CUDA LIBRARIES NOT FOUND                          ║\n\
+        ╚══════════════════════════════════════════════════════════════════╝\n\
+        \n\
+        Could not find CUDA runtime libraries (libcudart.so).\n\
+        \n\
+        Please install the CUDA toolkit or specify the path using:\n\
+        - Set CUDA_LIB_DIR environment variable to the directory containing libcudart.so\n\
+        - Set CUDA_HOME environment variable to your CUDA installation directory\n\
+        \n\
+        Download CUDA toolkit from: https://developer.nvidia.com/cuda-downloads\n\
+        "
     );
     
-    println!("Found CUDA libraries at: {}", cuda_lib_path.display());
+    println!("cargo:warning=Found CUDA libraries at: {}", cuda_lib_path.display());
 
     let kernel_files = find_cuda_kernel_files();
     
@@ -245,7 +387,7 @@ fn build_cuda_kernels() {
         panic!("No CUDA kernel files (.cu) found in cuda/kernels/");
     }
     
-    println!("Found {} CUDA kernel file(s)", kernel_files.len());
+    println!("cargo:warning=Found {} CUDA kernel file(s)", kernel_files.len());
     
     println!("cargo:rerun-if-changed=cuda/include/kernels.h");
     println!("cargo:rerun-if-changed=cuda/include/common.h");
@@ -258,11 +400,21 @@ fn build_cuda_kernels() {
     
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
-    // Specify the desired architecture version.
-    let arch = "sm_86";
+    // Get target architecture(s) from environment variable or use default
+    let archs = if let Ok(cuda_archs) = env::var("CUDA_ARCHS") {
+        println!("cargo:warning=Using CUDA architectures from CUDA_ARCHS: {}", cuda_archs);
+        cuda_archs.split(',')
+            .map(|s| s.trim().to_string())
+            .collect::<Vec<String>>()
+    } else {
+        // Default to sm_86 (RTX 30xx series)
+        // Users can override with: export CUDA_ARCHS="sm_75,sm_80,sm_86"
+        println!("cargo:warning=Using default CUDA architecture: sm_86");
+        println!("cargo:warning=To target multiple architectures, set CUDA_ARCHS env var (e.g., CUDA_ARCHS=\"sm_75,sm_80,sm_86\")");
+        vec!["sm_86".to_string()]
+    };
 
-    // Build all other .cu files to object files (for static linking)
-    // Note: add.cu in legacy/ is excluded as it's only used for PTX generation
+    // Build all .cu files to object files (for static linking)
     let mut object_files = Vec::new();
     
     for kernel_file in &kernel_files {
@@ -281,25 +433,46 @@ fn build_cuda_kernels() {
         
         let obj_file = out_dir.join(format!("{}_{}.o", parent_name, file_stem));
         
-        println!("Compiling {} to object file...", kernel_file.display());
+        println!("cargo:warning=Compiling {} to object file...", kernel_file.display());
 
-        let nvcc_compile_status = Command::new(&nvcc)
+        // Build compilation command with multiple architectures if specified
+        let mut compile_cmd = Command::new(&nvcc);
+        compile_cmd
             .arg("-c")  // Compile only (create object file)
             .arg("-o")
             .arg(&obj_file)
             .arg(kernel_file)
-            .arg(format!("-arch={}", arch))
             .arg("-I")
-            .arg("cuda/include") 
+            .arg("cuda/include")
             .arg("--compiler-options")
-            .arg("-fPIC")
-            .status()
-            .unwrap();
+            .arg("-fPIC");
+        
+        // Add architecture flags
+        for arch in &archs {
+            compile_cmd.arg(format!("-arch={}", arch));
+        }
+
+        let nvcc_compile_status = compile_cmd.status().unwrap();
 
         assert!(
             nvcc_compile_status.success(),
-            "Failed to compile {} to object file.", 
-            kernel_file.display()
+            "\n\n\
+            ╔══════════════════════════════════════════════════════════════════╗\n\
+            ║              CUDA KERNEL COMPILATION FAILED                      ║\n\
+            ╚══════════════════════════════════════════════════════════════════╝\n\
+            \n\
+            Failed to compile: {}\n\
+            \n\
+            This may be due to:\n\
+            - Unsupported CUDA architecture (current: {:?})\n\
+            - Incompatible CUDA version\n\
+            - Syntax errors in CUDA kernel code\n\
+            \n\
+            To specify a different architecture, set CUDA_ARCHS environment variable.\n\
+            For example: export CUDA_ARCHS=\"sm_75,sm_80,sm_86\"\n\
+            ", 
+            kernel_file.display(),
+            archs
         );
         
         object_files.push(obj_file);
@@ -322,7 +495,7 @@ fn build_cuda_kernels() {
             "Failed to create static library from CUDA object files"
         );
         
-        println!("Created CUDA kernels library at: {}", kernels_lib.display());
+        println!("cargo:warning=Created CUDA kernels library at: {}", kernels_lib.display());
     }
 
     // Tell cargo where to find our library and link it
