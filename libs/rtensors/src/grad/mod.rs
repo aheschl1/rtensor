@@ -303,13 +303,19 @@ impl<T: WeightValue, B: Backend> GradContext<T, B> {
                 })
                 .unwrap(); // must have at least one upstream grad
             
-            let nodes = self.nodes.borrow();
+            let mut nodes = self.nodes.borrow_mut();
             let node = nodes.get(node_key).unwrap(); // we would never have discovered this node if it was not present
             let upstreams = node.backwards(&dldy, self)?;
+
             // println!("upstreams: {:?}", upstreams);
             let parents = node.parents();
             for (parent, grad) in parents.into_iter().zip(upstreams.into_iter()) {
                 accumulations.entry(parent).or_insert_with(Vec::new).push(grad);
+            }
+
+            if let GradNode::Leaf(_) = node {}else {
+                // free memory by removing node info for non-leaf nodes
+                nodes.remove(node_key);
             }
         }
         Ok(())
@@ -427,11 +433,11 @@ pub fn when_enabled<T: TensorValue, B: Backend, R>(
     {
         if std::any::TypeId::of::<B>() == std::any::TypeId::of::<Cuda>() {
             return GRAD_CONTEXT_CUDA.with(|ctx_cell| {
-                let mut ctx_map = ctx_cell.borrow_mut();
-                if let Some(ctx_box) = ctx_map.get_mut(&type_id) {
+                let ctx_map = ctx_cell.borrow();
+                if let Some(ctx_box) = ctx_map.get(&type_id) {
                     // SAFETY: We know the TypeId matches T, and we've verified B is Cuda
-                    if let Some(ctx) = ctx_box.downcast_mut::<GradContext<T, Cuda>>() {
-                        let ctx = unsafe { &mut *(ctx as *mut GradContext<T, Cuda> as *mut GradContext<T, B>) };
+                    if let Some(ctx) = ctx_box.downcast_ref::<GradContext<T, Cuda>>() {
+                        let ctx = unsafe { &*(ctx as *const GradContext<T, Cuda> as *const GradContext<T, B>) };
                         Some(f(ctx))
                     } else {
                         None

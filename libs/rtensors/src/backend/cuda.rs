@@ -595,6 +595,22 @@ impl Backend for Cuda {
         })
     }
 
+    fn convert<T: TensorValue, N: TensorValue>(&self, src: &Self::Buf<T>, dst: &mut Self::Buf<N>) -> Result<(), TensorError> {
+        // if src.len() != dst.len() {
+        //     return Err(TensorError::SizeMismatch(format!(
+        //         "Buffer size mismatch in convert: src size {}, dst size {}",
+        //         src.len(),
+        //         dst.len()
+        //     )));
+        // }
+        // for i in 0..src.len() {
+        //     dst[i] = T::convert::<N>(&src[i]);
+        // }
+        // Ok(())
+
+        todo!()
+    }
+
     fn alloc<T: TensorValue>(
         &self,
         len: usize,
@@ -1508,7 +1524,9 @@ fn apply_argmax_contiguous_single_elem<T: WeightValue>(
 
     // Dispatch based on type - only signed types support negation
     match std::any::TypeId::of::<T>() {
-        // id if id == std::any::TypeId::of::<f32>() => launch_negate!(launch_tanh_contiguous_f32, f32),
+        id if id == std::any::TypeId::of::<f32>() => {
+            launch_negate!(launch_flat_contiguous_argmax_f32, f32)
+        }
         id if id == std::any::TypeId::of::<f64>() => {
             launch_negate!(launch_flat_contiguous_argmax_f64, f64)
         }
@@ -1561,7 +1579,9 @@ fn apply_reduction_contiguous_single_elem<T: WeightValue>(
 
     // Dispatch based on type - only signed types support negation
     match std::any::TypeId::of::<T>() {
-        // id if id == std::any::TypeId::of::<f32>() => launch_negate!(launch_tanh_contiguous_f32, f32),
+        id if id == std::any::TypeId::of::<f32>() => {
+            launch_negate!(launch_flat_contiguous_reduce_f32, f32)
+        }
         id if id == std::any::TypeId::of::<f64>() => {
             launch_negate!(launch_flat_contiguous_reduce_f64, f64)
         }

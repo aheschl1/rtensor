@@ -20,7 +20,8 @@ pub trait TensorValue:
     std::ops::SubAssign +
     std::ops::MulAssign +
     std::ops::Div<Output = Self> + 
-    Absolute +
+    Absolute + 
+    DTypeConversion +
     'static
 {
     const DTYPE: crate::core::value::DType;
@@ -251,6 +252,42 @@ impl WeightValue for f64 {
     }
 }
 
+pub trait DTypeConversion {
+    fn to_u8(&self) -> u8;
+    fn to_i8(&self) -> i8;
+    fn to_u16(&self) -> u16;
+    fn to_i16(&self) -> i16;
+    fn to_u32(&self) -> u32;
+    fn to_i32(&self) -> i32;
+    fn to_u64(&self) -> u64;
+    fn to_i64(&self) -> i64;
+    fn to_u128(&self) -> u128;
+    fn to_i128(&self) -> i128;
+    fn to_f32(&self) -> f32;
+    fn to_f64(&self) -> f64;
+    fn to_bool(&self) -> boolean;
+    #[inline(always)]
+    fn convert<N: TensorValue>(&self) -> N {
+        unsafe{
+            match N::DTYPE {
+                DType::U8 => std::mem::transmute_copy(&self.to_u8()),
+                DType::I8 => std::mem::transmute_copy(&self.to_i8()),
+                DType::U16 => std::mem::transmute_copy(&self.to_u16()),
+                DType::I16 => std::mem::transmute_copy(&self.to_i16()),
+                DType::U32 => std::mem::transmute_copy(&self.to_u32()),
+                DType::U128 => std::mem::transmute_copy(&self.to_u128()),
+                DType::I32 => std::mem::transmute_copy(&self.to_i32()),
+                DType::U64 => std::mem::transmute_copy(&self.to_u64()),
+                DType::I64 => std::mem::transmute_copy(&self.to_i64()),
+                DType::I128 => std::mem::transmute_copy(&self.to_i128()),
+                DType::F32 => std::mem::transmute_copy(&self.to_f32()),
+                DType::F64 => std::mem::transmute_copy(&self.to_f64()),
+                DType::BOOL => std::mem::transmute_copy(&self.to_bool()),
+            }
+        }
+    }
+}
+
 #[cfg(not(feature = "cuda"))]
 /// Trait for types that can be stored in tensors.
 /// 
@@ -290,6 +327,65 @@ macro_rules! impl_tensor_values {
         $(
             impl TensorValue for $type {
                 const DTYPE: crate::core::value::DType = $dtype;
+            }
+
+            impl DTypeConversion for $type {
+                #[inline(always)]
+                fn to_u8(&self) -> u8 {
+                    *self as u8
+                }
+                #[inline(always)]
+                fn to_i8(&self) -> i8 {
+                    *self as i8
+                }
+                #[inline(always)]
+                fn to_u16(&self) -> u16 {
+                    *self as u16
+                }
+                #[inline(always)]
+                fn to_i16(&self) -> i16 {
+                    *self as i16
+                }
+                #[inline(always)]
+                fn to_u32(&self) -> u32 {
+                    *self as u32
+                }
+                #[inline(always)]
+                fn to_i32(&self) -> i32 {
+                    *self as i32
+                }
+                #[inline(always)]
+                fn to_u64(&self) -> u64 {
+                    *self as u64
+                }
+                #[inline(always)]
+                fn to_i64(&self) -> i64 {
+                    *self as i64
+                }
+                #[inline(always)]
+                fn to_u128(&self) -> u128 {
+                    *self as u128
+                }
+                #[inline(always)]
+                fn to_i128(&self) -> i128 {
+                    *self as i128
+                }
+                #[inline(always)]
+                fn to_f32(&self) -> f32 {
+                    *self as f32
+                }
+                #[inline(always)]
+                fn to_f64(&self) -> f64 {
+                    *self as f64
+                }
+                #[inline(always)]
+                fn to_bool(&self) -> boolean {
+                    if *self != Self::ZERO {
+                        boolean::TRUE
+                    } else {
+                        boolean::FALSE
+                    }
+                }
             }
         )+
     };
@@ -390,6 +486,8 @@ impl_absolute_ident!(
 #[cfg(feature = "remote")]
 use serde::{Deserialize, Serialize};
 
+use crate::core::value::types::boolean;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "remote", derive(Serialize, Deserialize))]
 #[repr(C)]
@@ -415,7 +513,7 @@ pub mod types {
     #[cfg(feature = "cuda")]
     use cudarc::driver::DeviceRepr;
 
-    use crate::core::value::{DType, TensorValue, TypeConstants};
+    use crate::core::value::{DType, DTypeConversion, TensorValue, TypeConstants};
 
     #[derive(Clone, Copy, Default, Debug, PartialEq, PartialOrd)]
     #[repr(C)]
@@ -537,6 +635,61 @@ pub mod types {
 
     impl TensorValue for boolean {
         const DTYPE: DType = DType::BOOL;
+    }
+
+    impl DTypeConversion for boolean {
+        #[inline(always)]
+        fn to_u8(&self) -> u8 {
+            if self.0 { 1 } else { 0 }
+        }
+        #[inline(always)]
+        fn to_i8(&self) -> i8 {
+            if self.0 { 1 } else { 0 }
+        }
+        #[inline(always)]
+        fn to_u16(&self) -> u16 {
+            if self.0 { 1 } else { 0 }
+        }
+        #[inline(always)]
+        fn to_i16(&self) -> i16 {
+            if self.0 { 1 } else { 0 }
+        }
+        #[inline(always)]
+        fn to_u32(&self) -> u32 {
+            if self.0 { 1 } else { 0 }
+        }
+        #[inline(always)]
+        fn to_i32(&self) -> i32 {
+            if self.0 { 1 } else { 0 }
+        }
+        #[inline(always)]
+        fn to_u64(&self) -> u64 {
+            if self.0 { 1 } else { 0 }
+        }
+        #[inline(always)]
+        fn to_i64(&self) -> i64 {
+            if self.0 { 1 } else { 0 }
+        }
+        #[inline(always)]
+        fn to_u128(&self) -> u128 {
+            if self.0 { 1 } else { 0 }
+        }
+        #[inline(always)]
+        fn to_i128(&self) -> i128 {
+            if self.0 { 1 } else { 0 }
+        }
+        #[inline(always)]
+        fn to_f32(&self) -> f32 {
+            if self.0 { 1.0 } else { 0.0 }
+        }
+        #[inline(always)]
+        fn to_f64(&self) -> f64 {
+            if self.0 { 1.0 } else { 0.0 }
+        }
+        #[inline(always)]
+        fn to_bool(&self) -> boolean {
+            *self
+        }
     }
 
     #[cfg(feature = "cuda")]

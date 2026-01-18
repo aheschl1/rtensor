@@ -5,7 +5,7 @@ use std::net::IpAddr;
 
 use crate::backend::Backend;
 use crate::backend::cpu::Cpu;
-use crate::core::value::TensorValue;
+use crate::core::value::{DType, TensorValue};
 use crate::core::{shape_to_stride, MetaTensor, MetaTensorView, Shape};
 use crate::core::tensor::{compute_squeezed_parameters, compute_unsqueezed_parameters, TensorError};
 
@@ -354,6 +354,18 @@ where
 
     pub fn unsqueeze_inplace(&mut self) {
         self.unsqueeze_at_inplace(0).unwrap();
+    }
+
+    pub fn into_dtype<N: TensorValue>(&self) -> Result<TensorBase<N, B>, TensorError> {
+
+        let mut new_buf = self.backend.alloc::<N>(self.size())?;
+        self.backend.convert::<T, N>(&self.buf, &mut new_buf)?;
+
+        Ok(TensorBase::<N, B>::from_parts(
+            self.backend.clone(),
+            new_buf,
+            self.meta.clone()
+        ))
     }
 
 }
