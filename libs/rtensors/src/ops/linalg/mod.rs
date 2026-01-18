@@ -3,15 +3,7 @@ use crate::{backend::Backend, core::{tensor::TensorError, value::{TensorValue, W
 mod matmul;
 mod conv;
 
-pub enum PaddingType {
-    Zeros
-}
-
-pub struct ConvConfig2D {
-    pub stride: (usize, usize),
-    pub padding: (usize, usize),
-    pub padding_type: PaddingType,
-}
+pub use conv::*;
 
 /// Linear algebra operations: matrix multiplication and dot product.
 /// 
