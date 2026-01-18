@@ -306,6 +306,7 @@ pub trait TensorValue:
     std::ops::SubAssign +
     std::ops::MulAssign +
     Absolute +
+    DTypeConversion +
     std::ops::Div<Output = Self> + 
     'static
 {
